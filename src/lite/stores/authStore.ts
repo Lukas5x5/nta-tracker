@@ -145,7 +145,7 @@ interface AuthState {
   error: string | null
 
   login: (username: string, password: string) => Promise<boolean>
-  logout: () => void
+  logout: () => Promise<void>
   checkSession: () => Promise<void>
   clearError: () => void
 }
@@ -190,10 +190,10 @@ export const useAuthStore = create<AuthState>()(
             return false
           }
 
-          // Crew: Prüfen ob bereits auf anderem Gerät eingeloggt
+          // Crew: Wenn auf anderem Gerät eingeloggt, wird das alte Gerät automatisch abgemeldet
+          // checkSession() auf dem alten Gerät erkennt den neuen Token und loggt aus
           if (data.role === 'crew' && data.session_token) {
-            set({ error: 'Dieser Account ist bereits auf einem anderen Gerät aktiv', isLoading: false })
-            return false
+            console.log('[Auth] Crew-Account war auf anderem Gerät aktiv - übernehme Session')
           }
 
           const user: User = {
@@ -221,11 +221,12 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout: () => {
+      logout: async () => {
         const { user } = get()
         // Session-Token in DB löschen
         if (user) {
-          supabase.from('app_users').update({ session_token: null }).eq('id', user.id)
+          await supabase.from('app_users').update({ session_token: null }).eq('id', user.id)
+          console.log('[Auth] Session-Token gelöscht für:', user.username)
         }
         set({ user: null, sessionToken: null, isAuthenticated: false, error: null })
       },

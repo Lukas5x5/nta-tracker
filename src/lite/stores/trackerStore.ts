@@ -69,6 +69,7 @@ interface TrackerState {
 let positionsChannel: RealtimeChannel | null = null
 let membersChannel: RealtimeChannel | null = null
 let presenceChannel: RealtimeChannel | null = null
+let tasksChannel: RealtimeChannel | null = null
 
 export const useTrackerStore = create<TrackerState>((set, get) => ({
   team: null,
@@ -176,6 +177,10 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
     if (presenceChannel) {
       supabase.removeChannel(presenceChannel)
       presenceChannel = null
+    }
+    if (tasksChannel) {
+      supabase.removeChannel(tasksChannel)
+      tasksChannel = null
     }
 
     set({
@@ -454,6 +459,33 @@ function startRealtimeSubscriptions(teamId: string) {
         }))
       }))
     })
+    .subscribe()
+
+  // 4. User Profiles (Tasks) - Änderungen an Tasks live mitbekommen
+  tasksChannel = supabase
+    .channel(`tracker-tasks-${teamId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'user_profiles'
+      },
+      (payload) => {
+        const profile = payload.new as any
+        const state = store.getState()
+        const { selectedPilot, pilots } = state
+
+        // Prüfen ob das Update den aktuell ausgewählten Piloten betrifft
+        if (selectedPilot) {
+          const pilot = pilots.find(p => p.memberId === selectedPilot)
+          if (pilot?.userId && pilot.userId === profile.user_id) {
+            console.log('[Tracker] Tasks-Update für ausgewählten Piloten:', pilot.callsign)
+            state.loadPilotTasks(selectedPilot)
+          }
+        }
+      }
+    )
     .subscribe()
 
   // Stale Check alle 30 Sekunden

@@ -91,10 +91,10 @@ export function PilotTasksPanel({ onClose }: PilotTasksPanelProps) {
     )}
     <div style={{
       position: 'absolute',
-      top: 60,
+      bottom: 10,
       left: 10,
-      width: 320,
-      maxHeight: 'calc(100vh - 140px)',
+      right: 10,
+      maxHeight: '45vh',
       background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
       border: '1px solid rgba(255,255,255,0.15)',
       borderRadius: 12,
@@ -239,12 +239,14 @@ interface TaskCardProps {
 }
 
 function TaskCard({ task, pilotColor, onReportWind }: TaskCardProps) {
+  const [expandedGoal, setExpandedGoal] = useState<string | null>(null)
+
   return (
     <div style={{
       background: 'rgba(255,255,255,0.03)',
       border: '1px solid rgba(255,255,255,0.08)',
       borderRadius: 8,
-      padding: 10,
+      padding: 8,
       borderLeft: `3px solid ${pilotColor}`
     }}>
       {/* Task Header */}
@@ -266,7 +268,7 @@ function TaskCard({ task, pilotColor, onReportWind }: TaskCardProps) {
           {task.type}
         </span>
         <span style={{
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: 600,
           color: '#fff',
           flex: 1,
@@ -301,74 +303,91 @@ function TaskCard({ task, pilotColor, onReportWind }: TaskCardProps) {
         </button>
       </div>
 
-      {/* Goals */}
+      {/* Goals - kompakt */}
       {task.goals.length > 0 && (
         <div style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: 4,
+          gap: 3,
           paddingTop: 6,
           borderTop: '1px solid rgba(255,255,255,0.05)'
         }}>
-          {task.goals.map((goal, idx) => (
-            <div key={goal.id} style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 3,
-              fontSize: 10,
-              color: 'rgba(255,255,255,0.6)',
-              background: 'rgba(0,0,0,0.2)',
-              borderRadius: 5,
-              padding: 6
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ flex: 1, fontWeight: 600, color: '#fff', fontSize: 11 }}>{goal.name || `Goal ${idx + 1}`}</span>
-                <span style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,0.4)', fontSize: 9 }}>
-                  {goal.radius}m
-                </span>
-                {/* Navigate to Goal Button */}
-                {goal.position?.latitude && goal.position?.longitude && (
-                  <button
-                    onClick={() => openGoogleMapsNavigation(goal.position.latitude, goal.position.longitude)}
-                    title="Zum Goal navigieren"
-                    style={{
-                      width: 22,
-                      height: 22,
-                      background: 'rgba(34, 197, 94, 0.15)',
-                      border: '1px solid rgba(34, 197, 94, 0.3)',
-                      borderRadius: 4,
-                      color: '#22c55e',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0
-                    }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polygon points="3 11 22 2 13 21 11 13 3 11" />
-                    </svg>
-                  </button>
+          {task.goals.map((goal, idx) => {
+            const isExpanded = expandedGoal === goal.id
+            const hasPosition = goal.position?.latitude && goal.position?.longitude
+
+            return (
+              <div key={goal.id} style={{
+                fontSize: 10,
+                color: 'rgba(255,255,255,0.6)',
+                background: 'rgba(0,0,0,0.2)',
+                borderRadius: 5,
+                padding: '5px 6px'
+              }}>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: hasPosition ? 'pointer' : 'default' }}
+                  onClick={() => hasPosition && setExpandedGoal(isExpanded ? null : goal.id)}
+                >
+                  {hasPosition && (
+                    <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.3)', width: 8, textAlign: 'center' }}>
+                      {isExpanded ? '\u25BC' : '\u25B6'}
+                    </span>
+                  )}
+                  <span style={{ flex: 1, fontWeight: 600, color: '#fff', fontSize: 11 }}>{goal.name || `Goal ${idx + 1}`}</span>
+                  <span style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,0.4)', fontSize: 9 }}>
+                    {goal.radius}m
+                  </span>
+                  {/* Navigate to Goal Button */}
+                  {hasPosition && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openGoogleMapsNavigation(goal.position.latitude, goal.position.longitude)
+                      }}
+                      title="Zum Goal navigieren"
+                      style={{
+                        width: 22,
+                        height: 22,
+                        background: 'rgba(34, 197, 94, 0.15)',
+                        border: '1px solid rgba(34, 197, 94, 0.3)',
+                        borderRadius: 4,
+                        color: '#22c55e',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                {/* Koordinaten - nur sichtbar wenn aufgeklappt */}
+                {isExpanded && hasPosition && (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                    fontFamily: 'monospace',
+                    fontSize: 9,
+                    marginTop: 4,
+                    paddingTop: 4,
+                    borderTop: '1px solid rgba(255,255,255,0.05)'
+                  }}>
+                    <div style={{ color: 'rgba(255,255,255,0.5)' }}>
+                      WGS84: {formatWGS84(goal.position.latitude, goal.position.longitude)}
+                    </div>
+                    <div style={{ color: 'rgba(255,255,255,0.5)' }}>
+                      UTM: {formatUTM(goal.position.latitude, goal.position.longitude)}
+                    </div>
+                  </div>
                 )}
               </div>
-              {goal.position?.latitude && goal.position?.longitude && (
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 2,
-                  fontFamily: 'monospace',
-                  fontSize: 9
-                }}>
-                  <div style={{ color: 'rgba(255,255,255,0.5)' }}>
-                    WGS84: {formatWGS84(goal.position.latitude, goal.position.longitude)}
-                  </div>
-                  <div style={{ color: 'rgba(255,255,255,0.5)' }}>
-                    UTM: {formatUTM(goal.position.latitude, goal.position.longitude)}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

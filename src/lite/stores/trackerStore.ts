@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import { useAuthStore } from './authStore'
 
 export interface Team {
   id: string
@@ -25,6 +26,18 @@ export interface PilotTask {
   rings?: number[]
   mmaRadius?: number
   isActive: boolean
+}
+
+export interface ChatMessage {
+  id: string
+  memberId: string
+  callsign: string
+  color: string
+  message: string
+  createdAt: Date
+  isMine?: boolean
+  targetMemberId?: string | null
+  targetCallsign?: string | null
 }
 
 export interface PilotPosition {
@@ -59,17 +72,23 @@ interface TrackerState {
   pilotTasks: PilotTask[]
   loadingTasks: boolean
 
+  // Chat
+  myMemberId: string | null
+  messages: ChatMessage[]
+
   // Actions
   joinTeam: (joinCode: string) => Promise<boolean>
   leaveTeam: () => void
   selectPilot: (memberId: string | null) => void
   loadPilotTasks: (memberId: string) => Promise<void>
+  sendMessage: (message: string, targetMemberId?: string | null) => Promise<boolean>
 }
 
 let positionsChannel: RealtimeChannel | null = null
 let membersChannel: RealtimeChannel | null = null
 let presenceChannel: RealtimeChannel | null = null
 let tasksChannel: RealtimeChannel | null = null
+let messagesChannel: RealtimeChannel | null = null
 
 export const useTrackerStore = create<TrackerState>((set, get) => ({
   team: null,
@@ -83,6 +102,9 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
 
   pilotTasks: [],
   loadingTasks: false,
+
+  myMemberId: null,
+  messages: [],
 
   joinTeam: async (joinCode: string) => {
     set({ isJoining: true, joinError: null, joinCode })
@@ -137,6 +159,10 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
         isOnline: m.is_online || false
       }))
 
+      // Eigene member_id ermitteln (für Chat)
+      const authUser = useAuthStore.getState().user
+      const myMember = authUser ? (members || []).find((m: any) => m.user_id === authUser.id) : null
+
       set({
         team: {
           id: team.id,
@@ -146,6 +172,7 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
           is_active: team.is_active
         },
         pilots,
+        myMemberId: myMember?.id || null,
         isJoining: false,
         isTracking: true
       })
@@ -182,6 +209,10 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
       supabase.removeChannel(tasksChannel)
       tasksChannel = null
     }
+    if (messagesChannel) {
+      supabase.removeChannel(messagesChannel)
+      messagesChannel = null
+    }
 
     set({
       team: null,
@@ -191,7 +222,9 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
       joinCode: '',
       joinError: null,
       pilotTasks: [],
-      loadingTasks: false
+      loadingTasks: false,
+      myMemberId: null,
+      messages: []
     })
   },
 
@@ -302,6 +335,40 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
     } catch (err) {
       console.error('[Tracker] Fehler beim Laden der Tasks:', err)
       set({ pilotTasks: [], loadingTasks: false })
+    }
+  },
+
+  sendMessage: async (message: string, targetMemberId?: string | null) => {
+    const { team, myMemberId, pilots } = get()
+    if (!team || !myMemberId) return false
+
+    try {
+      const { data, error } = await supabase.from('team_messages').insert({
+        team_id: team.id,
+        member_id: myMemberId,
+        message,
+        target_member_id: targetMemberId || null
+      }).select('id, created_at').single()
+
+      if (!error && data) {
+        const me = pilots.find(p => p.memberId === myMemberId)
+        const target = targetMemberId ? pilots.find(p => p.memberId === targetMemberId) : null
+        const myMsg: ChatMessage = {
+          id: data.id,
+          memberId: myMemberId,
+          callsign: me?.callsign || 'Ich',
+          color: me?.color || '#ffffff',
+          message,
+          createdAt: new Date(data.created_at),
+          isMine: true,
+          targetMemberId: targetMemberId || null,
+          targetCallsign: target?.callsign || null
+        }
+        set(state => ({ messages: [...state.messages, myMsg] }))
+      }
+      return !error
+    } catch {
+      return false
     }
   }
 }))
@@ -484,6 +551,45 @@ function startRealtimeSubscriptions(teamId: string) {
             state.loadPilotTasks(selectedPilot)
           }
         }
+      }
+    )
+    .subscribe()
+
+  // 5. Team-Nachrichten empfangen
+  const myMemberId = store.getState().myMemberId
+  messagesChannel = supabase
+    .channel(`tracker-msg-${teamId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'team_messages'
+      },
+      (payload) => {
+        const msg = payload.new as any
+        if (msg.team_id !== teamId) return
+        if (msg.member_id === myMemberId) return
+        if (msg.target_member_id && msg.target_member_id !== myMemberId) return
+
+        const pilots = store.getState().pilots
+        const sender = pilots.find(p => p.memberId === msg.member_id)
+        const target = msg.target_member_id ? pilots.find(p => p.memberId === msg.target_member_id) : null
+
+        const chatMsg: ChatMessage = {
+          id: msg.id,
+          memberId: msg.member_id,
+          callsign: sender?.callsign || '???',
+          color: sender?.color || '#ffffff',
+          message: msg.message,
+          createdAt: new Date(msg.created_at),
+          targetMemberId: msg.target_member_id || null,
+          targetCallsign: target?.callsign || null
+        }
+
+        store.setState(state => ({
+          messages: [...state.messages, chatMsg]
+        }))
       }
     )
     .subscribe()

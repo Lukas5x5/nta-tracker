@@ -5,13 +5,15 @@ import { useTrackerStore } from '../stores/trackerStore'
 interface HeaderProps {
   onToggleList: () => void
   showList: boolean
+  onToggleChat: () => void
+  showChat: boolean
   onLeaveTeam: () => void
   teamName: string
 }
 
-export function Header({ onToggleList, showList, onLeaveTeam, teamName }: HeaderProps) {
+export function Header({ onToggleList, showList, onToggleChat, showChat, onLeaveTeam, teamName }: HeaderProps) {
   const { user, logout } = useAuthStore()
-  const { pilots } = useTrackerStore()
+  const { pilots, messages } = useTrackerStore()
 
   const onlinePilots = pilots.filter(p => p.isOnline).length
 
@@ -101,6 +103,29 @@ export function Header({ onToggleList, showList, onLeaveTeam, teamName }: Header
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+          </svg>
+        </button>
+
+        {/* Chat Toggle */}
+        <button
+          onClick={onToggleChat}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 36,
+            height: 36,
+            background: showChat ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 8,
+            color: showChat ? '#22c55e' : 'rgba(255,255,255,0.7)',
+            cursor: 'pointer',
+            position: 'relative'
+          }}
+          title="Team Chat"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
         </button>
 

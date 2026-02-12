@@ -5,6 +5,7 @@ import { TrackerMap } from './components/TrackerMap'
 import { Header } from './components/Header'
 import { PilotList } from './components/PilotList'
 import { PilotTasksPanel } from './components/PilotTasksPanel'
+import { TeamChat } from './components/TeamChat'
 import { useAuthStore } from './stores/authStore'
 import { useTrackerStore } from './stores/trackerStore'
 
@@ -13,6 +14,7 @@ export function LiteApp() {
   const { team, leaveTeam, selectedPilot, selectPilot } = useTrackerStore()
   const [showList, setShowList] = useState(false)
   const [showTasks, setShowTasks] = useState(false)
+  const [showChat, setShowChat] = useState(false)
 
   // Show tasks panel when pilot is selected
   useEffect(() => {
@@ -83,6 +85,8 @@ export function LiteApp() {
       <Header
         onToggleList={() => setShowList(!showList)}
         showList={showList}
+        onToggleChat={() => setShowChat(!showChat)}
+        showChat={showChat}
         onLeaveTeam={leaveTeam}
         teamName={team.name}
       />
@@ -96,6 +100,11 @@ export function LiteApp() {
             setShowTasks(false)
             selectPilot(null)
           }} />
+        )}
+
+        {/* Chat Overlay */}
+        {showChat && (
+          <TeamChat onClose={() => setShowChat(false)} />
         )}
 
         {/* Pilot List Overlay (mobile) */}

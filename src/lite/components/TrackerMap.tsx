@@ -75,16 +75,38 @@ export function TrackerMap() {
       attributionControl: false
     })
 
-    // Add tile layer (OpenStreetMap)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    }).addTo(map)
+    // Tile Layers
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OSM'
+    })
 
-    // Attribution (klein unten rechts)
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: '© Esri'
+    })
+
+    const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      maxZoom: 17,
+      attribution: '© OpenTopoMap'
+    })
+
+    // Default Layer
+    osmLayer.addTo(map)
+
+    // Layer Control
+    const baseLayers: Record<string, L.TileLayer> = {
+      'Karte': osmLayer,
+      'Satellit': satelliteLayer,
+      'Topo': topoLayer
+    }
+    L.control.layers(baseLayers, {}, { position: 'topright', collapsed: false }).addTo(map)
+
+    // Attribution
     L.control.attribution({
       position: 'bottomright',
       prefix: ''
-    }).addAttribution('© OSM').addTo(map)
+    }).addTo(map)
 
     mapInstanceRef.current = map
 
@@ -172,8 +194,6 @@ export function TrackerMap() {
         if (hasValidPosition) {
           // Update position
           existing.setLatLng([pilot.latitude, pilot.longitude])
-          // Update popup content
-          existing.setPopupContent(createPopupContent(pilot))
           // Update icon
           const newIcon = createPilotIcon(pilot)
           existing.setIcon(newIcon)
@@ -209,10 +229,6 @@ export function TrackerMap() {
     const pilot = pilots.find(p => p.memberId === selectedPilot)
     if (pilot && pilot.latitude !== 0 && pilot.longitude !== 0) {
       mapInstanceRef.current.setView([pilot.latitude, pilot.longitude], 14, { animate: true })
-      const marker = markersRef.current.get(selectedPilot)
-      if (marker) {
-        marker.openPopup()
-      }
     }
   }, [selectedPilot])
 
@@ -423,9 +439,6 @@ function createPilotMarker(pilot: PilotPosition, map: L.Map, onSelect: (memberId
 
   const marker = L.marker([pilot.latitude, pilot.longitude], { icon })
     .addTo(map)
-    .bindPopup(createPopupContent(pilot), {
-      className: 'pilot-popup-container'
-    })
 
   marker.on('click', () => {
     onSelect(pilot.memberId)
@@ -434,80 +447,3 @@ function createPilotMarker(pilot: PilotPosition, map: L.Map, onSelect: (memberId
   return marker
 }
 
-function createPopupContent(pilot: PilotPosition): string {
-  const altFt = Math.round(pilot.altitude * 3.28084)
-  const speedKmh = Math.round(pilot.speed * 3.6)
-  const varioMs = pilot.vario.toFixed(1)
-  const varioColor = pilot.vario > 0.3 ? '#22c55e' : pilot.vario < -0.3 ? '#ef4444' : 'rgba(255,255,255,0.7)'
-  const timeAgo = getTimeAgo(pilot.timestamp)
-
-  return `
-    <div style="
-      background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-      border-radius: 8px;
-      padding: 12px;
-      min-width: 180px;
-      color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    ">
-      <div style="
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 10px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
-      ">
-        <div style="
-          width: 24px;
-          height: 24px;
-          background: ${pilot.color};
-          border-radius: 50%;
-          border: 2px solid #fff;
-        "></div>
-        <div style="font-size: 14px; font-weight: 700;">${pilot.callsign}</div>
-        <div style="
-          margin-left: auto;
-          width: 8px;
-          height: 8px;
-          background: ${pilot.isOnline ? '#22c55e' : '#6b7280'};
-          border-radius: 50%;
-          box-shadow: ${pilot.isOnline ? '0 0 6px #22c55e' : 'none'};
-        "></div>
-      </div>
-
-      <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
-        <div style="display: flex; justify-content: space-between;">
-          <span style="color: rgba(255,255,255,0.5);">Höhe</span>
-          <span style="font-weight: 600; font-family: monospace;">${altFt} ft</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span style="color: rgba(255,255,255,0.5);">Kurs</span>
-          <span style="font-weight: 600; font-family: monospace;">${Math.round(pilot.heading)}°</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span style="color: rgba(255,255,255,0.5);">Speed</span>
-          <span style="font-weight: 600; font-family: monospace;">${speedKmh} km/h</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span style="color: rgba(255,255,255,0.5);">Vario</span>
-          <span style="font-weight: 600; font-family: monospace; color: ${varioColor};">${pilot.vario > 0 ? '+' : ''}${varioMs} m/s</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.05);">
-          <span style="color: rgba(255,255,255,0.3); font-size: 10px;">Zuletzt</span>
-          <span style="color: rgba(255,255,255,0.5); font-size: 10px;">${timeAgo}</span>
-        </div>
-      </div>
-    </div>
-  `
-}
-
-function getTimeAgo(timestamp: Date): string {
-  const diff = Date.now() - timestamp.getTime()
-  const seconds = Math.floor(diff / 1000)
-
-  if (seconds < 60) return 'gerade eben'
-  if (seconds < 3600) return `vor ${Math.floor(seconds / 60)} min`
-  if (seconds < 86400) return `vor ${Math.floor(seconds / 3600)} h`
-  return `vor ${Math.floor(seconds / 86400)} Tagen`
-}

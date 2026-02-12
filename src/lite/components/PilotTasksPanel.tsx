@@ -69,6 +69,7 @@ interface PilotTasksPanelProps {
 export function PilotTasksPanel({ onClose }: PilotTasksPanelProps) {
   const { pilots, selectedPilot, pilotTasks, loadingTasks } = useTrackerStore()
   const [windDialogTask, setWindDialogTask] = useState<PilotTask | null>(null)
+  const [showTasks, setShowTasks] = useState(false)
 
   const pilot = pilots.find(p => p.memberId === selectedPilot)
 
@@ -76,10 +77,10 @@ export function PilotTasksPanel({ onClose }: PilotTasksPanelProps) {
     return null
   }
 
-  // Prüfen ob Pilot eine gültige Position hat (nach dem null-check)
-  // pilot hat latitude/longitude direkt, nicht in einem position-Objekt
   const hasPilotPosition = pilot.latitude && pilot.longitude &&
     (pilot.latitude !== 0 || pilot.longitude !== 0)
+
+  const activeTask = pilotTasks.find(t => t.isActive)
 
   return (
     <>
@@ -94,7 +95,7 @@ export function PilotTasksPanel({ onClose }: PilotTasksPanelProps) {
       bottom: 10,
       left: 10,
       right: 10,
-      maxHeight: '45vh',
+      maxHeight: showTasks ? '50vh' : 'none',
       background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
       border: '1px solid rgba(255,255,255,0.15)',
       borderRadius: 12,
@@ -109,8 +110,7 @@ export function PilotTasksPanel({ onClose }: PilotTasksPanelProps) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '10px 12px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        padding: '8px 12px',
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -132,13 +132,14 @@ export function PilotTasksPanel({ onClose }: PilotTasksPanelProps) {
             <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
               {pilot.callsign}
             </div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>
-              {pilotTasks.length} Tasks
-            </div>
+            {activeTask && (
+              <div style={{ fontSize: 10, color: '#22c55e' }}>
+                {activeTask.type}: {activeTask.name}
+              </div>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {/* Navigate to Pilot Button */}
           {hasPilotPosition && (
             <button
               onClick={() => openGoogleMapsNavigation(pilot.latitude, pilot.longitude)}
@@ -183,50 +184,73 @@ export function PilotTasksPanel({ onClose }: PilotTasksPanelProps) {
         </div>
       </div>
 
-      {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: 10 }}>
-        {loadingTasks ? (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20,
-            color: 'rgba(255,255,255,0.5)',
-            fontSize: 12
-          }}>
+      {/* Tasks Dropdown Toggle */}
+      <button
+        onClick={() => setShowTasks(!showTasks)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '6px 12px',
+          background: 'rgba(255,255,255,0.03)',
+          border: 'none',
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          color: 'rgba(255,255,255,0.6)',
+          fontSize: 11,
+          cursor: 'pointer',
+          flexShrink: 0
+        }}
+      >
+        <span style={{ fontWeight: 600 }}>Tasks ({pilotTasks.length})</span>
+        <span style={{ fontSize: 9 }}>{showTasks ? '\u25B2' : '\u25BC'}</span>
+      </button>
+
+      {/* Tasks Content - nur sichtbar wenn aufgeklappt */}
+      {showTasks && (
+        <div style={{ flex: 1, overflow: 'auto', padding: 10, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          {loadingTasks ? (
             <div style={{
-              width: 18,
-              height: 18,
-              border: '2px solid rgba(255,255,255,0.1)',
-              borderTopColor: '#3b82f6',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              marginRight: 10
-            }} />
-            Lade...
-          </div>
-        ) : pilotTasks.length === 0 ? (
-          <div style={{
-            padding: 20,
-            textAlign: 'center',
-            color: 'rgba(255,255,255,0.4)',
-            fontSize: 12
-          }}>
-            {!pilot.userId ? 'Nicht verknüpft' : 'Keine Tasks'}
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {pilotTasks.map(task => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                pilotColor={pilot.color}
-                onReportWind={() => setWindDialogTask(task)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 16,
+              color: 'rgba(255,255,255,0.5)',
+              fontSize: 12
+            }}>
+              <div style={{
+                width: 18,
+                height: 18,
+                border: '2px solid rgba(255,255,255,0.1)',
+                borderTopColor: '#3b82f6',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                marginRight: 10
+              }} />
+              Lade...
+            </div>
+          ) : pilotTasks.length === 0 ? (
+            <div style={{
+              padding: 16,
+              textAlign: 'center',
+              color: 'rgba(255,255,255,0.4)',
+              fontSize: 12
+            }}>
+              {!pilot.userId ? 'Nicht verknüpft' : 'Keine Tasks'}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {pilotTasks.map(task => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  pilotColor={pilot.color}
+                  onReportWind={() => setWindDialogTask(task)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
     </>
   )

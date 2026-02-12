@@ -83,6 +83,30 @@ html, body, #root {
   font-family: monospace;
 }
 
+/* Layer Control */
+.leaflet-control-layers {
+  background: rgba(15, 23, 42, 0.9) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+  color: #fff !important;
+  padding: 6px 10px !important;
+}
+
+.leaflet-control-layers label {
+  color: #fff !important;
+  font-size: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 2px 0 !important;
+  cursor: pointer !important;
+}
+
+.leaflet-control-layers-separator {
+  border-top-color: rgba(255,255,255,0.1) !important;
+}
+
 /* Animations */
 @keyframes pulse {
   0%, 100% { opacity: 1; }

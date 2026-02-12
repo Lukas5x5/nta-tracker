@@ -161,7 +161,53 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
 
       // Eigene member_id ermitteln (für Chat)
       const authUser = useAuthStore.getState().user
-      const myMember = authUser ? (members || []).find((m: any) => m.user_id === authUser.id) : null
+      let myMember = authUser ? (members || []).find((m: any) => m.user_id === authUser.id) : null
+
+      // Falls User noch kein Team-Member ist, automatisch als Member hinzufügen
+      if (!myMember && authUser) {
+        const callsign = authUser.display_name || authUser.username
+        const crewColors = ['#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#f97316']
+        const color = crewColors[Math.floor(Math.random() * crewColors.length)]
+
+        // Upsert: Falls callsign schon existiert (z.B. nach Re-Join), einfach updaten
+        const { data: newMember, error: insertError } = await supabase
+          .from('team_members')
+          .upsert({
+            team_id: team.id,
+            user_id: authUser.id,
+            callsign,
+            color,
+            role: authUser.role || 'crew',
+            is_online: true
+          }, { onConflict: 'team_id,callsign' })
+          .select('*')
+          .single()
+
+        if (!insertError && newMember) {
+          console.log('[Tracker] Als Team-Member hinzugefügt:', callsign)
+          myMember = newMember
+          // Auch zur Piloten-Liste hinzufügen (falls noch nicht drin)
+          if (!pilots.find(p => p.memberId === newMember.id)) {
+            pilots.push({
+              memberId: newMember.id,
+              userId: authUser.id,
+              callsign,
+              color,
+              role: authUser.role || 'crew',
+              latitude: 0,
+              longitude: 0,
+              altitude: 0,
+              heading: 0,
+              speed: 0,
+              vario: 0,
+              timestamp: new Date(),
+              isOnline: true
+            })
+          }
+        } else {
+          console.error('[Tracker] Fehler beim Hinzufügen als Member:', insertError)
+        }
+      }
 
       set({
         team: {

@@ -102,11 +102,6 @@ export function LiteApp() {
           }} />
         )}
 
-        {/* Chat Overlay */}
-        {showChat && (
-          <TeamChat onClose={() => setShowChat(false)} />
-        )}
-
         {/* Pilot List Overlay (mobile) */}
         {showList && (
           <div style={{
@@ -123,6 +118,11 @@ export function LiteApp() {
           </div>
         )}
       </div>
+
+      {/* Chat Overlay - fixed über allem (auch über Leaflet auf Mobile) */}
+      {showChat && (
+        <TeamChat onClose={() => setShowChat(false)} />
+      )}
     </div>
   )
 }

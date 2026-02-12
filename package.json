@@ -1,0 +1,104 @@
+{
+  "name": "nta-balloon-navigator",
+  "version": "1.0.0",
+  "description": "Navigation Tool Austria - Heißluftballon Navigation Software",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:main\" \"npm run dev:electron\"",
+    "dev:renderer": "vite",
+    "dev:main": "tsc -p tsconfig.main.json --watch",
+    "dev:electron": "wait-on http://localhost:5173 dist/main/main.js && cmd /c \"set NODE_ENV=development && node_modules\\.bin\\electron.cmd .\"",
+    "start": "electron .",
+    "build": "tsc && vite build",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:electron": "npm run build && electron-builder",
+    "preview": "vite preview",
+    "rebuild": "npx @electron/rebuild -f -w serialport",
+    "dev:lite": "vite --config vite.config.lite.ts",
+    "build:lite": "vite build --config vite.config.lite.ts",
+    "preview:lite": "vite preview --config vite.config.lite.ts"
+  },
+  "dependencies": {
+    "@electron/remote": "^2.1.0",
+    "@supabase/supabase-js": "^2.93.3",
+    "@types/cesium": "^1.67.14",
+    "adm-zip": "^0.5.16",
+    "cesium": "^1.137.0",
+    "date-fns": "^2.30.0",
+    "leaflet": "^1.9.4",
+    "leaflet-imageoverlay-rotated": "^0.2.1",
+    "leaflet-pixi-overlay": "^1.9.5",
+    "mapbox-gl": "^3.18.1",
+    "nmea-simple": "^3.3.0",
+    "pdfjs-dist": "^3.11.174",
+    "pixi.js": "^8.16.0",
+    "proj4": "^2.20.2",
+    "proj4leaflet": "^1.0.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-draggable": "^4.5.0",
+    "react-leaflet": "^4.2.1",
+    "react-map-gl": "^8.1.0",
+    "resium": "^1.19.3",
+    "serialport": "^12.0.0",
+    "sharp": "^0.34.5",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
+    "@types/adm-zip": "^0.5.7",
+    "@types/leaflet": "^1.9.21",
+    "@types/proj4": "^2.5.6",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-basic-ssl": "^1.2.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "electron-packager": "^17.1.2",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "wait-on": "^9.0.3"
+  },
+  "author": "NTA Development",
+  "build": {
+    "appId": "at.balloon.nta",
+    "productName": "NTA Balloon Navigator",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "sign": false,
+      "signingHashAlgorithms": []
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NTA Balloon Navigator"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "build/icon.png"
+    }
+  }
+}

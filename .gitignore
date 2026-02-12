@@ -1,0 +1,16 @@
+# Alles ignorieren
+*
+
+# Nur Lite-relevante Dateien erlauben
+!.gitignore
+!.github/
+!.github/**
+!package.json
+!package-lock.json
+!tsconfig.json
+!vite.config.lite.ts
+!src/
+!src/lite/
+!src/lite/**
+!public/
+!public/balloon.svg

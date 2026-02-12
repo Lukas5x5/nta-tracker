@@ -21,7 +21,7 @@ export function TeamChat({ onClose }: TeamChatProps) {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, chatTarget])
 
   const handleSend = async (msg?: string) => {
     const messageText = msg || text.trim()
@@ -34,6 +34,19 @@ export function TeamChat({ onClose }: TeamChatProps) {
   }
 
   const targetPilot = chatTarget ? pilots.find(p => p.memberId === chatTarget) : null
+
+  // Nachrichten filtern nach aktuellem Chat-Kanal
+  const filteredMessages = messages.filter(msg => {
+    if (chatTarget === null) {
+      // "Alle"-Kanal: nur Broadcast-Nachrichten (ohne target)
+      return !msg.targetMemberId
+    } else {
+      // Privat-Chat: Nachrichten zwischen mir und dem ausgewählten Piloten
+      const isFromMeToTarget = msg.isMine && msg.targetMemberId === chatTarget
+      const isFromTargetToMe = msg.memberId === chatTarget && (!msg.targetMemberId || msg.targetMemberId === myMemberId)
+      return isFromMeToTarget || isFromTargetToMe
+    }
+  })
 
   return (
     <div style={{
@@ -134,7 +147,7 @@ export function TeamChat({ onClose }: TeamChatProps) {
           }}>
             Du bist nicht als Team-Mitglied registriert und kannst keine Nachrichten senden.
           </div>
-        ) : messages.length === 0 ? (
+        ) : filteredMessages.length === 0 ? (
           <div style={{
             padding: 20,
             textAlign: 'center',
@@ -144,7 +157,7 @@ export function TeamChat({ onClose }: TeamChatProps) {
             Noch keine Nachrichten
           </div>
         ) : (
-          messages.map(msg => (
+          filteredMessages.map(msg => (
             <div
               key={msg.id}
               style={{

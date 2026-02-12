@@ -1,6 +1,5 @@
 import React from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { useTrackerStore } from '../stores/trackerStore'
 
 interface HeaderProps {
   onToggleList: () => void
@@ -13,10 +12,6 @@ interface HeaderProps {
 
 export function Header({ onToggleList, showList, onToggleChat, showChat, onLeaveTeam, teamName }: HeaderProps) {
   const { user, logout } = useAuthStore()
-  const { pilots, messages } = useTrackerStore()
-
-  const onlinePilots = pilots.filter(p => p.isOnline).length
-
   return (
     <header style={{
       display: 'flex',
@@ -58,28 +53,6 @@ export function Header({ onToggleList, showList, onToggleChat, showChat, onLeave
         }}>
           {teamName}
         </span>
-      </div>
-
-      {/* Center: Pilot Count */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '6px 12px',
-        background: 'rgba(255,255,255,0.05)',
-        borderRadius: 20,
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.7)'
-      }}>
-        <div style={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          background: onlinePilots > 0 ? '#22c55e' : '#6b7280',
-          boxShadow: onlinePilots > 0 ? '0 0 6px #22c55e' : 'none'
-        }} />
-        <span style={{ fontWeight: 600 }}>{onlinePilots}</span>
-        <span style={{ color: 'rgba(255,255,255,0.4)' }}>/ {pilots.length}</span>
       </div>
 
       {/* Actions (right) */}

@@ -108,6 +108,8 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
 
   joinTeam: async (joinCode: string) => {
     set({ isJoining: true, joinError: null, joinCode })
+    // Join-Code im localStorage speichern für Auto-Rejoin nach Refresh
+    try { localStorage.setItem('nta-lite-join-code', joinCode) } catch {}
 
     try {
       // Team suchen
@@ -238,6 +240,8 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
   },
 
   leaveTeam: () => {
+    // Join-Code aus localStorage entfernen
+    try { localStorage.removeItem('nta-lite-join-code') } catch {}
     // Channels aufräumen
     if (positionsChannel) {
       supabase.removeChannel(positionsChannel)

@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useTrackerStore, type PilotPosition, type PilotTask } from '../stores/trackerStore'
+import { GroundWindDialog } from './GroundWindDialog'
 
 // WGS84 zu UTM Konvertierung
 function latLngToUTM(lat: number, lng: number): { zone: number; easting: number; northing: number; letter: string } {
@@ -61,8 +62,24 @@ export function TrackerMap() {
   const myLocationMarkerRef = useRef<L.Marker | null>(null)
   const myLocationCircleRef = useRef<L.Circle | null>(null)
   const initialFitDoneRef = useRef(false)
+  const [windDialogTask, setWindDialogTask] = useState<PilotTask | null>(null)
 
   const { pilots, selectedPilot, selectPilot, pilotTasks } = useTrackerStore()
+
+  // Globale Callbacks für Leaflet-Popup-Buttons registrieren
+  useEffect(() => {
+    (window as any).__ntaNavigateToGoal = (lat: number, lng: number) => {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`, '_blank')
+    };
+    (window as any).__ntaReportWind = (taskId: string) => {
+      const task = useTrackerStore.getState().pilotTasks.find(t => t.id === taskId)
+      if (task) setWindDialogTask(task)
+    }
+    return () => {
+      delete (window as any).__ntaNavigateToGoal
+      delete (window as any).__ntaReportWind
+    }
+  }, [])
 
   // Initialize map
   useEffect(() => {
@@ -354,7 +371,7 @@ export function TrackerMap() {
               padding: 12px;
               color: #fff;
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-              min-width: 200px;
+              min-width: 220px;
             ">
               <div style="font-weight: 700; margin-bottom: 8px; font-size: 14px;">${task.taskNumber || ''} ${task.name}</div>
               <div style="font-size: 12px; color: rgba(255,255,255,0.7);">
@@ -367,8 +384,50 @@ export function TrackerMap() {
                   <div>UTM: ${formatUTM(lat, lng)}</div>
                 </div>
               </div>
+              <div style="display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                <button onclick="window.__ntaNavigateToGoal(${lat}, ${lng})" style="
+                  flex: 1;
+                  padding: 8px;
+                  background: rgba(34, 197, 94, 0.2);
+                  border: 1px solid rgba(34, 197, 94, 0.4);
+                  border-radius: 6px;
+                  color: #22c55e;
+                  font-size: 11px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 4px;
+                ">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                  </svg>
+                  Navigation
+                </button>
+                <button onclick="window.__ntaReportWind('${task.id}')" style="
+                  flex: 1;
+                  padding: 8px;
+                  background: rgba(59, 130, 246, 0.2);
+                  border: 1px solid rgba(59, 130, 246, 0.4);
+                  border-radius: 6px;
+                  color: #3b82f6;
+                  font-size: 11px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 4px;
+                ">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2" />
+                  </svg>
+                  Wind
+                </button>
+              </div>
             </div>
-          `)
+          `, { className: 'task-popup' })
         taskLayersRef.current!.addLayer(marker)
       })
     })
@@ -377,7 +436,15 @@ export function TrackerMap() {
   }, [pilotTasks, selectedPilot])
 
   return (
-    <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+    <>
+      <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+      {windDialogTask && (
+        <GroundWindDialog
+          task={windDialogTask}
+          onClose={() => setWindDialogTask(null)}
+        />
+      )}
+    </>
   )
 }
 

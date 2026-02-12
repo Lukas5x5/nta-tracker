@@ -4,24 +4,27 @@ import { TeamJoin } from './components/TeamJoin'
 import { TrackerMap } from './components/TrackerMap'
 import { Header } from './components/Header'
 import { PilotList } from './components/PilotList'
-import { PilotTasksPanel } from './components/PilotTasksPanel'
 import { TeamChat } from './components/TeamChat'
 import { useAuthStore } from './stores/authStore'
 import { useTrackerStore } from './stores/trackerStore'
 
 export function LiteApp() {
   const { isAuthenticated, isLoading, checkSession } = useAuthStore()
-  const { team, leaveTeam, selectedPilot, selectPilot } = useTrackerStore()
+  const { team, leaveTeam, joinTeam } = useTrackerStore()
   const [showList, setShowList] = useState(false)
-  const [showTasks, setShowTasks] = useState(false)
   const [showChat, setShowChat] = useState(false)
 
-  // Show tasks panel when pilot is selected
+  // Auto-Rejoin nach Refresh: gespeicherten Join-Code verwenden
   useEffect(() => {
-    if (selectedPilot) {
-      setShowTasks(true)
+    if (isAuthenticated && !team) {
+      try {
+        const savedCode = localStorage.getItem('nta-lite-join-code')
+        if (savedCode) {
+          joinTeam(savedCode)
+        }
+      } catch {}
     }
-  }, [selectedPilot])
+  }, [isAuthenticated])
 
   // Session prüfen beim Start und alle 30 Sekunden
   useEffect(() => {
@@ -93,14 +96,6 @@ export function LiteApp() {
 
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <TrackerMap />
-
-        {/* Pilot Tasks Panel (bottom sheet) */}
-        {showTasks && selectedPilot && (
-          <PilotTasksPanel onClose={() => {
-            setShowTasks(false)
-            selectPilot(null)
-          }} />
-        )}
 
         {/* Pilot List Overlay (mobile) */}
         {showList && (

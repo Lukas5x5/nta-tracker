@@ -28,7 +28,6 @@
     "leaflet": "^1.9.4",
     "leaflet-imageoverlay-rotated": "^0.2.1",
     "leaflet-pixi-overlay": "^1.9.5",
-    "mapbox-gl": "^3.18.1",
     "nmea-simple": "^3.3.0",
     "pdfjs-dist": "^3.11.174",
     "pixi.js": "^8.16.0",
@@ -38,10 +37,10 @@
     "react-dom": "^18.2.0",
     "react-draggable": "^4.5.0",
     "react-leaflet": "^4.2.1",
-    "react-map-gl": "^8.1.0",
     "resium": "^1.19.3",
     "serialport": "^12.0.0",
     "sharp": "^0.34.5",
+    "sql.js": "^1.14.0",
     "zustand": "^4.4.7"
   },
   "devDependencies": {
@@ -73,6 +72,9 @@
       "node_modules/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "node_modules/sql.js/dist/sql-wasm.wasm"
+    ],
     "win": {
       "target": [
         {
@@ -82,6 +84,7 @@
           ]
         }
       ],
+      "icon": "build/icon.png",
       "sign": false,
       "signingHashAlgorithms": []
     },

@@ -23,6 +23,15 @@ html, body, #root {
   background: #1e293b;
 }
 
+/* Hide broken/missing tiles instead of showing black */
+.leaflet-tile-pane img.leaflet-tile[src=""] {
+  display: none !important;
+}
+
+.leaflet-tile-container img {
+  background: transparent !important;
+}
+
 .leaflet-control-zoom {
   border: none !important;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;

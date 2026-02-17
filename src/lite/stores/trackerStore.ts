@@ -163,27 +163,46 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
 
       // Eigene member_id ermitteln (für Chat)
       const authUser = useAuthStore.getState().user
-      let myMember = authUser ? (members || []).find((m: any) => m.user_id === authUser.id) : null
+      const isDemo = authUser?.is_demo === true
+      // Demo-User: immer neuen Member erstellen (mehrere Geräte = mehrere Members)
+      let myMember = (!isDemo && authUser) ? (members || []).find((m: any) => m.user_id === authUser.id) : null
 
       // Falls User noch kein Team-Member ist, automatisch als Member hinzufügen
       if (!myMember && authUser) {
-        const callsign = authUser.display_name || authUser.username
         const crewColors = ['#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#f97316']
         const color = crewColors[Math.floor(Math.random() * crewColors.length)]
 
-        // Upsert: Falls callsign schon existiert (z.B. nach Re-Join), einfach updaten
-        const { data: newMember, error: insertError } = await supabase
-          .from('team_members')
-          .upsert({
-            team_id: team.id,
-            user_id: authUser.id,
-            callsign,
-            color,
-            role: authUser.role || 'crew',
-            is_online: true
-          }, { onConflict: 'team_id,callsign' })
-          .select('*')
-          .single()
+        // Demo-User: eindeutiges Callsign generieren (z.B. "Demo-A3F")
+        const callsign = isDemo
+          ? `Demo-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
+          : (authUser.display_name || authUser.username)
+
+        // Demo-User: immer neuen Member erstellen (kein upsert, da mehrere gleichzeitig)
+        const { data: newMember, error: insertError } = isDemo
+          ? await supabase
+              .from('team_members')
+              .insert({
+                team_id: team.id,
+                user_id: authUser.id,
+                callsign,
+                color,
+                role: 'crew',
+                is_online: true
+              })
+              .select('*')
+              .single()
+          : await supabase
+              .from('team_members')
+              .upsert({
+                team_id: team.id,
+                user_id: authUser.id,
+                callsign,
+                color,
+                role: authUser.role || 'crew',
+                is_online: true
+              }, { onConflict: 'team_id,callsign' })
+              .select('*')
+              .single()
 
         if (!insertError && newMember) {
           console.log('[Tracker] Als Team-Member hinzugefügt:', callsign)
@@ -240,6 +259,14 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
   },
 
   leaveTeam: () => {
+    // Demo-User: eigenen Member-Eintrag löschen (aufräumen)
+    const authUser = useAuthStore.getState().user
+    const myMemberId = get().myMemberId
+    if (authUser?.is_demo && myMemberId) {
+      supabase.from('team_members').delete().eq('id', myMemberId).then(() => {
+        console.log('[Tracker] Demo-Member gelöscht:', myMemberId)
+      })
+    }
     // Join-Code aus localStorage entfernen
     try { localStorage.removeItem('nta-lite-join-code') } catch {}
     // Channels aufräumen

@@ -59,6 +59,8 @@ export function TrackerMap() {
   const mapInstanceRef = useRef<L.Map | null>(null)
   const markersRef = useRef<Map<string, L.Marker>>(new Map())
   const taskLayersRef = useRef<L.LayerGroup | null>(null)
+  const navLineRef = useRef<L.Polyline | null>(null)
+  const navLineBorderRef = useRef<L.Polyline | null>(null)
   const myLocationMarkerRef = useRef<L.Marker | null>(null)
   const myLocationCircleRef = useRef<L.Circle | null>(null)
   const initialFitDoneRef = useRef(false)
@@ -92,21 +94,35 @@ export function TrackerMap() {
       attributionControl: false
     })
 
+    // Hide broken tiles (make them transparent instead of black)
+    const handleTileError = (e: L.TileErrorEvent) => {
+      if (e.tile) {
+        e.tile.style.display = 'none'
+      }
+    }
+
     // Tile Layers
     const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      maxNativeZoom: 19,
       attribution: '© OSM'
     })
+    osmLayer.on('tileerror', handleTileError)
 
-    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19,
-      attribution: '© Esri'
+    const satelliteLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+      maxZoom: 20,
+      maxNativeZoom: 20,
+      subdomains: ['0', '1', '2', '3'],
+      attribution: '© Google'
     })
+    satelliteLayer.on('tileerror', handleTileError)
 
     const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
       maxZoom: 17,
+      maxNativeZoom: 15,
       attribution: '© OpenTopoMap'
     })
+    topoLayer.on('tileerror', handleTileError)
 
     // Default Layer
     osmLayer.addTo(map)
@@ -434,6 +450,66 @@ export function TrackerMap() {
 
     console.log('[Map] Total goals drawn:', totalGoals)
   }, [pilotTasks, selectedPilot])
+
+  // Navigation Line: Linie vom ausgewählten Piloten zum ersten Goal
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map) return
+
+    // Alte Linien entfernen
+    if (navLineRef.current) {
+      map.removeLayer(navLineRef.current)
+      navLineRef.current = null
+    }
+    if (navLineBorderRef.current) {
+      map.removeLayer(navLineBorderRef.current)
+      navLineBorderRef.current = null
+    }
+
+    if (!selectedPilot || pilotTasks.length === 0) return
+
+    // Piloten-Position finden
+    const pilot = pilots.find(p => p.memberId === selectedPilot)
+    if (!pilot || pilot.latitude === 0 || pilot.longitude === 0) return
+
+    // Erstes Goal mit gültiger Position finden
+    let goalLat: number | null = null
+    let goalLng: number | null = null
+    for (const task of pilotTasks) {
+      for (const goal of task.goals) {
+        if (goal.position?.latitude && goal.position?.longitude) {
+          goalLat = goal.position.latitude
+          goalLng = goal.position.longitude
+          break
+        }
+      }
+      if (goalLat) break
+    }
+
+    if (!goalLat || !goalLng) return
+
+    const positions: L.LatLngExpression[] = [
+      [pilot.latitude, pilot.longitude],
+      [goalLat, goalLng]
+    ]
+
+    // Schwarzer Rand für Kontrast
+    navLineBorderRef.current = L.polyline(positions, {
+      color: '#000000',
+      weight: 6,
+      opacity: 0.4,
+      interactive: false,
+    }).addTo(map)
+
+    // Grüne Hauptlinie
+    navLineRef.current = L.polyline(positions, {
+      color: '#22c55e',
+      weight: 3,
+      opacity: 0.9,
+      dashArray: '10, 6',
+      interactive: false,
+    }).addTo(map)
+  }, [selectedPilot, pilotTasks, pilots])
 
   return (
     <>

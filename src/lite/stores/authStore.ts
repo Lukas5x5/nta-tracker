@@ -135,6 +135,7 @@ interface User {
   display_name: string | null
   is_admin: boolean
   role: 'pilot' | 'crew'
+  is_demo?: boolean
 }
 
 interface AuthState {
@@ -196,22 +197,30 @@ export const useAuthStore = create<AuthState>()(
             console.log('[Auth] Crew-Account war auf anderem Gerät aktiv - übernehme Session')
           }
 
+          const isDemo = data.is_demo === true
           const user: User = {
             id: data.id,
             username: data.username,
             display_name: data.display_name,
             is_admin: data.is_admin,
-            role: data.role || 'pilot'
+            role: data.role || 'pilot',
+            is_demo: isDemo
           }
 
-          // Session-Token generieren und in DB speichern
-          const sessionToken = generateSessionToken()
-          await supabase
-            .from('app_users')
-            .update({ session_token: sessionToken })
-            .eq('id', data.id)
+          // Demo-Accounts: kein Session-Token → mehrere gleichzeitig möglich
+          if (isDemo) {
+            console.log('[Auth] Demo-Account Login - kein Session-Token')
+            set({ user, sessionToken: null, isAuthenticated: true, isLoading: false, error: null })
+          } else {
+            // Session-Token generieren und in DB speichern
+            const sessionToken = generateSessionToken()
+            await supabase
+              .from('app_users')
+              .update({ session_token: sessionToken })
+              .eq('id', data.id)
 
-          set({ user, sessionToken, isAuthenticated: true, isLoading: false, error: null })
+            set({ user, sessionToken, isAuthenticated: true, isLoading: false, error: null })
+          }
           return true
         } catch (err: any) {
           console.error('[Auth] Login error:', err)
@@ -239,16 +248,28 @@ export const useAuthStore = create<AuthState>()(
           return
         }
 
-        // Validiere Session mit Supabase
+        // Validiere Session mit Supabase — is_demo immer aus DB holen
         try {
           const { data, error } = await supabase
             .from('app_users')
-            .select('id, is_active, session_token')
+            .select('id, is_active, session_token, is_demo')
             .eq('id', user.id)
             .single()
 
           if (error || !data || !data.is_active) {
             set({ user: null, sessionToken: null, isAuthenticated: false, isLoading: false })
+            return
+          }
+
+          // is_demo aus DB aktualisieren (falls lokaler State veraltet)
+          const isDemo = data.is_demo === true
+          if (isDemo !== (user.is_demo === true)) {
+            set({ user: { ...user, is_demo: isDemo } })
+          }
+
+          // Demo-Accounts: keine Session-Token-Prüfung
+          if (isDemo) {
+            set({ isLoading: false })
             return
           }
 

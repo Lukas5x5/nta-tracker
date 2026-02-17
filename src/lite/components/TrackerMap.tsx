@@ -451,7 +451,7 @@ export function TrackerMap() {
     console.log('[Map] Total goals drawn:', totalGoals)
   }, [pilotTasks, selectedPilot])
 
-  // Navigation Line: Linie vom ausgewählten Piloten zum ersten Goal
+  // Heading Line: Linie vom ausgewählten Piloten in aktuelle Flugrichtung
   useEffect(() => {
     const map = mapInstanceRef.current
     if (!map) return
@@ -466,31 +466,32 @@ export function TrackerMap() {
       navLineBorderRef.current = null
     }
 
-    if (!selectedPilot || pilotTasks.length === 0) return
+    if (!selectedPilot) return
 
     // Piloten-Position finden
     const pilot = pilots.find(p => p.memberId === selectedPilot)
     if (!pilot || pilot.latitude === 0 || pilot.longitude === 0) return
 
-    // Erstes Goal mit gültiger Position finden
-    let goalLat: number | null = null
-    let goalLng: number | null = null
-    for (const task of pilotTasks) {
-      for (const goal of task.goals) {
-        if (goal.position?.latitude && goal.position?.longitude) {
-          goalLat = goal.position.latitude
-          goalLng = goal.position.longitude
-          break
-        }
-      }
-      if (goalLat) break
-    }
-
-    if (!goalLat || !goalLng) return
+    // Endpunkt berechnen: 500m in Heading-Richtung
+    const headingRad = (pilot.heading * Math.PI) / 180
+    const distanceM = 500
+    const earthRadius = 6371000
+    const lat1 = (pilot.latitude * Math.PI) / 180
+    const lng1 = (pilot.longitude * Math.PI) / 180
+    const lat2 = Math.asin(
+      Math.sin(lat1) * Math.cos(distanceM / earthRadius) +
+      Math.cos(lat1) * Math.sin(distanceM / earthRadius) * Math.cos(headingRad)
+    )
+    const lng2 = lng1 + Math.atan2(
+      Math.sin(headingRad) * Math.sin(distanceM / earthRadius) * Math.cos(lat1),
+      Math.cos(distanceM / earthRadius) - Math.sin(lat1) * Math.sin(lat2)
+    )
+    const endLat = (lat2 * 180) / Math.PI
+    const endLng = (lng2 * 180) / Math.PI
 
     const positions: L.LatLngExpression[] = [
       [pilot.latitude, pilot.longitude],
-      [goalLat, goalLng]
+      [endLat, endLng]
     ]
 
     // Schwarzer Rand für Kontrast
@@ -501,15 +502,14 @@ export function TrackerMap() {
       interactive: false,
     }).addTo(map)
 
-    // Grüne Hauptlinie
+    // Gelbe Hauptlinie (Kurs-Richtung)
     navLineRef.current = L.polyline(positions, {
-      color: '#22c55e',
+      color: '#facc15',
       weight: 3,
       opacity: 0.9,
-      dashArray: '10, 6',
       interactive: false,
     }).addTo(map)
-  }, [selectedPilot, pilotTasks, pilots])
+  }, [selectedPilot, pilots])
 
   return (
     <>

@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unveröffentlicht]
+- Update-Popup: Neues professionelles Design mit blauem Header, Bullet-Point Changelog, Hover-Effekten
+- Update-System: testUserIds-Filter für gezieltes Rollout über Supabase
+
 ## [1.1.2] - 2026-02-18
 - Fix: Update-Download EBUSY-Fehler – Datei wird jetzt zuverlässig geschlossen bevor der Installer startet
 

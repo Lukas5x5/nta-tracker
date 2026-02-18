@@ -140,6 +140,11 @@ function App() {
           const config = typeof data.value === 'string' ? JSON.parse(data.value) : data.value
           const latestVersion = config.version || config
           if (latestVersion && latestVersion !== APP_VERSION) {
+            // Wenn testUserIds gesetzt: nur diese User sehen das Update
+            if (config.testUserIds && Array.isArray(config.testUserIds)) {
+              const userId = useAuthStore.getState()?.user?.id
+              if (!userId || !config.testUserIds.includes(userId)) return
+            }
             setUpdateInfo({
               version: latestVersion,
               message: config.message,
@@ -1841,119 +1846,158 @@ function App() {
           justifyContent: 'center'
         }} onClick={() => setUpdateDismissed(true)}>
           <div style={{
-            background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+            background: '#0c1222',
             borderRadius: '16px',
-            padding: '28px 32px',
-            minWidth: '400px',
-            maxWidth: '500px',
-            boxShadow: '0 8px 40px rgba(0, 0, 0, 0.6)',
-            border: '1px solid rgba(59, 130, 246, 0.3)',
-            color: '#fff'
+            width: '440px',
+            boxShadow: '0 24px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(59, 130, 246, 0.15)',
+            color: '#fff',
+            overflow: 'hidden'
           }} onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            {/* Farbiger Header-Streifen */}
+            <div style={{
+              background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)',
+              padding: '20px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px'
+            }}>
               <div style={{
-                width: '36px', height: '36px', borderRadius: '10px',
-                background: 'rgba(59, 130, 246, 0.15)', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                width: '42px', height: '42px', borderRadius: '12px',
+                background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
               }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3v12" />
+                  <polyline points="8 11 12 15 16 11" />
+                  <path d="M20 21H4" />
                 </svg>
               </div>
               <div>
-                <div style={{ fontSize: '16px', fontWeight: 700 }}>Update verfügbar</div>
-                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>
-                  v{APP_VERSION} → v{updateInfo.version}
+                <div style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.2px' }}>Update verfügbar</div>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', marginTop: '2px', fontWeight: 500 }}>
+                  v{APP_VERSION} &rarr; v{updateInfo.version}
                 </div>
               </div>
             </div>
 
-            {/* Changelog */}
-            {updateInfo.changelog && updateInfo.changelog.length > 0 ? (
-              <div style={{
-                margin: '16px 0',
-                padding: '12px 14px',
-                background: 'rgba(0,0,0,0.25)',
-                borderRadius: '10px',
-                border: '1px solid rgba(255,255,255,0.06)',
-                maxHeight: '200px',
-                overflowY: 'auto'
-              }}>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
-                  Änderungen
-                </div>
-                {updateInfo.changelog.map((item, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: i < updateInfo.changelog!.length - 1 ? '6px' : 0, fontSize: '12px', lineHeight: 1.5, color: 'rgba(255,255,255,0.7)' }}>
-                    <span style={{ color: '#3b82f6', flexShrink: 0, marginTop: '1px' }}>+</span>
-                    <span>{item}</span>
+            {/* Body */}
+            <div style={{ padding: '20px 24px' }}>
+              {/* Changelog */}
+              {updateInfo.changelog && updateInfo.changelog.length > 0 ? (
+                <div style={{
+                  marginBottom: '20px',
+                  padding: '14px 16px',
+                  background: 'rgba(255,255,255,0.03)',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  maxHeight: '220px',
+                  overflowY: 'auto'
+                }}>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>
+                    Was ist neu
                   </div>
-                ))}
-              </div>
-            ) : updateInfo.message ? (
-              <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', margin: '16px 0', lineHeight: 1.5 }}>
-                {updateInfo.message}
-              </div>
-            ) : (
-              <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', margin: '16px 0' }}>
-                Eine neue Version ist verfügbar.
-              </div>
-            )}
-
-            {/* Download-Fortschritt */}
-            {downloading && (
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden', marginBottom: '6px' }}>
-                  <div style={{
-                    height: '100%', width: `${downloadProgress}%`,
-                    background: 'linear-gradient(90deg, #3b82f6, #2563eb)',
-                    borderRadius: '3px', transition: 'width 0.3s'
-                  }} />
+                  {updateInfo.changelog.map((item, i) => (
+                    <div key={i} style={{
+                      display: 'flex', gap: '10px', alignItems: 'flex-start',
+                      marginBottom: i < updateInfo.changelog!.length - 1 ? '8px' : 0,
+                      fontSize: '12.5px', lineHeight: 1.5, color: 'rgba(255,255,255,0.75)'
+                    }}>
+                      <div style={{
+                        width: '5px', height: '5px', borderRadius: '50%',
+                        background: '#3b82f6', flexShrink: 0, marginTop: '7px'
+                      }} />
+                      <span>{item}</span>
+                    </div>
+                  ))}
                 </div>
-                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>{downloadProgress}% heruntergeladen...</div>
-              </div>
-            )}
-            {downloadError && (
-              <div style={{ fontSize: '12px', color: '#ef4444', marginBottom: '12px', padding: '8px 10px', background: 'rgba(239,68,68,0.1)', borderRadius: '6px' }}>{downloadError}</div>
-            )}
-
-            {/* Buttons */}
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setUpdateDismissed(true)}
-                style={{
-                  padding: '10px 20px', background: 'rgba(255,255,255,0.1)',
-                  border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px',
-                  color: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 600
-                }}
-              >
-                Später
-              </button>
-              {updateInfo.downloadUrl && window.ntaAPI?.update && !downloading && (
-                <button
-                  onClick={async () => {
-                    setDownloading(true)
-                    setDownloadError(null)
-                    setDownloadProgress(0)
-                    const removeListener = window.ntaAPI.update.onProgress((p) => setDownloadProgress(p.percent))
-                    const result = await window.ntaAPI.update.downloadAndInstall(updateInfo!.downloadUrl!)
-                    if (!result.success) {
-                      setDownloadError(result.error || 'Download fehlgeschlagen')
-                      setDownloading(false)
-                    }
-                    removeListener()
-                  }}
-                  style={{
-                    padding: '10px 20px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
-                    border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer',
-                    fontSize: '13px', fontWeight: 600, boxShadow: '0 2px 10px rgba(59,130,246,0.4)'
-                  }}
-                >
-                  Jetzt installieren
-                </button>
+              ) : updateInfo.message ? (
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '20px', lineHeight: 1.6 }}>
+                  {updateInfo.message}
+                </div>
+              ) : (
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px' }}>
+                  Eine neue Version ist verfügbar.
+                </div>
               )}
+
+              {/* Download-Fortschritt */}
+              {downloading && (
+                <div style={{ marginBottom: '18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>Herunterladen...</span>
+                    <span style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 700 }}>{downloadProgress}%</span>
+                  </div>
+                  <div style={{ height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%', width: `${downloadProgress}%`,
+                      background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
+                      borderRadius: '2px', transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                </div>
+              )}
+              {downloadError && (
+                <div style={{
+                  fontSize: '12px', color: '#fca5a5', marginBottom: '14px',
+                  padding: '10px 12px', background: 'rgba(239,68,68,0.08)',
+                  borderRadius: '8px', border: '1px solid rgba(239,68,68,0.15)',
+                  display: 'flex', alignItems: 'center', gap: '8px'
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                  {downloadError}
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => setUpdateDismissed(true)}
+                  style={{
+                    flex: 1, padding: '11px 16px', background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px',
+                    color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '13px',
+                    fontWeight: 600, transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#fff' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)' }}
+                >
+                  Später
+                </button>
+                {updateInfo.downloadUrl && window.ntaAPI?.update && !downloading && (
+                  <button
+                    onClick={async () => {
+                      setDownloading(true)
+                      setDownloadError(null)
+                      setDownloadProgress(0)
+                      const removeListener = window.ntaAPI.update.onProgress((p) => setDownloadProgress(p.percent))
+                      const result = await window.ntaAPI.update.downloadAndInstall(updateInfo!.downloadUrl!)
+                      if (!result.success) {
+                        setDownloadError(result.error || 'Download fehlgeschlagen')
+                        setDownloading(false)
+                      }
+                      removeListener()
+                    }}
+                    style={{
+                      flex: 1.5, padding: '11px 16px',
+                      background: 'linear-gradient(135deg, #2563eb, #3b82f6)',
+                      border: 'none', borderRadius: '10px', color: '#fff', cursor: 'pointer',
+                      fontSize: '13px', fontWeight: 700, letterSpacing: '-0.1px',
+                      boxShadow: '0 4px 16px rgba(37, 99, 235, 0.35)',
+                      transition: 'all 0.15s',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 6px 24px rgba(37, 99, 235, 0.5)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                    onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(37, 99, 235, 0.35)'; e.currentTarget.style.transform = 'translateY(0)' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 3v12" />
+                      <polyline points="8 11 12 15 16 11" />
+                      <path d="M20 21H4" />
+                    </svg>
+                    Jetzt installieren
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

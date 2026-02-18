@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob: 'unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://unpkg.com https://api.mapbox.com https://cesium.com; img-src 'self' data: blob: http://127.0.0.1:* https://*.tile.openstreetmap.org https://*.openstreetmap.org https://*.tile.opentopomap.org https://*.opentopomap.org https://maps.wikimedia.org https://*.basemaps.cartocdn.com https://mt0.google.com https://mt1.google.com https://mt2.google.com https://mt3.google.com https://api.mapbox.com https://*.tiles.mapbox.com https://assets.cesium.com https://*.cesium.com https://*.cesiumjs.org; connect-src 'self' http://127.0.0.1:* https://overpass-api.de https://api.mapbox.com https://*.tiles.mapbox.com https://events.mapbox.com https://api.cesium.com https://*.cesium.com https://*.cesiumjs.org https://api.open-meteo.com https://*.supabase.co wss://*.supabase.co https://mt0.google.com https://mt1.google.com https://mt2.google.com https://mt3.google.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org; child-src blob:">
+    <title>NTA - Balloon Navigator</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="./base.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>

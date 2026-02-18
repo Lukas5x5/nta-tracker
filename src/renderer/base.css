@@ -1,0 +1,76 @@
+/* KRITISCH: Dunkler Hintergrund sofort - verhindert weißes Flackern */
+html, body, #root {
+  background-color: #0a0f1e !important;
+  margin: 0;
+  padding: 0;
+}
+.leaflet-container {
+  background-color: #0a0f1e !important;
+}
+
+/* Hardware-Beschleunigung für Karten-Overlays - verhindert Flackern */
+.leaflet-image-layer,
+.leaflet-overlay-pane img,
+.hardware-accelerated-overlay,
+.gpu-accelerated-image {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  image-rendering: auto;
+}
+
+/* GPU-beschleunigte Bilder - maximale Performance */
+.gpu-accelerated-image {
+  /* GPU Compositing Layer erzwingen */
+  transform: translate3d(0, 0, 0);
+  /* Keine Übergänge für sofortiges Rendering */
+  transition: none !important;
+  /* Optimierte Darstellung */
+  -webkit-font-smoothing: antialiased;
+  /* Pointer Events deaktivieren für bessere Performance */
+  pointer-events: none;
+}
+
+/* Leaflet Pane Optimierung für flüssiges Panning */
+.leaflet-overlay-pane {
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+
+/* Leaflet Map Container - GPU Layer */
+.leaflet-map-pane {
+  transform: translate3d(0, 0, 0);
+}
+
+/* Zoom Animation deaktivieren für sofortiges Rendering */
+.leaflet-zoom-anim .leaflet-image-layer,
+.leaflet-zoom-anim .gpu-accelerated-image {
+  transition: none !important;
+}
+
+/* Während dem Panning - keine Repaints */
+.leaflet-dragging .leaflet-image-layer,
+.leaflet-dragging .gpu-accelerated-image {
+  will-change: transform;
+  pointer-events: none;
+}
+
+/* Verhindere Neuladen beim Panning */
+.leaflet-tile-container img,
+.leaflet-image-layer img {
+  transition: none !important;
+}
+
+/* Balloon Marker - GPU-beschleunigt, KEINE CSS-Transition!
+   Position wird per requestAnimationFrame (60fps) interpoliert.
+   CSS-Transitions würden mit der JS-Animation kollidieren. */
+.leaflet-marker-icon.balloon-marker {
+  will-change: transform;
+  transition: none !important;
+}
+.balloon-marker > div {
+  will-change: transform;
+  transition: none !important;
+}

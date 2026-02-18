@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Track Viewer - NTA Balloon Navigator</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        #cesiumContainer {
+            width: 100%;
+            height: 100%;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: linear-gradient(135deg, rgba(30, 30, 30, 0.95), rgba(40, 40, 40, 0.95));
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            z-index: 1000;
+            min-width: 240px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #controls h3 {
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            font-weight: 700;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 2px solid rgba(76, 175, 80, 0.5);
+            padding-bottom: 8px;
+        }
+
+        #controls button {
+            width: 100%;
+            padding: 12px 16px;
+            margin: 8px 0;
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+        }
+
+        #controls button:hover {
+            background: linear-gradient(135deg, #45a049, #3d8b40);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+        }
+
+        #controls button:active {
+            transform: translateY(0);
+        }
+
+        #info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: linear-gradient(135deg, rgba(30, 30, 30, 0.95), rgba(40, 40, 40, 0.95));
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            z-index: 1000;
+            font-size: 13px;
+            min-width: 240px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .info-row {
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .info-label {
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-value {
+            color: #4CAF50;
+            font-weight: 700;
+            font-size: 15px;
+        }
+
+        /* Range Slider Styling */
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            border: 2px solid #4CAF50;
+            transition: all 0.2s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 3px 12px rgba(76, 175, 80, 0.5);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            border: 2px solid #4CAF50;
+            transition: all 0.2s ease;
+        }
+
+        input[type="range"]::-moz-range-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 3px 12px rgba(76, 175, 80, 0.5);
+        }
+
+        /* Loading animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        #controls, #info {
+            animation: fadeIn 0.5s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div id="loadingIndicator" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+         background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 10000;
+         font-family: Arial, sans-serif; text-align: center;">
+        <div style="font-size: 18px; margin-bottom: 10px;">Lade 3D-Ansicht...</div>
+        <div style="font-size: 14px; color: #aaa;">Bitte warten, Cesium wird geladen</div>
+    </div>
+    <div id="cesiumContainer"></div>
+
+    <div id="controls">
+        <h3>🗺️ Kamera</h3>
+        <button onclick="viewOverview()">
+            <span style="font-size: 18px;">🌍</span>
+            <span>Übersicht</span>
+        </button>
+        <button onclick="viewFollow()">
+            <span style="font-size: 18px;">✈️</span>
+            <span>Verfolgen</span>
+        </button>
+        <button onclick="viewCockpit()">
+            <span style="font-size: 18px;">👁️</span>
+            <span>Ich-Perspektive</span>
+        </button>
+        <button onclick="startAutoFly()" style="background: linear-gradient(135deg, #f59e0b, #d97706) !important; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3) !important;">
+            <span style="font-size: 18px;">🎈</span>
+            <span id="autoFlyText">🎈 Animation</span>
+        </button>
+
+        <!-- Ballon Speed Slider -->
+        <div style="margin-top: 8px; margin-bottom: 8px;">
+            <label style="font-size: 10px; color: rgba(255,255,255,0.6); display: block; margin-bottom: 4px;">
+                Geschwindigkeit: <span id="balloonSpeedValue">5</span>x
+            </label>
+            <input
+                id="balloonSpeedSlider"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value="40"
+                style="width: 100%; height: 6px; border-radius: 3px; outline: none;
+                       background: linear-gradient(to right, #f59e0b 0%, #ef4444 100%);
+                       -webkit-appearance: none; cursor: pointer;"
+                oninput="updateBalloonSpeed()"
+            >
+            <div style="display: flex; justify-content: space-between; font-size: 9px; color: rgba(255,255,255,0.3);">
+                <span>0.1x</span>
+                <span>1x</span>
+                <span>50x</span>
+            </div>
+        </div>
+
+        <!-- Ballon Progress -->
+        <div id="balloonProgressContainer" style="margin-bottom: 8px;">
+            <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
+                <div id="balloonProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #f59e0b, #ef4444); border-radius: 2px; transition: width 0.1s linear;"></div>
+            </div>
+            <div id="balloonProgressText" style="font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 2px; text-align: center;">0%</div>
+        </div>
+
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <label style="font-size: 11px; color: rgba(255,255,255,0.7); margin-bottom: 8px; display: block;">
+                📍 Track-Position
+            </label>
+            <input
+                id="trackSlider"
+                type="range"
+                min="0"
+                max="100"
+                value="0"
+                style="width: 100%; height: 6px; border-radius: 3px; outline: none;
+                       background: linear-gradient(to right, #3b82f6 0%, #60a5fa 100%);
+                       -webkit-appearance: none; cursor: pointer;"
+                oninput="seekToPosition(this.value)"
+            >
+            <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 10px; color: rgba(255,255,255,0.5);">
+                <span>Start</span>
+                <span id="currentPoint">0%</span>
+                <span>Ziel</span>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <label style="font-size: 12px; color: rgba(255,255,255,0.9); font-weight: 600; display: block; margin-bottom: 10px;">
+                ⛰️ Geländehöhe: <span id="exaggerationValue" style="color: #4CAF50; font-size: 14px;">2.0</span>x
+            </label>
+            <input
+                type="range"
+                min="1"
+                max="10"
+                step="0.5"
+                value="2"
+                style="width: 100%; height: 6px; border-radius: 3px; outline: none;
+                       background: linear-gradient(to right, #4CAF50 0%, #45a049 100%);
+                       -webkit-appearance: none; cursor: pointer;"
+                oninput="setTerrainExaggeration(this.value); document.getElementById('exaggerationValue').textContent = this.value"
+            >
+            <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 10px; color: rgba(255,255,255,0.5);">
+                <span>1x</span>
+                <span>5x</span>
+                <span>10x</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="info">
+        <div style="margin-bottom: 15px; padding-bottom: 12px; border-bottom: 2px solid rgba(76, 175, 80, 0.3);">
+            <h4 style="margin: 0; font-size: 14px; color: #fff; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">
+                📊 Track-Info
+            </h4>
+        </div>
+
+        <div class="info-row">
+            <span class="info-label">📍 Punkte</span>
+            <span class="info-value" id="pointCount">0</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">📏 Distanz</span>
+            <span class="info-value" id="distance">0 km</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">⬆️ Max. Höhe</span>
+            <span class="info-value" id="maxAlt">0 m</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">⏱️ Dauer</span>
+            <span class="info-value" id="duration">0 min</span>
+        </div>
+        <div class="info-row" style="margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <span class="info-label">🗺️ Gelände</span>
+            <span class="info-value" id="terrainStatus" style="font-size: 13px;">Lädt...</span>
+        </div>
+    </div>
+
+    <script>
+        let viewer;
+        let trackData = [];
+        let goalData = [];
+        let trackEntity;
+        let globalTerrainOffset = 0;
+        let balloonEntity = null;
+        let balloonAnimInterval = null;
+        let balloonAnimating = false;
+        let balloonAnimIndex = 0;
+        let balloonAnimSpeed = 5;
+        let balloonAnimAccum = 0;
+
+        // Extrahiere Track und Goals aus den Daten (unterstützt altes und neues Format)
+        function parseViewerData(data) {
+            // Neues Format: { track: [...], goals: [...] }
+            if (data && data.track && Array.isArray(data.track)) {
+                if (data.goals && Array.isArray(data.goals)) {
+                    goalData = data.goals;
+                    console.log('Goals loaded:', goalData.length, 'goals');
+                }
+                return data.track;
+            }
+            // Altes Format: direktes Array
+            if (Array.isArray(data)) {
+                return data;
+            }
+            return [];
+        }
+
+        // Parse track data from URL hash, localStorage, or URL parameter
+        function getTrackData() {
+            // Try URL hash first (base64 encoded data)
+            try {
+                const hash = window.location.hash.substring(1); // Remove #
+                if (hash && hash.length > 100) {
+                    // Decode base64
+                    const jsonString = atob(hash);
+                    const data = JSON.parse(jsonString);
+                    const trackArray = parseViewerData(data);
+                    console.log('Track data loaded from URL hash:', trackArray.length, 'points');
+                    // Store in localStorage for potential refresh
+                    localStorage.setItem('nta_track_data', JSON.stringify(data));
+                    return trackArray.filter(point => {
+                        const isValid =
+                            point &&
+                            typeof point.lat === 'number' &&
+                            typeof point.lon === 'number' &&
+                            typeof point.alt === 'number' &&
+                            !isNaN(point.lat) &&
+                            !isNaN(point.lon) &&
+                            !isNaN(point.alt) &&
+                            point.lat >= -90 && point.lat <= 90 &&
+                            point.lon >= -180 && point.lon <= 180 &&
+                            point.alt >= -1000 && point.alt <= 50000;
+
+                        if (!isValid) {
+                            console.warn('Invalid track point:', point);
+                        }
+                        return isValid;
+                    });
+                }
+            } catch (e) {
+                console.error('Fehler beim Laden aus URL hash:', e);
+            }
+
+            // Try localStorage (fallback)
+            try {
+                const storedData = localStorage.getItem('nta_track_data');
+                if (storedData) {
+                    const rawData = JSON.parse(storedData);
+                    const data = parseViewerData(rawData);
+                    console.log('Track data loaded from localStorage:', data.length, 'points');
+                    // Validate track data
+                    return data.filter(point => {
+                        const isValid =
+                            point &&
+                            typeof point.lat === 'number' &&
+                            typeof point.lon === 'number' &&
+                            typeof point.alt === 'number' &&
+                            !isNaN(point.lat) &&
+                            !isNaN(point.lon) &&
+                            !isNaN(point.alt) &&
+                            point.lat >= -90 && point.lat <= 90 &&
+                            point.lon >= -180 && point.lon <= 180 &&
+                            point.alt >= -1000 && point.alt <= 50000;
+
+                        if (!isValid) {
+                            console.warn('Invalid track point:', point);
+                        }
+                        return isValid;
+                    });
+                }
+            } catch (e) {
+                console.error('Fehler beim Laden aus localStorage:', e);
+            }
+
+            // Fallback: Try URL parameter (for backwards compatibility)
+            const urlParams = new URLSearchParams(window.location.search);
+            const trackParam = urlParams.get('track');
+
+            if (trackParam) {
+                try {
+                    const rawData = JSON.parse(decodeURIComponent(trackParam));
+                    const data = parseViewerData(rawData);
+                    console.log('Track data loaded from URL:', data.length, 'points');
+                    // Validate track data
+                    return data.filter(point => {
+                        const isValid =
+                            point &&
+                            typeof point.lat === 'number' &&
+                            typeof point.lon === 'number' &&
+                            typeof point.alt === 'number' &&
+                            !isNaN(point.lat) &&
+                            !isNaN(point.lon) &&
+                            !isNaN(point.alt) &&
+                            point.lat >= -90 && point.lat <= 90 &&
+                            point.lon >= -180 && point.lon <= 180 &&
+                            point.alt >= -1000 && point.alt <= 50000;
+
+                        if (!isValid) {
+                            console.warn('Invalid track point:', point);
+                        }
+                        return isValid;
+                    });
+                } catch (e) {
+                    console.error('Fehler beim Parsen der Track-Daten aus URL:', e);
+                    return [];
+                }
+            }
+
+            console.error('Keine Track-Daten gefunden (weder localStorage noch URL)');
+            return [];
+        }
+
+        // Initialize Cesium viewer
+        async function initViewer() {
+            try {
+                console.log('Creating Cesium Viewer...');
+
+                // Setze Cesium Ion Token
+                Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjZWIxYzQ1Mi00NTZjLTRkNDMtYTZhZS1lYzhiMjQxMWRkZTgiLCJpZCI6Mzg2MjA2LCJpYXQiOjE3NzAwNDM1Mzd9.4ifwO4SjdPnFVRfGU7xc_fimLZe7VWCIo50O5ku-WSM';
+
+                console.log('Lade 3D Terrain...');
+
+                // ESRI World Imagery als Satellitenbilder (direkter Tile-Zugriff, kein Token nötig)
+                const esriImagery = new Cesium.UrlTemplateImageryProvider({
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                    maximumLevel: 19,
+                    credit: 'Esri, Maxar, Earthstar Geographics'
+                });
+                console.log('✓ ESRI Satellite Imagery Provider erstellt');
+
+                // Terrain laden - versuche Cesium World Terrain, sonst Ellipsoid
+                let terrainProvider;
+                try {
+                    terrainProvider = await Cesium.createWorldTerrainAsync({
+                        requestWaterMask: true,
+                        requestVertexNormals: true
+                    });
+                    console.log('✓ Cesium World Terrain geladen');
+                } catch (terrainError) {
+                    console.warn('Cesium World Terrain nicht verfügbar, verwende Ellipsoid:', terrainError);
+                    terrainProvider = new Cesium.EllipsoidTerrainProvider();
+                }
+
+                // Erstelle Viewer MIT baseLayer (Cesium 1.104+ API)
+                // WICHTIG: baseLayer statt imageryProvider verwenden!
+                viewer = new Cesium.Viewer('cesiumContainer', {
+                    baseLayer: new Cesium.ImageryLayer(esriImagery),
+                    terrainProvider: terrainProvider,
+                    baseLayerPicker: false,
+                    geocoder: false,
+                    homeButton: false,
+                    sceneModePicker: false,
+                    navigationHelpButton: false,
+                    animation: false,
+                    timeline: false,
+                    fullscreenButton: false,
+                    vrButton: false,
+                    shouldAnimate: false
+                });
+
+                console.log('✓ Viewer mit Satellitenbildern erstellt (baseLayer API)');
+                document.getElementById('terrainStatus').textContent = '✓ 3D Bereit';
+                document.getElementById('terrainStatus').style.color = '#4CAF50';
+
+                // Aktiviere 3D-Gelände-Rendering
+                viewer.scene.globe.enableLighting = true;
+                viewer.scene.globe.depthTestAgainstTerrain = true;
+
+                // Hohe Qualität für Terrain
+                viewer.scene.globe.maximumScreenSpaceError = 1.0;
+                viewer.scene.fxaa = true;
+
+                // Wichtig: Vertikale Überhöhung für sichtbare Berge
+                viewer.scene.verticalExaggeration = 2.0;
+                document.getElementById('exaggerationValue').textContent = '2.0';
+
+                // Google Earth Kamera-Steuerung
+                enableGoogleEarthMode();
+
+                // Füge 3D-Gebäude hinzu (Cesium OSM Buildings)
+                try {
+                    const buildingTileset = await Cesium.createOsmBuildingsAsync();
+                    viewer.scene.primitives.add(buildingTileset);
+                    console.log('✓ 3D Gebäude geladen');
+                } catch (error) {
+                    console.warn('3D Gebäude konnten nicht geladen werden:', error);
+                }
+
+                // Überwache Terrain-Laden
+                viewer.scene.globe.tileLoadProgressEvent.addEventListener((queuedTileCount) => {
+                    if (queuedTileCount === 0) {
+                        console.log('✓ Alle Terrain-Tiles geladen');
+                        document.getElementById('terrainStatus').textContent = '✓ 3D Geladen';
+                        document.getElementById('terrainStatus').style.color = '#4CAF50';
+                    } else if (queuedTileCount > 0) {
+                        document.getElementById('terrainStatus').textContent = '⏳ ' + queuedTileCount;
+                        document.getElementById('terrainStatus').style.color = '#FFA500';
+                    }
+                });
+
+                console.log('Loading track data...');
+
+                // Load and display track
+                trackData = getTrackData();
+
+                // Hide loading indicator immediately after viewer is created
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                if (loadingIndicator) {
+                    loadingIndicator.style.display = 'none';
+                }
+
+                if (trackData.length > 0) {
+                    console.log('Track data loaded:', trackData.length, 'points');
+                    displayTrack();
+                    displayGoals();
+                    updateInfo();
+
+                    // Kamera hinter dem Startpunkt positionieren
+                    setTimeout(() => {
+                        console.log('Positioning camera behind start...');
+                        viewBehindStart();
+                    }, 2000);
+                } else {
+                    alert('Keine Track-Daten gefunden!');
+                }
+
+            } catch (error) {
+                console.error('Error initializing Cesium viewer:', error);
+                // Hide loading indicator
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                if (loadingIndicator) {
+                    loadingIndicator.style.display = 'none';
+                }
+                alert('Fehler beim Laden der 3D-Ansicht: ' + error.message + '\n\nBitte prüfen Sie die Browser-Konsole (F12) für Details.');
+            }
+        }
+
+        // Create custom pin canvas for markers
+        function createPinCanvas(text, color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 80;
+            canvas.height = 100;
+            const ctx = canvas.getContext('2d');
+
+            // Draw pin shape
+            ctx.beginPath();
+            ctx.arc(40, 30, 25, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Draw pin bottom
+            ctx.beginPath();
+            ctx.moveTo(40, 55);
+            ctx.lineTo(40, 90);
+            ctx.lineTo(50, 65);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 40, 30);
+
+            return canvas;
+        }
+
+        // Display track on globe
+        // Goal-Kreuze am Boden anzeigen
+        function displayGoals() {
+            if (!goalData || goalData.length === 0) {
+                console.log('Keine Goals zum Anzeigen');
+                return;
+            }
+
+            console.log('Displaying', goalData.length, 'goals');
+
+            goalData.forEach((goal, index) => {
+                // ~2.5m Schenkellänge (halb so groß)
+                const crossSize = 0.0000225;
+
+                // Weißes Kreuz aus zwei Linien am Boden (X-Form)
+                viewer.entities.add({
+                    polyline: {
+                        positions: [
+                            Cesium.Cartesian3.fromDegrees(goal.lon - crossSize, goal.lat - crossSize, 0),
+                            Cesium.Cartesian3.fromDegrees(goal.lon + crossSize, goal.lat + crossSize, 0)
+                        ],
+                        width: 9,
+                        material: Cesium.Color.WHITE,
+                        clampToGround: true
+                    }
+                });
+                viewer.entities.add({
+                    polyline: {
+                        positions: [
+                            Cesium.Cartesian3.fromDegrees(goal.lon + crossSize, goal.lat - crossSize, 0),
+                            Cesium.Cartesian3.fromDegrees(goal.lon - crossSize, goal.lat + crossSize, 0)
+                        ],
+                        width: 9,
+                        material: Cesium.Color.WHITE,
+                        clampToGround: true
+                    }
+                });
+
+                // Label mit Goal-Name
+                viewer.entities.add({
+                    position: Cesium.Cartesian3.fromDegrees(goal.lon, goal.lat, 0),
+                    label: {
+                        text: goal.taskName || goal.name || ('Ziel ' + (index + 1)),
+                        font: 'bold 14px Arial',
+                        fillColor: Cesium.Color.WHITE,
+                        outlineColor: Cesium.Color.BLACK,
+                        outlineWidth: 2,
+                        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                        pixelOffset: new Cesium.Cartesian2(0, -20),
+                        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY
+                    }
+                });
+
+                // MMA-Kreis (weißer Kreis mit Radius = mmaRadius vom Task)
+                var mmaRadius = goal.mmaRadius || 0;
+                if (mmaRadius > 0) {
+                    viewer.entities.add({
+                        position: Cesium.Cartesian3.fromDegrees(goal.lon, goal.lat, 0),
+                        ellipse: {
+                            semiMajorAxis: mmaRadius,
+                            semiMinorAxis: mmaRadius,
+                            material: Cesium.Color.WHITE.withAlpha(0.1),
+                            outline: true,
+                            outlineColor: Cesium.Color.WHITE.withAlpha(0.8),
+                            outlineWidth: 2,
+                            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+                        }
+                    });
+                }
+            });
+
+            console.log('✓ Goals angezeigt:', goalData.length);
+        }
+
+        async function displayTrack() {
+            if (trackData.length === 0) {
+                alert('Keine gültigen Track-Daten gefunden!');
+                return;
+            }
+
+            console.log('Displaying track with', trackData.length, 'points');
+            console.log('First point:', trackData[0]);
+            console.log('Last point:', trackData[trackData.length - 1]);
+
+            // Terrain-Offset berechnen: GPS-Höhe ist MSL, Cesium nutzt WGS84-Ellipsoid
+            // terrainOffset = Cesium-Ellipsoid-Boden - MSL-Boden (= Geoid-Undulation)
+            // Dann: Cesium-Höhe = MSL-Höhe + terrainOffset
+            let terrainOffset = 0;
+            try {
+                var refPoint = trackData[0]; // Startpunkt als Referenz
+                var refLat = refPoint.lat;
+                var refLon = refPoint.lon;
+
+                // 1. MSL-Bodenhöhe bestimmen (HGT eingebettet oder API)
+                var groundMslHeight = 0;
+                if (typeof embeddedGroundMslHeight !== 'undefined' && embeddedGroundMslHeight > 0) {
+                    groundMslHeight = embeddedGroundMslHeight;
+                    console.log('HGT Bodenhoehe:', groundMslHeight, 'm MSL');
+                } else {
+                    try {
+                        var response = await fetch(
+                            'https://api.open-meteo.com/v1/elevation?latitude=' + refLat + '&longitude=' + refLon
+                        );
+                        if (response.ok) {
+                            var data = await response.json();
+                            if (data.elevation && data.elevation.length > 0) {
+                                groundMslHeight = data.elevation[0];
+                                console.log('API Bodenhoehe:', groundMslHeight, 'm MSL');
+                            }
+                        }
+                    } catch (apiErr) {
+                        console.warn('Keine Bodenhoehe verfuegbar');
+                    }
+                }
+
+                // 2. Cesium Terrain-Höhe (WGS84 Ellipsoid) am Boden samplen
+                var samplePositions = [Cesium.Cartographic.fromDegrees(refLon, refLat)];
+                var sampled = await Cesium.sampleTerrainMostDetailed(
+                    viewer.terrainProvider,
+                    samplePositions
+                );
+                if (sampled[0] && sampled[0].height !== undefined) {
+                    var terrainEllipsoidHeight = sampled[0].height;
+                    if (groundMslHeight > 0) {
+                        // Exakt: Geoid-Undulation = Ellipsoid-Boden - MSL-Boden
+                        terrainOffset = terrainEllipsoidHeight - groundMslHeight;
+                        console.log('Terrain-Offset (exakt):', terrainOffset.toFixed(1) + 'm (Cesium Boden: ' + terrainEllipsoidHeight.toFixed(1) + 'm, MSL Boden: ' + groundMslHeight.toFixed(1) + 'm)');
+                    } else {
+                        // Keine MSL-Bodenhoehe verfuegbar - Geoid-Undulation schaetzen
+                        // Fuer Mitteleuropa ~47m, Bereich ~35-55m
+                        // Bessere Schaetzung: EGM96 Geoid-Undulation aus Lat/Lon
+                        var geoidUndulation = 47;
+                        // Grobe Korrektur nach Breitengrad (Europa: Nord=45m, Sued=38m, Ost=48m)
+                        if (refLat > 45 && refLat < 55 && refLon > 5 && refLon < 20) {
+                            geoidUndulation = 46 + (refLon - 10) * 0.3;
+                        }
+                        terrainOffset = geoidUndulation;
+                        groundMslHeight = terrainEllipsoidHeight - geoidUndulation;
+                        console.log('Terrain-Offset (geschaetzt):', terrainOffset.toFixed(1) + 'm (Geoid-Undulation, Cesium Boden: ' + terrainEllipsoidHeight.toFixed(1) + 'm, geschaetzter MSL Boden: ' + groundMslHeight.toFixed(1) + 'm)');
+                    }
+                } else {
+                    // Terrain nicht verfuegbar - Fallback: nur Geoid-Schaetzung (~47m fuer Mitteleuropa)
+                    terrainOffset = 47;
+                    console.warn('Terrain-Sampling fehlgeschlagen, verwende Schaetzung:', terrainOffset, 'm');
+                }
+
+                globalTerrainOffset = terrainOffset;
+                console.log('Start-Punkt: alt=' + refPoint.alt + 'm MSL -> ' + (refPoint.alt + terrainOffset).toFixed(1) + 'm Ellipsoid');
+                console.log('Boden: ' + groundMslHeight + 'm MSL -> ' + (groundMslHeight + terrainOffset).toFixed(1) + 'm Ellipsoid');
+                console.log('AGL am Start: ' + (refPoint.alt - groundMslHeight).toFixed(1) + 'm');
+            } catch (e) {
+                console.warn('Terrain-Offset Berechnung fehlgeschlagen:', e);
+            }
+
+            // Create positions array with validation and terrain offset
+            const positions = [];
+            for (const point of trackData) {
+                try {
+                    const position = Cesium.Cartesian3.fromDegrees(point.lon, point.lat, point.alt + terrainOffset);
+                    // Validate the resulting Cartesian3
+                    if (position && !isNaN(position.x) && !isNaN(position.y) && !isNaN(position.z)) {
+                        positions.push(position);
+                    } else {
+                        console.warn('Invalid Cartesian3 from point:', point);
+                    }
+                } catch (e) {
+                    console.error('Error converting point to Cartesian3:', point, e);
+                }
+            }
+
+            if (positions.length === 0) {
+                alert('Konnte keine gültigen Positionen erstellen!');
+                return;
+            }
+
+            console.log('Created', positions.length, 'valid positions');
+
+            // Create main track polyline with gradient color based on altitude
+            const minAlt = Math.min(...trackData.map(p => p.alt));
+            const maxAlt = Math.max(...trackData.map(p => p.alt));
+            const altRange = maxAlt - minAlt || 1;
+
+            // Erstelle mehrere Segmente mit Höhen-abhängigen Farben
+            for (let i = 0; i < positions.length - 1; i++) {
+                const point = trackData[i];
+                const nextPoint = trackData[i + 1];
+
+                // Berechne Farbe basierend auf Höhe (grün=niedrig, gelb=mittel, rot=hoch)
+                const altPercent = (point.alt - minAlt) / altRange;
+                let color;
+                if (altPercent < 0.33) {
+                    // Grün zu Gelb
+                    const t = altPercent * 3;
+                    color = Cesium.Color.fromCssColorString(`rgb(${Math.round(76 + t * 179)}, ${Math.round(175 - t * 80)}, 80)`);
+                } else if (altPercent < 0.66) {
+                    // Gelb zu Orange
+                    const t = (altPercent - 0.33) * 3;
+                    color = Cesium.Color.fromCssColorString(`rgb(255, ${Math.round(165 - t * 70)}, ${Math.round(80 - t * 46)})`);
+                } else {
+                    // Orange zu Rot
+                    const t = (altPercent - 0.66) * 3;
+                    color = Cesium.Color.fromCssColorString(`rgb(255, ${Math.round(95 - t * 8)}, ${Math.round(34 - t * 34)})`);
+                }
+
+                viewer.entities.add({
+                    polyline: {
+                        positions: [positions[i], positions[i + 1]],
+                        width: 8,
+                        material: new Cesium.PolylineGlowMaterialProperty({
+                            glowPower: 0.3,
+                            taperPower: 0.5,
+                            color: color
+                        }),
+                        clampToGround: false
+                    }
+                });
+            }
+
+            // Zusätzlicher äußerer Glow-Effekt für den gesamten Track
+            trackEntity = viewer.entities.add({
+                polyline: {
+                    positions: positions,
+                    width: 12,
+                    material: new Cesium.PolylineGlowMaterialProperty({
+                        glowPower: 0.15,
+                        color: Cesium.Color.WHITE.withAlpha(0.3)
+                    }),
+                    clampToGround: false
+                }
+            });
+
+            // Add start marker with better visibility
+            viewer.entities.add({
+                position: positions[0],
+                billboard: {
+                    image: createPinCanvas('START', '#4CAF50'),
+                    verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                    scale: 1.2,
+                    pixelOffset: new Cesium.Cartesian2(0, 0)
+                },
+                point: {
+                    pixelSize: 20,
+                    color: Cesium.Color.fromCssColorString('#4CAF50').withAlpha(0.3),
+                    outlineColor: Cesium.Color.fromCssColorString('#4CAF50'),
+                    outlineWidth: 3
+                }
+            });
+
+            // Add end marker with better visibility
+            viewer.entities.add({
+                position: positions[positions.length - 1],
+                billboard: {
+                    image: createPinCanvas('ZIEL', '#ef4444'),
+                    verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                    scale: 1.2,
+                    pixelOffset: new Cesium.Cartesian2(0, 0)
+                },
+                point: {
+                    pixelSize: 20,
+                    color: Cesium.Color.fromCssColorString('#ef4444').withAlpha(0.3),
+                    outlineColor: Cesium.Color.fromCssColorString('#ef4444'),
+                    outlineWidth: 3
+                }
+            });
+
+            // Hoverfähige Trackpunkte (alle n-ten Punkt für gute Abdeckung)
+            const markerInterval = Math.max(1, Math.floor(trackData.length / 200));
+            for (let i = 0; i < trackData.length; i += markerInterval) {
+                const point = trackData[i];
+                const altPercent = (point.alt - minAlt) / altRange;
+                var color;
+                if (altPercent < 0.33) {
+                    var t = altPercent * 3;
+                    color = Cesium.Color.fromCssColorString('rgb(' + Math.round(76 + t * 179) + ',' + Math.round(175 - t * 80) + ',80)');
+                } else if (altPercent < 0.66) {
+                    var t = (altPercent - 0.33) * 3;
+                    color = Cesium.Color.fromCssColorString('rgb(255,' + Math.round(165 - t * 70) + ',' + Math.round(80 - t * 46) + ')');
+                } else {
+                    var t = (altPercent - 0.66) * 3;
+                    color = Cesium.Color.fromCssColorString('rgb(255,' + Math.round(95 - t * 8) + ',' + Math.round(34 - t * 34) + ')');
+                }
+
+                var altFt = Math.round(point.alt * 3.28084);
+                var time = point.timestamp ? new Date(point.timestamp).toLocaleTimeString('de-AT') : '?';
+
+                viewer.entities.add({
+                    name: 'trackpoint_' + i,
+                    position: positions[i],
+                    point: {
+                        pixelSize: 6,
+                        color: color,
+                        outlineColor: Cesium.Color.WHITE.withAlpha(0.6),
+                        outlineWidth: 1,
+                        scaleByDistance: new Cesium.NearFarScalar(500, 2.0, 20000, 0.5),
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY
+                    },
+                    properties: {
+                        trackIndex: i,
+                        altitude: Math.round(point.alt),
+                        altitudeFt: altFt,
+                        heading: Math.round(point.heading || 0),
+                        speed: ((point.speed || 0) * 3.6).toFixed(1),
+                        vario: (point.vario || 0).toFixed(1),
+                        time: time
+                    }
+                });
+            }
+
+            // Vertikale Linien vom Boden (alle 50 Marker)
+            var vertInterval = Math.max(1, Math.floor(trackData.length / 20));
+            for (var vi = 0; vi < trackData.length; vi += vertInterval) {
+                var vPoint = trackData[vi];
+                var vAltPercent = (vPoint.alt - minAlt) / altRange;
+                var vColor;
+                if (vAltPercent < 0.5) {
+                    vColor = Cesium.Color.LIME.withAlpha(0.2);
+                } else {
+                    vColor = Cesium.Color.RED.withAlpha(0.2);
+                }
+                viewer.entities.add({
+                    polyline: {
+                        positions: [
+                            Cesium.Cartesian3.fromDegrees(vPoint.lon, vPoint.lat, 0),
+                            positions[vi]
+                        ],
+                        width: 1,
+                        material: vColor,
+                        clampToGround: false
+                    }
+                });
+            }
+
+            // Hover-Tooltip einrichten
+            setupHoverTooltip();
+        }
+
+        // Hover-Tooltip für Trackpunkte
+        function setupHoverTooltip() {
+            // Erstelle Tooltip-Element
+            var tooltip = document.createElement('div');
+            tooltip.id = 'track-tooltip';
+            tooltip.style.cssText = 'position:absolute;display:none;pointer-events:none;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:10px 14px;color:white;font-family:monospace;font-size:12px;line-height:1.6;z-index:100000;min-width:180px;box-shadow:0 4px 20px rgba(0,0,0,0.5);';
+            viewer.container.appendChild(tooltip);
+
+            // Highlight-Punkt
+            var highlightEntity = viewer.entities.add({
+                position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
+                point: {
+                    pixelSize: 16,
+                    color: Cesium.Color.WHITE.withAlpha(0.9),
+                    outlineColor: Cesium.Color.CYAN,
+                    outlineWidth: 3,
+                    disableDepthTestDistance: Number.POSITIVE_INFINITY
+                },
+                show: false
+            });
+
+            var handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+
+            handler.setInputAction(function(movement) {
+                var picked = viewer.scene.pick(movement.endPosition);
+
+                if (Cesium.defined(picked) && picked.id && picked.id.name && picked.id.name.indexOf('trackpoint_') === 0) {
+                    var entity = picked.id;
+                    var props = entity.properties;
+
+                    if (props) {
+                        var altM = props.altitude ? props.altitude.getValue() : '?';
+                        var altFt = props.altitudeFt ? props.altitudeFt.getValue() : '?';
+                        var speed = props.speed ? props.speed.getValue() : '?';
+                        var vario = props.vario ? props.vario.getValue() : '?';
+                        var heading = props.heading ? props.heading.getValue() : '?';
+                        var time = props.time ? props.time.getValue() : '?';
+
+                        var varioNum = parseFloat(vario);
+                        var varioSign = varioNum > 0 ? '+' : '';
+                        var varioColor = varioNum > 0 ? '#4ade80' : varioNum < 0 ? '#f87171' : '#ffffff';
+
+                        tooltip.innerHTML =
+                            '<div style="margin-bottom:4px;font-weight:bold;color:#60a5fa;font-size:13px;">' + time + '</div>' +
+                            '<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 12px;">' +
+                            '<span style="color:rgba(255,255,255,0.5);">ALT</span><span>' + altM + ' m / ' + altFt + ' ft</span>' +
+                            '<span style="color:rgba(255,255,255,0.5);">HDG</span><span>' + heading + '°</span>' +
+                            '<span style="color:rgba(255,255,255,0.5);">SPD</span><span>' + speed + ' km/h</span>' +
+                            '<span style="color:rgba(255,255,255,0.5);">VAR</span><span style="color:' + varioColor + ';">' + varioSign + vario + ' m/s</span>' +
+                            '</div>';
+
+                        tooltip.style.display = 'block';
+                        tooltip.style.left = (movement.endPosition.x + 18) + 'px';
+                        tooltip.style.top = (movement.endPosition.y - 60) + 'px';
+
+                        // Highlight-Punkt anzeigen
+                        highlightEntity.position = entity.position.getValue(viewer.clock.currentTime);
+                        highlightEntity.show = true;
+                    }
+                } else {
+                    tooltip.style.display = 'none';
+                    highlightEntity.show = false;
+                }
+            }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+        }
+
+        // Calculate and update info panel
+        function updateInfo() {
+            // Format numbers with thousand separators
+            const formatNumber = (num) => num.toLocaleString('de-DE');
+
+            document.getElementById('pointCount').textContent = formatNumber(trackData.length);
+
+            // Calculate total distance
+            let totalDistance = 0;
+            for (let i = 1; i < trackData.length; i++) {
+                const prev = trackData[i - 1];
+                const curr = trackData[i];
+                const dist = Cesium.Cartesian3.distance(
+                    Cesium.Cartesian3.fromDegrees(prev.lon, prev.lat, prev.alt),
+                    Cesium.Cartesian3.fromDegrees(curr.lon, curr.lat, curr.alt)
+                );
+                totalDistance += dist;
+            }
+            const distKm = (totalDistance / 1000).toFixed(2);
+            document.getElementById('distance').textContent = distKm + ' km';
+
+            // Find max altitude
+            const maxAlt = Math.max(...trackData.map(p => p.alt));
+            document.getElementById('maxAlt').textContent = formatNumber(Math.round(maxAlt)) + ' m';
+
+            // Calculate duration
+            if (trackData.length > 1 && trackData[0].timestamp && trackData[trackData.length - 1].timestamp) {
+                const durationMin = (trackData[trackData.length - 1].timestamp - trackData[0].timestamp) / 1000 / 60;
+                const hours = Math.floor(durationMin / 60);
+                const minutes = Math.round(durationMin % 60);
+
+                if (hours > 0) {
+                    document.getElementById('duration').textContent = `${hours}h ${minutes}min`;
+                } else {
+                    document.getElementById('duration').textContent = minutes + ' min';
+                }
+            }
+        }
+
+        // Camera view functions - Google Earth style
+        function viewBehindStart() {
+            if (trackData.length < 2) return;
+
+            var start = trackData[0];
+            var lookAheadIdx = Math.min(20, trackData.length - 1);
+            var lookAhead = trackData[lookAheadIdx];
+
+            // Kurs vom Start in Richtung Track
+            var dLon = lookAhead.lon - start.lon;
+            var dLat = lookAhead.lat - start.lat;
+            var trackHeading = Math.atan2(dLon, dLat); // 0=Nord
+
+            // Kamera hinter dem Startpunkt (~600m zurück)
+            var offsetDistance = 0.0054;
+            var camLat = start.lat - Math.cos(trackHeading) * offsetDistance;
+            var camLon = start.lon - Math.sin(trackHeading) * offsetDistance;
+            var camAlt = start.alt + globalTerrainOffset + 200; // 200m über Startpunkt (Ellipsoid-korrigiert)
+
+            viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(camLon, camLat, camAlt),
+                orientation: {
+                    heading: trackHeading,
+                    pitch: Cesium.Math.toRadians(-15),
+                    roll: 0.0
+                },
+                duration: 2
+            });
+        }
+
+        function viewOverview() {
+            if (trackData.length === 0) return;
+
+            const positions = trackData.map(point =>
+                Cesium.Cartesian3.fromDegrees(point.lon, point.lat, point.alt)
+            );
+
+            // Calculate center point of track
+            const boundingSphere = Cesium.BoundingSphere.fromPoints(positions);
+            const center = boundingSphere.center;
+            const radius = boundingSphere.radius;
+
+            // Convert center to cartographic to get lat/lon
+            const centerCartographic = Cesium.Cartographic.fromCartesian(center);
+            const centerLon = Cesium.Math.toDegrees(centerCartographic.longitude);
+            const centerLat = Cesium.Math.toDegrees(centerCartographic.latitude);
+
+            // Google Earth style: view from southeast at 45° angle
+            const distance = Math.max(radius * 3, 3000);
+            const heading = Cesium.Math.toRadians(135); // View from SE
+            const pitch = Cesium.Math.toRadians(-35); // 35° down angle
+
+            viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, distance),
+                orientation: {
+                    heading: heading,
+                    pitch: pitch,
+                    roll: 0.0
+                },
+                duration: 2
+            });
+        }
+
+        function viewFollow() {
+            if (trackData.length === 0) return;
+
+            // Start from beginning of track, follow along
+            const point = trackData[0];
+            const nextPoint = trackData[Math.min(10, trackData.length - 1)];
+
+            // Calculate heading from start
+            const heading = Math.atan2(
+                nextPoint.lon - point.lon,
+                nextPoint.lat - point.lat
+            );
+
+            // Google Earth follow style: behind and above
+            viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, point.alt + 800),
+                orientation: {
+                    heading: heading,
+                    pitch: Cesium.Math.toRadians(-30),
+                    roll: 0.0
+                },
+                duration: 2
+            });
+        }
+
+        function viewCockpit() {
+            if (trackData.length < 2) return;
+
+            const point = trackData[0];
+            const nextPoint = trackData[1];
+
+            // Calculate heading from first to second point
+            const heading = Math.atan2(
+                nextPoint.lon - point.lon,
+                nextPoint.lat - point.lat
+            );
+
+            // First person view from balloon
+            viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, point.alt + 30),
+                orientation: {
+                    heading: heading,
+                    pitch: Cesium.Math.toRadians(-5), // Slight down angle
+                    roll: 0.0
+                },
+                duration: 2
+            });
+        }
+
+        // Auto-tilt camera for Google Earth-like perspective
+        function enableGoogleEarthMode() {
+            if (!viewer) return;
+
+            // This makes the camera automatically tilt when zooming in
+            viewer.scene.screenSpaceCameraController.enableTilt = true;
+            viewer.scene.screenSpaceCameraController.tiltEventTypes = [
+                Cesium.CameraEventType.MIDDLE_DRAG,
+                Cesium.CameraEventType.PINCH,
+                {
+                    eventType: Cesium.CameraEventType.LEFT_DRAG,
+                    modifier: Cesium.KeyboardEventModifier.CTRL
+                },
+                {
+                    eventType: Cesium.CameraEventType.RIGHT_DRAG,
+                    modifier: Cesium.KeyboardEventModifier.CTRL
+                }
+            ];
+        }
+
+        // Toggle between 2D and 3D mode
+        function toggle3DMode() {
+            if (!viewer) return;
+
+            const scene = viewer.scene;
+            const currentMode = scene.mode;
+
+            if (currentMode === Cesium.SceneMode.SCENE3D) {
+                // Switch to 2D
+                scene.morphTo2D(1.0);
+            } else if (currentMode === Cesium.SceneMode.SCENE2D) {
+                // Switch to Columbus View (2.5D)
+                scene.morphToColumbusView(1.0);
+            } else {
+                // Switch back to 3D
+                scene.morphTo3D(1.0);
+            }
+        }
+
+        // Toggle 3D buildings on/off
+        let tilesVisible = true;
+        let tileset = null;
+        function toggleTerrain() {
+            if (!viewer) return;
+
+            tilesVisible = !tilesVisible;
+
+            // Toggle visibility of all 3D tilesets
+            for (let i = 0; i < viewer.scene.primitives.length; i++) {
+                const primitive = viewer.scene.primitives.get(i);
+                if (primitive instanceof Cesium.Cesium3DTileset) {
+                    primitive.show = tilesVisible;
+                }
+            }
+        }
+
+        // Add terrain exaggeration control
+        function setTerrainExaggeration(value) {
+            if (!viewer) return;
+            viewer.scene.verticalExaggeration = value;
+        }
+
+        // Track navigation: Seek to specific position on track
+        function seekToPosition(percent) {
+            if (!viewer || trackData.length === 0) return;
+
+            // Update current position indicator
+            document.getElementById('currentPoint').textContent = Math.round(percent) + '%';
+
+            // Calculate index in track based on percentage
+            const index = Math.floor((percent / 100) * (trackData.length - 1));
+            const point = trackData[index];
+
+            // Look ahead to determine heading
+            const lookAheadIndex = Math.min(index + 5, trackData.length - 1);
+            const lookAheadPoint = trackData[lookAheadIndex];
+
+            // Calculate heading
+            const heading = Math.atan2(
+                lookAheadPoint.lon - point.lon,
+                lookAheadPoint.lat - point.lat
+            );
+
+            // Fly to position with smooth transition
+            viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(
+                    point.lon,
+                    point.lat,
+                    point.alt + 600  // 600m above track point
+                ),
+                orientation: {
+                    heading: heading,
+                    pitch: Cesium.Math.toRadians(-35),  // Google Earth style
+                    roll: 0.0
+                },
+                duration: 1.0  // Quick transition
+            });
+        }
+
+        // Heißluftballon-Bild erstellen (Canvas)
+        function createBalloonImage() {
+            var canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 96;
+            var ctx = canvas.getContext('2d');
+            if (!ctx) return canvas;
+
+            // Hülle (Ballon-Envelope) - klassische Form
+            var gradient = ctx.createLinearGradient(32, 0, 32, 60);
+            gradient.addColorStop(0, '#ff4444');
+            gradient.addColorStop(0.3, '#ff6633');
+            gradient.addColorStop(0.5, '#ffcc00');
+            gradient.addColorStop(0.7, '#ff6633');
+            gradient.addColorStop(1, '#cc2222');
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.moveTo(32, 4);
+            ctx.bezierCurveTo(52, 10, 60, 30, 56, 45);
+            ctx.bezierCurveTo(54, 52, 46, 58, 40, 60);
+            ctx.lineTo(24, 60);
+            ctx.bezierCurveTo(18, 58, 10, 52, 8, 45);
+            ctx.bezierCurveTo(4, 30, 12, 10, 32, 4);
+            ctx.fill();
+
+            // Vertikale Streifen
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 1;
+            for (var x = 20; x <= 44; x += 8) {
+                ctx.beginPath();
+                ctx.moveTo(x, 10);
+                ctx.quadraticCurveTo(x + (x < 32 ? -3 : 3), 35, x, 58);
+                ctx.stroke();
+            }
+
+            // Seile
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(24, 60);
+            ctx.lineTo(26, 72);
+            ctx.moveTo(40, 60);
+            ctx.lineTo(38, 72);
+            ctx.stroke();
+
+            // Korb
+            ctx.fillStyle = '#8B6914';
+            ctx.fillRect(24, 72, 16, 10);
+            ctx.strokeStyle = '#6B4914';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(24, 72, 16, 10);
+
+            // Korb-Flechtmuster
+            ctx.strokeStyle = '#A07828';
+            ctx.lineWidth = 0.5;
+            for (var y = 74; y <= 80; y += 3) {
+                ctx.beginPath();
+                ctx.moveTo(24, y);
+                ctx.lineTo(40, y);
+                ctx.stroke();
+            }
+
+            return canvas;
+        }
+
+        // Ballon-Animation starten/stoppen
+        function startAutoFly() {
+            if (!viewer || trackData.length === 0) return;
+
+            var button = document.getElementById('autoFlyText');
+
+            if (balloonAnimating) {
+                stopBalloonAnimation();
+                return;
+            }
+
+            // Balloon-Entity erstellen
+            var startPoint = trackData[0];
+            var correctedAlt = startPoint.alt + globalTerrainOffset;
+
+            if (balloonEntity) {
+                viewer.entities.remove(balloonEntity);
+            }
+
+            balloonEntity = viewer.entities.add({
+                name: 'balloon_animation',
+                position: Cesium.Cartesian3.fromDegrees(startPoint.lon, startPoint.lat, correctedAlt),
+                billboard: {
+                    image: createBalloonImage(),
+                    scale: 1.0,
+                    verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                    heightReference: Cesium.HeightReference.NONE,
+                    disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                    scaleByDistance: new Cesium.NearFarScalar(200, 1.5, 15000, 0.4)
+                }
+            });
+
+            balloonAnimAccum = 0; // Fließkomma-Position entlang des Tracks
+            balloonAnimating = true;
+            button.textContent = '⏹ Stopp';
+
+            // Kamera hinter Start
+            viewBehindStart();
+
+            // Speed aus dem Slider lesen
+            updateBalloonSpeed();
+
+            // Animation starten - fließende Interpolation zwischen Trackpunkten
+            balloonAnimInterval = setInterval(function() {
+                balloonAnimAccum += balloonAnimSpeed;
+
+                var maxIdx = trackData.length - 1;
+                if (balloonAnimAccum >= maxIdx) {
+                    balloonAnimAccum = maxIdx;
+                    stopBalloonAnimation();
+                    return;
+                }
+
+                // Interpoliere zwischen zwei Trackpunkten
+                var idx = Math.floor(balloonAnimAccum);
+                var frac = balloonAnimAccum - idx; // 0.0 - 1.0 zwischen den Punkten
+                var p1 = trackData[idx];
+                var p2 = trackData[Math.min(idx + 1, maxIdx)];
+
+                var lon = p1.lon + (p2.lon - p1.lon) * frac;
+                var lat = p1.lat + (p2.lat - p1.lat) * frac;
+                var alt = (p1.alt + (p2.alt - p1.alt) * frac) + globalTerrainOffset;
+
+                var newPos = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
+
+                if (balloonEntity) {
+                    balloonEntity.position = new Cesium.ConstantPositionProperty(newPos);
+                }
+
+                // Progress aktualisieren
+                var progress = Math.round((balloonAnimAccum / maxIdx) * 100);
+                var slider = document.getElementById('trackSlider');
+                if (slider) slider.value = progress;
+                var currentPoint = document.getElementById('currentPoint');
+                if (currentPoint) currentPoint.textContent = progress + '%';
+
+                // Progress-Bar aktualisieren
+                var progressBar = document.getElementById('balloonProgressBar');
+                if (progressBar) progressBar.style.width = progress + '%';
+                var progressText = document.getElementById('balloonProgressText');
+                if (progressText) progressText.textContent = progress + '%';
+
+                // Kamera folgt dem Ballon - Richtung aus den letzten ~20 Punkten
+                var lookBackIdx = Math.max(0, idx - 20);
+                var prevPoint = trackData[lookBackIdx];
+                var dLon = lon - prevPoint.lon;
+                var dLat = lat - prevPoint.lat;
+                var heading = Math.atan2(dLon, dLat);
+
+                var camDistance = 0.003; // ~300m hinter dem Ballon
+                var camLat = lat - Math.cos(heading) * camDistance;
+                var camLon = lon - Math.sin(heading) * camDistance;
+                var camAlt = alt + 100;
+
+                viewer.camera.setView({
+                    destination: Cesium.Cartesian3.fromDegrees(camLon, camLat, camAlt),
+                    orientation: {
+                        heading: heading,
+                        pitch: Cesium.Math.toRadians(-20),
+                        roll: 0
+                    }
+                });
+            }, 50); // 20 FPS
+        }
+
+        function updateBalloonSpeed() {
+            var slider = document.getElementById('balloonSpeedSlider');
+            if (!slider) return;
+            var v = parseInt(slider.value);
+            // 0-20: 0.1 bis 1.0 (feine Kontrolle), 20-100: 1 bis 50 (grob)
+            if (v <= 20) {
+                balloonAnimSpeed = Math.max(0.1, v * 0.05);
+            } else {
+                balloonAnimSpeed = 1 + ((v - 20) / 80) * 49;
+            }
+            var label = document.getElementById('balloonSpeedValue');
+            if (label) {
+                label.textContent = balloonAnimSpeed < 1 ? balloonAnimSpeed.toFixed(1) : Math.round(balloonAnimSpeed).toString();
+            }
+        }
+
+        function stopBalloonAnimation() {
+            if (balloonAnimInterval) {
+                clearInterval(balloonAnimInterval);
+                balloonAnimInterval = null;
+            }
+            balloonAnimating = false;
+            var button = document.getElementById('autoFlyText');
+            if (button) button.textContent = '🎈 Animation';
+        }
+
+        // Initialize when page loads
+        window.onload = initViewer;
+    </script>
+</body>
+</html>

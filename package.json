@@ -1,6 +1,6 @@
 {
   "name": "nta-balloon-navigator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Navigation Tool Austria - Heißluftballon Navigation Software",
   "main": "dist/main/main.js",
   "scripts": {

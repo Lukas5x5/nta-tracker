@@ -1,0 +1,772 @@
+/* ============================================
+   NTA - Navigation Tool Austria
+   Globale Styles
+   ============================================ */
+
+:root {
+  /* Farben */
+  --color-primary: #1a73e8;
+  --color-primary-dark: #1557b0;
+  --color-secondary: #34a853;
+  --color-warning: #fbbc04;
+  --color-error: #ea4335;
+
+  /* Hintergrund */
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-tertiary: #0f3460;
+  --bg-card: #1f2937;
+
+  /* Text */
+  --text-primary: #ffffff;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+
+  /* Borders */
+  --border-color: #374151;
+  --border-radius: 8px;
+
+  /* Schatten */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+
+  /* Variometer Farben */
+  --vario-climb: #22c55e;
+  --vario-sink: #ef4444;
+  --vario-neutral: #6b7280;
+
+  /* Schriftgrößen */
+  --font-xs: 0.75rem;
+  --font-sm: 0.875rem;
+  --font-base: 1rem;
+  --font-lg: 1.125rem;
+  --font-xl: 1.25rem;
+  --font-2xl: 1.5rem;
+  --font-3xl: 2rem;
+  --font-4xl: 2.5rem;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
+  /* UI Skalierung */
+  --header-height: 60px;
+  --nav-panel-scale: 1;
+  --panel-scale: 1;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* App Layout */
+.app {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: var(--header-height) 1fr auto;
+  height: 100vh;
+  gap: 0;
+}
+
+.app-header {
+  grid-column: 1 / -1;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--spacing-lg);
+  gap: var(--spacing-lg);
+}
+
+.app-sidebar-left {
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  overflow-y: auto;
+  padding: var(--spacing-md);
+}
+
+.app-main {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Sidebar removed - tasks now shown in header */
+
+.app-footer {
+  grid-column: 1 / -1;
+  background: linear-gradient(0deg, #0f172a 0%, #1e293b 100%);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  padding: 0;
+  height: 34px;
+}
+
+/* Karte */
+.map-container {
+  width: 100%;
+  height: 100%;
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #0a0f1e;
+}
+
+/* Data Cards */
+.data-card {
+  background: var(--bg-card);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  border: 1px solid var(--border-color);
+}
+
+.data-card-title {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--spacing-sm);
+}
+
+.data-card-value {
+  font-size: var(--font-3xl);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-card-unit {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  margin-left: var(--spacing-xs);
+}
+
+/* Navigation Panel */
+.nav-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.nav-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.nav-label {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.nav-value {
+  font-size: var(--font-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  gap: var(--spacing-sm);
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--color-primary-dark);
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background: var(--border-color);
+}
+
+.btn-success {
+  background: var(--color-secondary);
+  color: white;
+}
+
+.btn-danger {
+  background: var(--color-error);
+  color: white;
+}
+
+.btn-large {
+  padding: var(--spacing-md) var(--spacing-xl);
+  font-size: var(--font-lg);
+}
+
+.btn-icon {
+  padding: var(--spacing-sm);
+  aspect-ratio: 1;
+}
+
+/* Marker Button */
+.marker-btn {
+  width: 100%;
+  padding: var(--spacing-lg);
+  font-size: var(--font-xl);
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--color-error), #dc2626);
+  border: none;
+  border-radius: var(--border-radius);
+  color: white;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.2s;
+}
+
+.marker-btn:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-lg);
+}
+
+.marker-btn:active {
+  transform: scale(0.98);
+}
+
+/* Goal Button */
+.goal-btn {
+  width: 100%;
+  padding: var(--spacing-lg);
+  font-size: var(--font-xl);
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  border: none;
+  border-radius: var(--border-radius);
+  color: white;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.2s;
+}
+
+.goal-btn:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Variometer Anzeige */
+.variometer {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.variometer-bar {
+  width: 8px;
+  height: 60px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.variometer-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--vario-neutral);
+  transition: all 0.2s;
+}
+
+.variometer-fill.climbing {
+  bottom: 50%;
+  background: var(--vario-climb);
+}
+
+.variometer-fill.sinking {
+  top: 50%;
+  background: var(--vario-sink);
+}
+
+/* Status Indicator */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-error);
+}
+
+.status-dot.connected {
+  background: var(--color-secondary);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-10deg); }
+  75% { transform: rotate(10deg); }
+}
+
+/* Task Panel */
+.task-panel {
+  background: var(--bg-card);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md);
+  border: 1px solid var(--border-color);
+}
+
+.task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+}
+
+.task-type {
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.task-info {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.task-info-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.task-info-label {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.task-info-value {
+  font-size: var(--font-xl);
+  font-weight: 600;
+}
+
+/* Goal List */
+.goal-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.goal-item {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.goal-item:hover {
+  background: var(--border-color);
+}
+
+.goal-item.selected {
+  background: var(--color-primary);
+}
+
+.goal-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.goal-distance {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* Connection Panel */
+.connection-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.device-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.device-item {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.device-item:hover {
+  background: var(--border-color);
+}
+
+.device-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.device-rssi {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+
+/* Wind Panel */
+.wind-panel {
+  background: var(--bg-card);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md);
+  border: 1px solid var(--border-color);
+}
+
+.wind-layer {
+  display: grid;
+  grid-template-columns: 60px 1fr 60px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) 0;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.wind-altitude {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.wind-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wind-speed {
+  font-size: var(--font-sm);
+  text-align: right;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-xl);
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+}
+
+.modal-title {
+  font-size: var(--font-xl);
+  font-weight: 600;
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Input */
+.input {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-primary);
+  font-size: var(--font-base);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-md);
+}
+
+.input-label {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+/* Leaflet Map Optimierungen für Hardware-Beschleunigung */
+.leaflet-container {
+  will-change: transform;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.leaflet-pane {
+  will-change: transform;
+}
+
+.leaflet-tile-container {
+  will-change: transform;
+}
+
+/* Hardware-beschleunigtes Image Overlay */
+.hardware-accelerated-overlay,
+.leaflet-image-layer {
+  will-change: transform, opacity;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+/* Verhindere Neuberechnung bei Zoom/Pan */
+.leaflet-overlay-pane {
+  will-change: transform;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+/* Leaflet Zoom Animation optimieren */
+.leaflet-zoom-anim .leaflet-zoom-animated {
+  will-change: transform;
+  -webkit-transition: -webkit-transform 0.25s cubic-bezier(0, 0, 0.25, 1);
+  transition: transform 0.25s cubic-bezier(0, 0, 0.25, 1);
+}
+
+/* Deaktiviere Animation für große Image Overlays - verhindert Ruckeln */
+.leaflet-image-layer.hardware-accelerated-overlay {
+  transition: none !important;
+  -webkit-transition: none !important;
+}
+
+/* Verhindere Repaints beim Panning */
+.leaflet-overlay-pane img {
+  will-change: transform;
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  pointer-events: none;
+}
+
+/* ============================================
+   Dunkles Trackpunkt-Popup Styling
+   ============================================ */
+
+/* Dark Popup Container */
+.dark-trackpoint-popup .leaflet-popup-content-wrapper {
+  background: transparent !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+  padding: 0 !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  overflow: hidden;
+}
+
+.dark-trackpoint-popup .leaflet-popup-content {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: auto !important;
+  min-width: 420px !important;
+}
+
+/* Popup Tip (Pfeil) */
+.dark-trackpoint-popup .leaflet-popup-tip-container {
+  margin-top: -1px;
+}
+
+.dark-trackpoint-popup .leaflet-popup-tip {
+  background: rgba(10, 15, 30, 0.98) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Close Button */
+.dark-trackpoint-popup .leaflet-popup-close-button {
+  color: rgba(255, 255, 255, 0.6) !important;
+  font-size: 20px !important;
+  padding: 8px !important;
+  top: 6px !important;
+  right: 6px !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.15s;
+  z-index: 10;
+}
+
+.dark-trackpoint-popup .leaflet-popup-close-button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+}
+
+/* Ensure popup is above grid overlay */
+.leaflet-popup-pane {
+  z-index: 700 !important;
+}
+
+.dark-trackpoint-popup {
+  z-index: 1000 !important;
+}
+
+/* Drop Marker Popup - auch dunkel */
+.dark-drop-popup .leaflet-popup-content-wrapper {
+  background: transparent !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+  padding: 0 !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  overflow: hidden;
+}
+
+.dark-drop-popup .leaflet-popup-content {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: auto !important;
+  min-width: 420px !important;
+}
+
+.dark-drop-popup .leaflet-popup-tip {
+  background: rgba(10, 15, 30, 0.98) !important;
+  border: none !important;
+}
+
+.dark-drop-popup .leaflet-popup-close-button {
+  color: rgba(255, 255, 255, 0.6) !important;
+  font-size: 20px !important;
+  padding: 8px !important;
+  top: 6px !important;
+  right: 6px !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.15s;
+  z-index: 10;
+}
+
+.dark-drop-popup .leaflet-popup-close-button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+}
+
+/* Drop Marker Icons immer klickbar und über anderen Elementen */
+.drop-marker-icon {
+  z-index: 2000 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Drop Marker Tooltip - erscheint bei Hover */
+.dark-drop-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.dark-drop-tooltip::before {
+  display: none !important;
+}

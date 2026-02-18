@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.1.2] - 2026-02-18
+- Fix: Update-Download EBUSY-Fehler – Datei wird jetzt zuverlässig geschlossen bevor der Installer startet
+
 ## [1.1.1] - 2026-02-18
 - Update-Popup: Professionelle Changelog-Anzeige mit Bullet Points
 - GitHub Repo auf öffentlich gestellt – Update-Download funktioniert jetzt direkt

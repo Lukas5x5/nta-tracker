@@ -900,7 +900,6 @@ function setupIpcHandlers() {
           const file = fs.createWriteStream(filePath)
           response.on('data', (chunk: Buffer) => {
             downloaded += chunk.length
-            file.write(chunk)
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send('update:progress', {
                 percent: totalSize > 0 ? Math.round((downloaded / totalSize) * 100) : 0,
@@ -910,18 +909,28 @@ function setupIpcHandlers() {
             }
           })
 
-          response.on('end', () => {
-            file.end(() => {
-              // Installer starten und App beenden
-              const { spawn } = require('child_process')
-              spawn(filePath, ['/S'], { detached: true, stdio: 'ignore' }).unref()
-              setTimeout(() => app.quit(), 1000)
-              resolve({ success: true })
+          // Pipe für zuverlässiges Schreiben
+          response.pipe(file)
+
+          file.on('finish', () => {
+            file.close(() => {
+              // Kurz warten bis Windows die Datei freigibt, dann Installer starten
+              setTimeout(() => {
+                const { spawn } = require('child_process')
+                spawn(filePath, ['/S'], { detached: true, stdio: 'ignore' }).unref()
+                setTimeout(() => app.quit(), 1000)
+                resolve({ success: true })
+              }, 500)
             })
           })
 
+          file.on('error', (err: Error) => {
+            file.close()
+            resolve({ success: false, error: err.message })
+          })
+
           response.on('error', (err: Error) => {
-            file.end()
+            file.close()
             resolve({ success: false, error: err.message })
           })
         }).on('error', (err: Error) => {

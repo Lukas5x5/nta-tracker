@@ -16,7 +16,7 @@ import type { Task, ProhibitedZone } from '../shared/types'
 import { latLonToUTM } from './utils/coordinatesWGS84'
 
 // Aktuelle App-Version (muss bei jedem Release angepasst werden)
-const APP_VERSION = '1.1.0'
+const APP_VERSION = '1.1.1'
 
 // Haversine-Distanzberechnung (Meter)
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -119,7 +119,7 @@ function App() {
   const [pendingChampionship, setPendingChampionship] = useState<{ id: string; name: string } | null>(null)
 
   // Update-Check State
-  const [updateInfo, setUpdateInfo] = useState<{ version: string; message?: string; url?: string; downloadUrl?: string } | null>(null)
+  const [updateInfo, setUpdateInfo] = useState<{ version: string; message?: string; changelog?: string[]; url?: string; downloadUrl?: string } | null>(null)
   const [updateDismissed, setUpdateDismissed] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
@@ -143,6 +143,7 @@ function App() {
             setUpdateInfo({
               version: latestVersion,
               message: config.message,
+              changelog: config.changelog,
               url: config.url,
               downloadUrl: config.downloadUrl
             })
@@ -1843,26 +1844,65 @@ function App() {
             background: 'linear-gradient(135deg, #1e293b, #0f172a)',
             borderRadius: '16px',
             padding: '28px 32px',
-            minWidth: '380px',
-            maxWidth: '460px',
+            minWidth: '400px',
+            maxWidth: '500px',
             boxShadow: '0 8px 40px rgba(0, 0, 0, 0.6)',
             border: '1px solid rgba(59, 130, 246, 0.3)',
             color: '#fff'
           }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              <div style={{ fontSize: '16px', fontWeight: 700 }}>
-                Update verfügbar: v{updateInfo.version}
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '10px',
+                background: 'rgba(59, 130, 246, 0.15)', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', flexShrink: 0
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontSize: '16px', fontWeight: 700 }}>Update verfügbar</div>
+                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>
+                  v{APP_VERSION} → v{updateInfo.version}
+                </div>
               </div>
             </div>
-            <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '20px', lineHeight: 1.5 }}>
-              {updateInfo.message || 'Eine neue Version der App ist verfügbar.'}
-            </div>
 
+            {/* Changelog */}
+            {updateInfo.changelog && updateInfo.changelog.length > 0 ? (
+              <div style={{
+                margin: '16px 0',
+                padding: '12px 14px',
+                background: 'rgba(0,0,0,0.25)',
+                borderRadius: '10px',
+                border: '1px solid rgba(255,255,255,0.06)',
+                maxHeight: '200px',
+                overflowY: 'auto'
+              }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                  Änderungen
+                </div>
+                {updateInfo.changelog.map((item, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: i < updateInfo.changelog!.length - 1 ? '6px' : 0, fontSize: '12px', lineHeight: 1.5, color: 'rgba(255,255,255,0.7)' }}>
+                    <span style={{ color: '#3b82f6', flexShrink: 0, marginTop: '1px' }}>+</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            ) : updateInfo.message ? (
+              <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', margin: '16px 0', lineHeight: 1.5 }}>
+                {updateInfo.message}
+              </div>
+            ) : (
+              <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', margin: '16px 0' }}>
+                Eine neue Version ist verfügbar.
+              </div>
+            )}
+
+            {/* Download-Fortschritt */}
             {downloading && (
               <div style={{ marginBottom: '16px' }}>
                 <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden', marginBottom: '6px' }}>
@@ -1876,9 +1916,10 @@ function App() {
               </div>
             )}
             {downloadError && (
-              <div style={{ fontSize: '12px', color: '#ef4444', marginBottom: '12px' }}>{downloadError}</div>
+              <div style={{ fontSize: '12px', color: '#ef4444', marginBottom: '12px', padding: '8px 10px', background: 'rgba(239,68,68,0.1)', borderRadius: '6px' }}>{downloadError}</div>
             )}
 
+            {/* Buttons */}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button
                 onClick={() => setUpdateDismissed(true)}

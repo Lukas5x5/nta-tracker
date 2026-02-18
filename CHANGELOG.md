@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.1.1] - 2026-02-18
+- Update-Popup: Professionelle Changelog-Anzeige mit Bullet Points
+- GitHub Repo auf öffentlich gestellt – Update-Download funktioniert jetzt direkt
+
 ## [1.1.0] - 2026-02-18
 - Einstellungen "UI Größe": Slider durch +/- Buttons ersetzt, Kompakt/Normal/Groß entfernt
 - Admin-Panel: Passwort-Feld bei Crew-Erstellung, Zugangsdaten-Anzeige nach Erstellung, Passwort ändern für Crew

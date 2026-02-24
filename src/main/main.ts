@@ -873,6 +873,13 @@ function setupIpcHandlers() {
     const tempDir = app.getPath('temp')
     const filePath = path.join(tempDir, 'NTA-Update.exe')
 
+    // Alte Update-Datei löschen falls vorhanden (vermeidet EBUSY)
+    try {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    } catch (e) {
+      // Ignorieren wenn Datei gesperrt ist – wird beim Schreiben überschrieben
+    }
+
     return new Promise((resolve) => {
       const protocol = url.startsWith('https') ? https : http
 
@@ -914,13 +921,30 @@ function setupIpcHandlers() {
 
           file.on('finish', () => {
             file.close(() => {
-              // Kurz warten bis Windows die Datei freigibt, dann Installer starten
-              setTimeout(() => {
-                const { spawn } = require('child_process')
-                spawn(filePath, ['/S'], { detached: true, stdio: 'ignore' }).unref()
-                setTimeout(() => app.quit(), 1000)
-                resolve({ success: true })
-              }, 500)
+              // Retry-Mechanismus: Installer starten mit mehreren Versuchen
+              const { spawn } = require('child_process')
+              let attempts = 0
+              const maxAttempts = 5
+              const trySpawn = () => {
+                attempts++
+                try {
+                  // Prüfe ob Datei lesbar ist (nicht mehr gesperrt)
+                  fs.accessSync(filePath, fs.constants.R_OK | fs.constants.X_OK)
+                  const proc = spawn(filePath, ['/S'], { detached: true, stdio: 'ignore' })
+                  proc.unref()
+                  setTimeout(() => app.quit(), 1500)
+                  resolve({ success: true })
+                } catch (err: any) {
+                  if (attempts < maxAttempts) {
+                    // Exponentiell länger warten: 500ms, 1s, 2s, 4s, 8s
+                    setTimeout(trySpawn, 500 * Math.pow(2, attempts - 1))
+                  } else {
+                    resolve({ success: false, error: `Installer konnte nicht gestartet werden: ${err.message}` })
+                  }
+                }
+              }
+              // Erster Versuch nach 1s Wartezeit
+              setTimeout(trySpawn, 1000)
             })
           })
 

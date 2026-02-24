@@ -1900,19 +1900,35 @@ function App() {
                   <div style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>
                     Was ist neu
                   </div>
-                  {updateInfo.changelog.map((item, i) => (
-                    <div key={i} style={{
-                      display: 'flex', gap: '10px', alignItems: 'flex-start',
-                      marginBottom: i < updateInfo.changelog!.length - 1 ? '8px' : 0,
-                      fontSize: '12.5px', lineHeight: 1.5, color: 'rgba(255,255,255,0.75)'
-                    }}>
-                      <div style={{
-                        width: '5px', height: '5px', borderRadius: '50%',
-                        background: '#3b82f6', flexShrink: 0, marginTop: '7px'
-                      }} />
-                      <span>{item}</span>
-                    </div>
-                  ))}
+                  {updateInfo.changelog.map((item, i) => {
+                    // Kategorie-Header erkennen (z.B. "### Neue Features" oder "## Bugfixes")
+                    const headerMatch = item.match(/^#{1,3}\s+(.+)/)
+                    if (headerMatch) {
+                      return (
+                        <div key={i} style={{
+                          fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.5)',
+                          textTransform: 'uppercase', letterSpacing: '0.5px',
+                          marginTop: i > 0 ? '12px' : 0, marginBottom: '6px',
+                          paddingBottom: '4px', borderBottom: '1px solid rgba(255,255,255,0.06)'
+                        }}>
+                          {headerMatch[1]}
+                        </div>
+                      )
+                    }
+                    return (
+                      <div key={i} style={{
+                        display: 'flex', gap: '10px', alignItems: 'flex-start',
+                        marginBottom: i < updateInfo.changelog!.length - 1 ? '8px' : 0,
+                        fontSize: '12.5px', lineHeight: 1.5, color: 'rgba(255,255,255,0.75)'
+                      }}>
+                        <div style={{
+                          width: '5px', height: '5px', borderRadius: '50%',
+                          background: '#3b82f6', flexShrink: 0, marginTop: '7px'
+                        }} />
+                        <span>{item}</span>
+                      </div>
+                    )
+                  })}
                 </div>
               ) : updateInfo.message ? (
                 <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '20px', lineHeight: 1.6 }}>

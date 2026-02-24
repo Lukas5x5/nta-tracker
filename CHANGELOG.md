@@ -2,11 +2,6 @@
 
 ## [Unveröffentlicht]
 
-## [1.2.1] - 2026-02-24
-
-### Bugfixes
-- Gas-Tracker Panel: Verschieben per Drag (Mouse und Touch) funktioniert jetzt korrekt – Header-Bereich war fälschlicherweise als nicht-verschiebbar markiert
-
 ## [1.2.0] - 2026-02-24
 
 ### Neue Features
@@ -32,6 +27,8 @@
 - Kurslinie "Position ändern" funktioniert jetzt korrekt (nicht nur Erstpositionierung)
 - Heartbeat-Lizenzprüfung loggt nicht mehr bei kurzer Supabase-Unterbrechung aus
 - Kartenposition wird nach Re-Login wiederhergestellt statt Default-Position
+- Gas-Tracker Panel: Verschieben per Drag (Mouse und Touch) funktioniert jetzt korrekt
+- Update-Download: Bei Fehler wird der Installer als Fallback im Browser geöffnet
 
 
 ## [1.1.2] - 2026-02-18

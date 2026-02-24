@@ -2,6 +2,11 @@
 
 ## [Unveröffentlicht]
 
+## [1.2.1] - 2026-02-24
+
+### Bugfixes
+- Gas-Tracker Panel: Verschieben per Drag (Mouse und Touch) funktioniert jetzt korrekt – Header-Bereich war fälschlicherweise als nicht-verschiebbar markiert
+
 ## [1.2.0] - 2026-02-24
 
 ### Neue Features

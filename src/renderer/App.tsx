@@ -16,7 +16,7 @@ import type { Task, ProhibitedZone } from '../shared/types'
 import { latLonToUTM } from './utils/coordinatesWGS84'
 
 // Aktuelle App-Version (muss bei jedem Release angepasst werden)
-const APP_VERSION = '1.2.0'
+const APP_VERSION = '1.2.1'
 
 // Haversine-Distanzberechnung (Meter)
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -1992,7 +1992,10 @@ function App() {
                       const removeListener = window.ntaAPI.update.onProgress((p) => setDownloadProgress(p.percent))
                       const result = await window.ntaAPI.update.downloadAndInstall(updateInfo!.downloadUrl!)
                       if (!result.success) {
-                        setDownloadError(result.error || 'Download fehlgeschlagen')
+                        // Bei Fehler: Browser öffnen mit Download-Link
+                        const fallbackUrl = updateInfo!.url || updateInfo!.downloadUrl!
+                        window.ntaAPI?.openExternal?.(fallbackUrl)
+                        setDownloadError('Installer wird im Browser geöffnet – bitte manuell installieren')
                         setDownloading(false)
                       }
                       removeListener()

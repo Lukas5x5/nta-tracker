@@ -141,7 +141,7 @@ export function GasPanel({ isOpen, onClose }: GasPanelProps) {
       onTouchStart={handleTouchStart}
     >
       {/* Header */}
-      <div className="no-drag" style={{
+      <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { flushSync } from 'react-dom'
 import { createPortal } from 'react-dom'
 import { useFlightStore } from '../stores/flightStore'
+import { getOutdoor } from '../utils/outdoorStyles'
 import { usePanelDrag } from '../hooks/usePanelDrag'
 import { Task, TaskType, Goal, GoalType, ScoringArea } from '../../shared/types'
 import {
@@ -94,6 +95,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
     updateSettings,
     activeCompetitionMap
   } = useFlightStore()
+  const o = getOutdoor(settings.outdoorMode)
 
   // UTM Bounds und Zone aus aktiver Wettkampfkarte (wie OZI Explorer)
   const mapUtmBounds = activeCompetitionMap?.utmReprojection?.utmBounds
@@ -575,6 +577,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
     <>
       <div
         ref={panelRef}
+        className="briefing-panel"
         style={{
           position: 'fixed',
           left: position.x,
@@ -587,7 +590,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
           background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
           borderRadius: '12px',
           boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-          border: '1px solid rgba(255,255,255,0.1)',
+          border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
           overflow: 'hidden',
           cursor: isDragging ? 'grabbing' : 'default',
           transform: `scale(${scale})`,
@@ -599,7 +602,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
       {/* Header - kompakt wie andere Panels */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        borderBottom: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
         background: 'rgba(0,0,0,0.2)',
         display: 'flex',
         justifyContent: 'space-between',
@@ -621,7 +624,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
           </svg>
           <div>
             <div style={{ fontSize: '14px', fontWeight: 600, color: 'white' }}>Briefing</div>
-            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
+            <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
               {tasks.length} Task{tasks.length !== 1 ? 's' : ''}
             </div>
           </div>
@@ -673,7 +676,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
             background: 'transparent',
             border: 'none',
             cursor: 'pointer',
-            color: 'rgba(255,255,255,0.5)',
+            color: `rgba(255,255,255,${o.textMuted})`,
             padding: '4px',
             display: 'flex',
             alignItems: 'center',
@@ -716,7 +719,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                   fontSize: '13px',
                   fontWeight: 600,
                   background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   borderRadius: '6px',
                   color: 'white'
                 }}
@@ -730,7 +733,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                     width: '36px',
                     height: '36px',
                     background: taskForm.markerColor,
-                    border: '2px solid rgba(255,255,255,0.3)',
+                    border: `2px solid rgba(255,255,255,${o.on ? 0.5 : 0.3})`,
                     borderRadius: '6px',
                     cursor: 'pointer'
                   }}
@@ -746,7 +749,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                     padding: '8px',
                     background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
                     borderRadius: '8px',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                     boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
                     zIndex: 100,
                     display: 'grid',
@@ -769,7 +772,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                           width: '28px',
                           height: '28px',
                           background: color,
-                          border: taskForm.markerColor === color ? '2px solid white' : '1px solid rgba(255,255,255,0.2)',
+                          border: taskForm.markerColor === color ? '2px solid white' : `1px solid rgba(255,255,255,${o.on ? 0.35 : 0.2})`,
                           borderRadius: '4px',
                           cursor: 'pointer'
                         }}
@@ -806,7 +809,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                     fontSize: '12px',
                     fontWeight: 600,
                     background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                     borderRadius: '5px',
                     color: '#10b981'
                   }}
@@ -836,7 +839,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                     fontSize: '12px',
                     fontWeight: 600,
                     background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                     borderRadius: '5px',
                     color: '#f59e0b'
                   }}
@@ -855,7 +858,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                   fontSize: '12px',
                   fontWeight: 600,
                   background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   borderRadius: '5px',
                   color: '#3b82f6',
                   textAlign: 'center'
@@ -867,7 +870,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
             <div style={{ marginBottom: '8px' }}>
               <div style={{
                 fontSize: '9px',
-                color: 'rgba(255,255,255,0.4)',
+                color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                 marginBottom: '4px',
                 textTransform: 'uppercase'
               }}>
@@ -918,7 +921,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
             {/* MMA + Ends At */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>MMA (m)</div>
+                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '2px' }}>MMA (m)</div>
                 <input
                   type="number"
                   value={taskForm.mma}
@@ -937,7 +940,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                     fontSize: '13px',
                     fontWeight: 600,
                     background: 'rgba(0,0,0,0.4)',
-                    border: '1px solid rgba(255,255,255,0.15)',
+                    border: `1px solid rgba(255,255,255,${o.borderStrong})`,
                     borderRadius: '5px',
                     color: 'white',
                     textAlign: 'center'
@@ -945,7 +948,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>
+                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '2px' }}>
                   Ends at ({settings.taskTimeZone === 'local' ? 'Lok' : 'UTC'})
                 </div>
                 <input
@@ -959,7 +962,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                     width: '100%',
                     padding: '8px',
                     borderRadius: '5px',
-                    border: '1px solid rgba(255,255,255,0.15)',
+                    border: `1px solid rgba(255,255,255,${o.borderStrong})`,
                     background: 'rgba(0,0,0,0.3)',
                     color: 'white',
                     fontSize: '13px',
@@ -989,7 +992,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                   onClick={e => e.stopPropagation()}
                   style={{ width: '14px', height: '14px', accentColor: '#f59e0b', cursor: 'pointer' }}
                 />
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>Erinnerung</span>
+                <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textSec})` }}>Erinnerung</span>
                 <input
                   type="number"
                   value={taskForm.reminderValue}
@@ -1031,7 +1034,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                   <option value="minutes">min</option>
                   <option value="seconds">sek</option>
                 </select>
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>vor Ende</span>
+                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>vor Ende</span>
               </div>
             )}
 
@@ -1044,9 +1047,9 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                   flex: 1,
                   padding: '8px',
                   borderRadius: '6px',
-                  background: taskForm.multiMarker ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)',
-                  border: taskForm.multiMarker ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255,255,255,0.1)',
-                  color: taskForm.multiMarker ? '#f59e0b' : 'rgba(255,255,255,0.5)',
+                  background: taskForm.multiMarker ? 'rgba(245, 158, 11, 0.2)' : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
+                  border: taskForm.multiMarker ? '1px solid rgba(245, 158, 11, 0.5)' : `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                  color: taskForm.multiMarker ? '#f59e0b' : `rgba(255,255,255,${o.textMuted})`,
                   fontSize: '11px',
                   fontWeight: 600,
                   cursor: 'pointer'
@@ -1061,9 +1064,9 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                   flex: 1,
                   padding: '8px',
                   borderRadius: '6px',
-                  background: taskForm.showRings ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
-                  border: taskForm.showRings ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255,255,255,0.1)',
-                  color: taskForm.showRings ? '#3b82f6' : 'rgba(255,255,255,0.5)',
+                  background: taskForm.showRings ? 'rgba(59, 130, 246, 0.2)' : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
+                  border: taskForm.showRings ? '1px solid rgba(59, 130, 246, 0.5)' : `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                  color: taskForm.showRings ? '#3b82f6' : `rgba(255,255,255,${o.textMuted})`,
                   fontSize: '11px',
                   fontWeight: 600,
                   cursor: 'pointer'
@@ -1093,7 +1096,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                         flex: 1,
                         padding: '6px',
                         borderRadius: '4px',
-                        background: taskForm.markerCount === count ? '#f59e0b' : 'rgba(255,255,255,0.08)',
+                        background: taskForm.markerCount === count ? '#f59e0b' : `rgba(255,255,255,${o.border})`,
                         border: 'none',
                         color: taskForm.markerCount === count ? 'black' : 'white',
                         fontSize: '11px',
@@ -1109,7 +1112,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                 {/* Farben */}
                 {Array.from({ length: taskForm.markerCount }).map((_, idx) => (
                   <div key={idx} style={{ display: 'flex', gap: '3px', marginBottom: '4px', alignItems: 'center' }}>
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', width: '14px' }}>{idx + 1}:</span>
+                    <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, width: '14px' }}>{idx + 1}:</span>
                     {availableMarkerColors.map((color, colorIdx) => (
                       <button
                         key={colorIdx}
@@ -1161,7 +1164,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                         padding: '6px 4px',
                         fontSize: '11px',
                         background: 'rgba(0,0,0,0.4)',
-                        border: '1px solid rgba(255,255,255,0.12)',
+                        border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.12})`,
                         borderRadius: '4px',
                         color: 'white',
                         textAlign: 'center'
@@ -1182,7 +1185,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                   padding: '10px',
                   borderRadius: '6px',
                   background: (!taskForm.lat || !taskForm.name.trim())
-                    ? 'rgba(255,255,255,0.05)'
+                    ? `rgba(255,255,255,${o.on ? 0.12 : 0.05})`
                     : editingTaskId
                     ? '#3b82f6'
                     : '#22c55e',
@@ -1206,9 +1209,9 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                 style={{
                   padding: '10px 16px',
                   borderRadius: '6px',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: 'rgba(255,255,255,0.5)',
+                  background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
+                  border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                  color: `rgba(255,255,255,${o.textMuted})`,
                   fontSize: '12px',
                   fontWeight: 500,
                   cursor: 'pointer'
@@ -1249,7 +1252,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
           <div style={{
             textAlign: 'center',
             padding: '24px 16px',
-            color: 'rgba(255,255,255,0.3)',
+            color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})`,
             fontSize: '12px'
           }}>
             Keine Tasks vorhanden
@@ -1260,8 +1263,8 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
               <div
                 key={task.id}
                 style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+                  border: `1px solid rgba(255,255,255,${o.border})`,
                   borderRadius: '6px',
                   padding: '8px 10px',
                   display: 'flex',
@@ -1290,7 +1293,7 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                   }}>
                     {task.name}
                   </div>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
+                  <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
                     {task.loggerId && <span style={{ color: '#10b981' }}>{task.loggerId}</span>}
                     {task.loggerId && task.loggerGoalId && ' '}
                     {task.loggerGoalId && <span style={{ color: '#f59e0b' }}>{task.loggerGoalId}</span>}
@@ -1374,12 +1377,12 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
               padding: '16px',
               maxWidth: '300px',
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
-              border: '1px solid rgba(255,255,255,0.1)'
+              border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ fontSize: '14px', fontWeight: 600, color: 'white', marginBottom: '8px' }}>Task löschen?</div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginBottom: '16px' }}>
+            <div style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, marginBottom: '16px' }}>
               "{tasks.find(t => t.id === taskToDelete)?.name}"
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -1389,9 +1392,9 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
                   flex: 1,
                   padding: '8px',
                   borderRadius: '6px',
-                  border: '1px solid rgba(255,255,255,0.15)',
+                  border: `1px solid rgba(255,255,255,${o.borderStrong})`,
                   background: 'transparent',
-                  color: 'rgba(255,255,255,0.7)',
+                  color: `rgba(255,255,255,${o.textSec})`,
                   cursor: 'pointer',
                   fontSize: '12px'
                 }}

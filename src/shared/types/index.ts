@@ -69,7 +69,6 @@ export enum TaskType {
   SFL = 'SFL', // Shortest Flight
   LTT = 'LTT', // Least Time Task
   MTT = 'MTT', // Most Time Task
-  ThreeD = '3D',  // 3D Tasks
   APT = 'APT',  // Altitude Profile Task
 }
 
@@ -115,7 +114,7 @@ export interface Task {
   loggerId?: string  // Logger Marker ID (LM) für digitalen Logger
   loggerGoalId?: string  // Logger Goal ID (LG) für digitalen Logger
 
-  // 3D Task spezifisch
+  // Höhenlimits
   minAltitude?: number
   maxAltitude?: number
   altitudeReference?: 'MSL' | 'AGL' | 'QNH'
@@ -164,8 +163,7 @@ export interface Goal {
 }
 
 export enum GoalType {
-  Ground = 'ground',
-  Air3D = '3d'
+  Ground = 'ground'
 }
 
 export interface ScoringArea {
@@ -193,6 +191,7 @@ export interface MarkerDrop {
   timestamp: Date
   taskId?: string
   notes?: string
+  clinoAngle?: number // Klinometerwinkel in Grad (Winkel vom Ballon zum Aufschlagpunkt)
 }
 
 export interface GoalDeclaration {
@@ -369,6 +368,7 @@ export interface AppSettings {
   displayFields: DisplayField[]
   fontSize: 'small' | 'medium' | 'large'
   theme: 'light' | 'dark' | 'auto'
+  outdoorMode?: boolean  // Outdoor/High-Contrast Modus für bessere Lesbarkeit bei Sonneneinstrahlung
 
   // Audio
   audioAlerts: boolean
@@ -564,6 +564,7 @@ export interface AppSettings {
   aptPanelScale?: number      // APT Panel Skalierung (default: 1.0, range: 0.6-1.5)
   angPanelScale?: number      // ANG Berechnung Panel Skalierung (default: 1.0, range: 0.6-1.5)
   windRoseScale?: number      // Windrose Skalierung (default: 1.0, range: 0.6-1.5)
+  gasPanelScale?: number      // Gas-Tracker Skalierung (default: 1.0, range: 0.6-1.5)
 
   // Pilot
   pilotName: string
@@ -572,6 +573,18 @@ export interface AppSettings {
   // BLS Sensor
   lastConnectedBLS?: string | null  // ID des zuletzt verbundenen BLS
   lastConnectedBLSName?: string | null  // Name des zuletzt verbundenen BLS
+
+  // Timer & Wecker
+  timerAlarmSound?: boolean       // Sound bei Timer/Wecker-Alarm (default: true)
+  timerAlarmVolume?: number       // Lautstärke 0-1 (default: 0.7)
+
+  // Gas Bottle Tracker
+  gasBottles?: GasBottle[]          // Konfigurierte Gasflaschen
+  gasReserveMinutes?: number        // Reserve-Zeit in Minuten (default: 10)
+  gasPanelPosition?: { x: number; y: number }
+
+  // Funktionstasten
+  functionKeyBindings?: { [key: string]: string }  // z.B. { "F1": "dropMarker" }
 }
 
 export interface DisplayField {
@@ -709,6 +722,7 @@ export interface AppUser {
   created_at: string
   license_key?: string | null
   bound_installation_id?: string | null
+  crew_password?: string | null
 }
 
 export interface AppUserRow extends AppUser {
@@ -806,4 +820,65 @@ export interface ProhibitedZone {
   altitudeWarningMode?: 'floor' | 'ceiling'  // 'floor' = von Boden bis X (warnt wenn unter Höhe UND nahe), 'ceiling' = Höhenbegrenzung nach oben
   altitudeWarningValue?: number  // Höhenwert (in der Einheit aus Settings: ft oder m)
   altitudeWarningMargin?: number  // Vorlauf-Warnung: wie viele ft/m VOR der Grenze warnen (in der Einheit aus Settings)
+}
+
+// Gas Bottle Tracker
+export interface GasBottle {
+  id: string
+  name: string              // z.B. "Flasche 1"
+  totalLiters: number       // Gesamtvolumen z.B. 40
+  consumptionPerHour: number // Verbrauch pro Stunde z.B. 30 L/h
+}
+
+export interface UsedBottleRecord {
+  bottleId: string
+  startTime: string   // ISO Date String
+  endTime: string     // ISO Date String
+  litersUsed: number
+}
+
+export interface GasBottleState {
+  activeBottleId: string | null
+  activeSince: string | null  // ISO Date String
+  usedBottles: UsedBottleRecord[]
+}
+
+// Funktionstasten-Belegung
+export type FKeyAction =
+  | 'dropMarker'
+  | 'toggleStopwatch'
+  | 'toggleGasPanel'
+  | 'switchGasBottle'
+  | 'toggleMeasureTool'
+  | 'toggleWindRose'
+  | 'toggleRecording'
+  | 'openToolMarker'
+  | 'openToolFly'
+  | 'openToolLnd'
+  | 'openToolLrn'
+  | 'openToolApt'
+  | 'openToolAng'
+  | 'toggleNavPanel'
+  | 'toggleWindPanel'
+  | 'toggleBriefing'
+  | 'none'
+
+export const FKEY_ACTION_LABELS: Record<FKeyAction, string> = {
+  dropMarker: 'Marker Drop',
+  toggleStopwatch: 'Stoppuhr/Timer',
+  toggleGasPanel: 'Gas-Tracker',
+  switchGasBottle: 'Gasflasche wechseln',
+  toggleMeasureTool: 'Messwerkzeug',
+  toggleWindRose: 'Windrose',
+  toggleRecording: 'Aufzeichnung Start/Stop',
+  openToolMarker: 'Tool: Drop-Rechner',
+  openToolFly: 'Tool: PDG/FON',
+  openToolLnd: 'Tool: Landeprognose',
+  openToolLrn: 'Tool: Land Run',
+  openToolApt: 'Tool: APT',
+  openToolAng: 'Tool: ANG',
+  toggleNavPanel: 'Navigation ein/aus',
+  toggleWindPanel: 'Wind-Panel ein/aus',
+  toggleBriefing: 'Briefing ein/aus',
+  none: 'Keine Aktion'
 }

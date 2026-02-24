@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { useFlightStore } from '../stores/flightStore'
+import { getOutdoor } from '../utils/outdoorStyles'
 
 interface MeasurePoint {
   lat: number
@@ -90,6 +92,9 @@ function calculatePerimeter(points: MeasurePoint[]): number {
 }
 
 export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChange, areaCompleted, onAreaComplete, color, onColorChange }: MeasureToolProps) {
+  const settings = useFlightStore(s => s.settings)
+  const o = getOutdoor(settings.outdoorMode)
+
   // Position State für Drag
   const [position, setPosition] = useState({ x: 20, y: 200 })
   const [isDragging, setIsDragging] = useState(false)
@@ -231,6 +236,7 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
 
   return (
     <div
+      className="measure-tool-panel"
       style={{
         position: 'fixed',
         left: `${position.x}px`,
@@ -239,7 +245,7 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
         background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
         borderRadius: '12px',
         boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
-        border: '1px solid rgba(255,255,255,0.15)',
+        border: `1px solid rgba(255,255,255,${o.borderStrong})`,
         zIndex: 10000,
         overflow: 'hidden',
         cursor: isDragging ? 'grabbing' : 'grab',
@@ -277,7 +283,7 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
         <button
           onClick={onClose}
           style={{
-            background: 'rgba(255,255,255,0.1)',
+            background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
             border: 'none',
             color: 'white',
             cursor: 'pointer',
@@ -306,10 +312,10 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
           style={{
             flex: 1,
             padding: '8px',
-            background: mode === 'distance' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
+            background: mode === 'distance' ? 'rgba(59, 130, 246, 0.2)' : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
             border: mode === 'distance' ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid transparent',
             borderRadius: '6px',
-            color: mode === 'distance' ? '#3b82f6' : 'rgba(255,255,255,0.6)',
+            color: mode === 'distance' ? '#3b82f6' : `rgba(255,255,255,${o.on ? 0.92 : 0.6})`,
             fontSize: '11px',
             fontWeight: 600,
             cursor: 'pointer',
@@ -333,10 +339,10 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
           style={{
             flex: 1,
             padding: '8px',
-            background: mode === 'area' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.05)',
+            background: mode === 'area' ? 'rgba(34, 197, 94, 0.2)' : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
             border: mode === 'area' ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid transparent',
             borderRadius: '6px',
-            color: mode === 'area' ? '#22c55e' : 'rgba(255,255,255,0.6)',
+            color: mode === 'area' ? '#22c55e' : `rgba(255,255,255,${o.on ? 0.92 : 0.6})`,
             fontSize: '11px',
             fontWeight: 600,
             cursor: 'pointer',
@@ -361,7 +367,7 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
         padding: '8px 12px',
         borderBottom: '1px solid rgba(255,255,255,0.1)'
       }}>
-        <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>Farbe:</span>
+        <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})` }}>Farbe:</span>
         <input
           type="color"
           value={color}
@@ -375,7 +381,7 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
             background: 'transparent'
           }}
         />
-        <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}>
+        <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, fontFamily: 'monospace' }}>
           {color.toUpperCase()}
         </span>
       </div>
@@ -385,7 +391,7 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
         {points.length === 0 ? (
           <div style={{
             textAlign: 'center',
-            color: 'rgba(255,255,255,0.5)',
+            color: `rgba(255,255,255,${o.textMuted})`,
             fontSize: '12px',
             padding: '16px 0'
           }}>
@@ -407,7 +413,7 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
             }}>
               <div style={{
                 fontSize: '10px',
-                color: 'rgba(255,255,255,0.5)',
+                color: `rgba(255,255,255,${o.textMuted})`,
                 marginBottom: '4px',
                 textTransform: 'uppercase'
               }}>
@@ -438,13 +444,13 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       padding: '6px 8px',
-                      background: 'rgba(255,255,255,0.05)',
+                      background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
                       borderRadius: '6px',
                       marginBottom: '4px',
                       fontSize: '11px'
                     }}
                   >
-                    <span style={{ color: 'rgba(255,255,255,0.6)' }}>
+                    <span style={{ color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})` }}>
                       {index + 1} → {index + 2}
                     </span>
                     <div style={{ display: 'flex', gap: '12px' }}>
@@ -494,7 +500,7 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
                 }}>
                   <div style={{
                     fontSize: '10px',
-                    color: 'rgba(255,255,255,0.5)',
+                    color: `rgba(255,255,255,${o.textMuted})`,
                     marginBottom: '4px'
                   }}>
                     {points.length < 3
@@ -504,7 +510,7 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
                   <div style={{
                     fontSize: '18px',
                     fontWeight: 700,
-                    color: points.length >= 3 ? color : 'rgba(255,255,255,0.4)',
+                    color: points.length >= 3 ? color : `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                     fontFamily: 'monospace'
                   }}>
                     {points.length >= 3 ? formatArea(polygonArea) : '---'}
@@ -526,11 +532,11 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
                           alignItems: 'center',
                           gap: '8px',
                           padding: '4px 8px',
-                          background: 'rgba(255,255,255,0.05)',
+                          background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
                           borderRadius: '4px',
                           marginBottom: '2px',
                           fontSize: '11px',
-                          color: 'rgba(255,255,255,0.6)'
+                          color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`
                         }}
                       >
                         <span style={{
@@ -577,10 +583,10 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
                     style={{
                       flex: 1,
                       padding: '8px',
-                      background: points.length >= 3 ? `${color}33` : 'rgba(255,255,255,0.05)',
+                      background: points.length >= 3 ? `${color}33` : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
                       border: points.length >= 3 ? `1px solid ${color}66` : '1px solid transparent',
                       borderRadius: '6px',
-                      color: points.length >= 3 ? color : 'rgba(255,255,255,0.3)',
+                      color: points.length >= 3 ? color : `rgba(255,255,255,${o.on ? 0.5 : 0.3})`,
                       fontSize: '11px',
                       fontWeight: 600,
                       cursor: points.length >= 3 ? 'pointer' : 'not-allowed'
@@ -604,7 +610,7 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
                 }}>
                   <div style={{
                     fontSize: '10px',
-                    color: 'rgba(255,255,255,0.5)',
+                    color: `rgba(255,255,255,${o.textMuted})`,
                     marginBottom: '4px',
                     textTransform: 'uppercase'
                   }}>
@@ -623,7 +629,7 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
                 {/* Info */}
                 <div style={{
                   fontSize: '11px',
-                  color: 'rgba(255,255,255,0.5)',
+                  color: `rgba(255,255,255,${o.textMuted})`,
                   textAlign: 'center',
                   marginBottom: '12px'
                 }}>
@@ -676,7 +682,7 @@ export function MeasureTool({ isOpen, onClose, points, onClear, mode, onModeChan
         padding: '8px 12px',
         borderTop: '1px solid rgba(255,255,255,0.1)',
         fontSize: '10px',
-        color: 'rgba(255,255,255,0.4)',
+        color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
         textAlign: 'center'
       }}>
         Shift + Klick zum Messen

@@ -291,7 +291,6 @@ export function BriefingSidebar({ isOpen, onClose, clickedPosition, onClearClick
                 <option value={TaskType.XDI}>XDI - Max Distance</option>
                 <option value={TaskType.MDD}>MDD - Min Distance DD</option>
                 <option value={TaskType.ELB}>ELB - Elbow</option>
-                <option value={TaskType.ThreeD}>3D - 3D Task</option>
               </select>
             </div>
 

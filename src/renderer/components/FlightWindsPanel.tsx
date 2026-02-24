@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useFlightStore } from '../stores/flightStore'
+import { getOutdoor } from '../utils/outdoorStyles'
 import { useTeamStore } from '../stores/teamStore'
 import { usePanelDrag } from '../hooks/usePanelDrag'
 import { WindSource, WindLayer } from '../../shared/types'
 import {
   parseWindFile, normalizeToInternal, inferWindSource, formatName,
-  defaultImportSettings, WindImportSettings, WindImportResult
+  filterByLayerThickness, defaultImportSettings, WindImportSettings, WindImportResult
 } from '../utils/windImport'
 import { fetchIconD2Wind, IconD2Result, WEATHER_MODELS } from '../utils/iconD2'
 import { parseTrajectoryFile, TRAJECTORY_COLORS } from '../utils/trajectoryImport'
@@ -81,6 +82,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
     windSourceFilter, setWindSourceFilter,
     showWindRose, setShowWindRose
   } = useFlightStore()
+  const o = getOutdoor(settings.outdoorMode)
 
   // Team state
   const teamSession = useTeamStore(s => s.session)
@@ -124,7 +126,11 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
   useEffect(() => {
     if (importResult && importResult.success) {
       const source = inferWindSource(importResult.format, importFilename)
-      const layers = normalizeToInternal(importResult.rows, importSettings, source)
+      let layers = normalizeToInternal(importResult.rows, importSettings, source)
+      // Schichtdicke-Filter anwenden
+      if (importSettings.layerThicknessFt && importSettings.layerThicknessFt > 0) {
+        layers = filterByLayerThickness(layers, importSettings.layerThicknessFt)
+      }
       setPreviewLayers(layers)
     } else {
       setPreviewLayers([])
@@ -191,9 +197,12 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
       const result = parseWindFile(content)
       setImportResult(result)
 
-      if (result.detectedSettings) {
-        setImportSettings(prev => ({ ...prev, ...result.detectedSettings }))
-      }
+      // Settings zuerst auf Defaults zurücksetzen, dann erkannte Settings mergen
+      // Sonst bleiben alte Settings von vorheriger Datei hängen
+      setImportSettings({
+        ...defaultImportSettings,
+        ...(result.detectedSettings || {})
+      })
     })
 
     e.target.value = ''
@@ -448,6 +457,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
   return (
     <div
       ref={panelRef}
+      className="flight-winds-panel"
       style={{
         position: 'fixed',
         left: `${position.x}px`,
@@ -456,7 +466,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
         background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
         borderRadius: '16px',
         boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
-        border: '1px solid rgba(255,255,255,0.1)',
+        border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
         zIndex: 10000,
         display: 'flex',
         flexDirection: 'column',
@@ -473,7 +483,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
       {/* Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        borderBottom: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
@@ -488,7 +498,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
           <div className="no-drag" style={{
             display: 'flex',
             gap: '2px',
-            background: 'rgba(255,255,255,0.05)',
+            background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
             borderRadius: '6px',
             padding: '2px',
             marginLeft: '4px'
@@ -517,7 +527,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                   fontWeight: 700,
                   cursor: 'pointer',
                   background: windSourceFilter === opt.key ? `${opt.color}30` : 'transparent',
-                  color: windSourceFilter === opt.key ? opt.color : 'rgba(255,255,255,0.35)',
+                  color: windSourceFilter === opt.key ? opt.color : `rgba(255,255,255,${o.textDim})`,
                   letterSpacing: '0.3px',
                   transition: 'all 0.15s'
                 }}
@@ -531,9 +541,9 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
           className="no-drag"
           onClick={onClose}
           style={{
-            background: 'rgba(255,255,255,0.1)',
+            background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
             border: 'none',
-            color: 'rgba(255,255,255,0.6)',
+            color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`,
             width: '28px',
             height: '28px',
             borderRadius: '8px',
@@ -562,9 +572,9 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
               flex: 1,
               padding: '8px 12px',
               fontSize: '11px',
-              background: activeTab === tab ? '#3b82f6' : 'rgba(255,255,255,0.05)',
+              background: activeTab === tab ? '#3b82f6' : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
               color: 'white',
-              border: activeTab === tab ? 'none' : '1px solid rgba(255,255,255,0.1)',
+              border: activeTab === tab ? 'none' : `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
               borderRadius: '8px',
               cursor: 'pointer',
               fontWeight: 600,
@@ -613,7 +623,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
             <div style={{
               textAlign: 'center',
               padding: '24px 16px',
-              color: 'rgba(255,255,255,0.4)',
+              color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
               fontSize: '12px',
               width: '100%'
             }}>
@@ -664,13 +674,13 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                           ? 'linear-gradient(90deg, rgba(59, 130, 246, 0.4) 0%, rgba(59, 130, 246, 0.15) 100%)'
                           : isSelected
                             ? 'rgba(34, 197, 94, 0.25)'
-                            : 'rgba(255,255,255,0.03)',
+                            : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
                         borderRadius: '8px',
                         border: isCurrentLayer
                           ? '2px solid #3b82f6'
                           : isSelected
                             ? '1px solid rgba(34, 197, 94, 0.5)'
-                            : '1px solid rgba(255,255,255,0.1)',
+                            : `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                         cursor: 'pointer',
                         transition: 'all 0.15s',
                         boxShadow: isCurrentLayer ? '0 0 12px rgba(59, 130, 246, 0.5)' : 'none'
@@ -703,7 +713,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         alignItems: 'baseline'
                       }}>
                         <span style={{ color: altColor }}>{formatAltitudeNumber(layer.altitude)}</span>
-                        <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '11px', marginLeft: '1px' }}>{altitudeUnit}</span>
+                        <span style={{ color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, fontSize: '11px', marginLeft: '1px' }}>{altitudeUnit}</span>
                       </div>
 
                       {/* Kurs - prominent in Gelb */}
@@ -715,7 +725,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         display: 'flex',
                         alignItems: 'center',
                         gap: '3px',
-                        borderLeft: '1px solid rgba(255,255,255,0.2)',
+                        borderLeft: `1px solid rgba(255,255,255,${o.on ? 0.35 : 0.2})`,
                         paddingLeft: '8px',
                         marginLeft: '4px'
                       }}>
@@ -741,7 +751,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         color: windColor,
                         fontFamily: 'monospace',
                         whiteSpace: 'nowrap',
-                        borderLeft: '1px solid rgba(255,255,255,0.2)',
+                        borderLeft: `1px solid rgba(255,255,255,${o.on ? 0.35 : 0.2})`,
                         paddingLeft: '8px',
                         marginLeft: '4px'
                       }}>
@@ -755,7 +765,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                           fontWeight: 700,
                           fontFamily: 'monospace',
                           whiteSpace: 'nowrap',
-                          borderLeft: '1px solid rgba(255,255,255,0.2)',
+                          borderLeft: `1px solid rgba(255,255,255,${o.on ? 0.35 : 0.2})`,
                           paddingLeft: '6px',
                           marginLeft: '4px',
                           display: 'flex',
@@ -849,7 +859,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         style={{
                           background: windLineMode && pendingWindLayer?.altitude === layer.altitude
                             ? '#06b6d4'
-                            : 'rgba(255,255,255,0.1)',
+                            : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                           border: 'none',
                           color: 'white',
                           cursor: 'pointer',
@@ -902,11 +912,11 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
         {windLines.length > 0 && (
           <div className="no-drag" style={{
             padding: '8px 16px',
-            borderTop: '1px solid rgba(255,255,255,0.1)'
+            borderTop: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`
           }}>
             <div style={{
               fontSize: '10px',
-              color: 'rgba(255,255,255,0.5)',
+              color: `rgba(255,255,255,${o.textMuted})`,
               marginBottom: '6px',
               display: 'flex',
               justifyContent: 'space-between',
@@ -975,12 +985,12 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
         {showAddForm && (
           <div className="no-drag" style={{
             padding: '12px 16px',
-            borderTop: '1px solid rgba(255,255,255,0.1)',
+            borderTop: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
             background: 'rgba(0,0,0,0.2)'
           }}>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '2px' }}>
+                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '2px' }}>
                   {altitudeUnit === 'ft' ? 'HÖHE (FT)' : 'HÖHE (M)'}
                 </div>
                 <input
@@ -992,7 +1002,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                     width: '100%',
                     padding: '8px',
                     background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                     borderRadius: '6px',
                     color: 'white',
                     fontSize: '13px',
@@ -1001,7 +1011,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '2px' }}>RICHTUNG (°)</div>
+                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '2px' }}>RICHTUNG (°)</div>
                 <input
                   type="number"
                   placeholder="247"
@@ -1013,7 +1023,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                     width: '100%',
                     padding: '8px',
                     background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                     borderRadius: '6px',
                     color: 'white',
                     fontSize: '13px',
@@ -1022,7 +1032,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '2px' }}>KM/H</div>
+                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '2px' }}>KM/H</div>
                 <input
                   type="number"
                   placeholder="12"
@@ -1033,7 +1043,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                     width: '100%',
                     padding: '8px',
                     background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                     borderRadius: '6px',
                     color: 'white',
                     fontSize: '13px',
@@ -1048,10 +1058,10 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                 style={{
                   flex: 1,
                   padding: '8px',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
+                  border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   borderRadius: '6px',
-                  color: 'rgba(255,255,255,0.7)',
+                  color: `rgba(255,255,255,${o.textSec})`,
                   fontSize: '12px',
                   fontWeight: 600,
                   cursor: 'pointer'
@@ -1082,7 +1092,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
         {/* Footer Actions */}
         <div className="no-drag" style={{
           padding: '12px 16px',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
+          borderTop: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
           display: 'flex',
           gap: '8px'
         }}>
@@ -1195,7 +1205,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
 
               {/* Modellauswahl */}
               <div style={{ marginBottom: '10px' }}>
-                <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px', textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px', textTransform: 'uppercase' }}>
                   Modell
                 </div>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
@@ -1207,9 +1217,9 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                       style={{
                         padding: '5px 8px',
                         fontSize: '10px',
-                        background: iconD2Model === model.id ? '#0ea5e9' : 'rgba(255,255,255,0.05)',
+                        background: iconD2Model === model.id ? '#0ea5e9' : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
                         color: 'white',
-                        border: iconD2Model === model.id ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                        border: iconD2Model === model.id ? 'none' : `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                         borderRadius: '5px',
                         cursor: 'pointer',
                         fontWeight: 600,
@@ -1228,7 +1238,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
 
               {/* Zeitauswahl */}
               <div style={{ marginBottom: '10px' }}>
-                <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px', textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px', textTransform: 'uppercase' }}>
                   Zeitpunkt
                 </div>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
@@ -1243,9 +1253,9 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         style={{
                           padding: '5px 8px',
                           fontSize: '10px',
-                          background: iconD2TimeOffset === h ? '#0ea5e9' : 'rgba(255,255,255,0.05)',
+                          background: iconD2TimeOffset === h ? '#0ea5e9' : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
                           color: 'white',
-                          border: iconD2TimeOffset === h ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                          border: iconD2TimeOffset === h ? 'none' : `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                           borderRadius: '5px',
                           cursor: 'pointer',
                           fontWeight: 600,
@@ -1277,7 +1287,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       fontSize: '10px',
-                      color: 'rgba(255,255,255,0.4)',
+                      color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                       marginBottom: '8px'
                     }}>
                       <span>
@@ -1291,9 +1301,9 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         <button
                           onClick={() => setWindImportPickPosition(true)}
                           style={{
-                            background: windImportPickPosition ? '#0ea5e9' : 'rgba(255,255,255,0.1)',
+                            background: windImportPickPosition ? '#0ea5e9' : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                             border: 'none',
-                            color: windImportPickPosition ? 'white' : 'rgba(255,255,255,0.6)',
+                            color: windImportPickPosition ? 'white' : `rgba(255,255,255,${o.on ? 0.92 : 0.6})`,
                             cursor: 'pointer',
                             padding: '3px 8px',
                             borderRadius: '4px',
@@ -1310,7 +1320,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                             style={{
                               background: 'none',
                               border: 'none',
-                              color: 'rgba(255,255,255,0.3)',
+                              color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})`,
                               cursor: 'pointer',
                               padding: '3px 4px',
                               fontSize: '10px'
@@ -1333,8 +1343,8 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                           ? 'rgba(14, 165, 233, 0.3)'
                           : hasAnyPos
                             ? '#0ea5e9'
-                            : 'rgba(255,255,255,0.1)',
-                        color: hasAnyPos ? 'white' : 'rgba(255,255,255,0.4)',
+                            : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                        color: hasAnyPos ? 'white' : `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                         border: 'none',
                         borderRadius: '8px',
                         cursor: hasAnyPos && !iconD2Loading ? 'pointer' : 'default',
@@ -1390,7 +1400,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                   <div style={{ fontSize: '12px', fontWeight: 600, color: 'white' }}>
                     {WEATHER_MODELS.find(m => m.id === iconD2Result.modelId)?.name ?? iconD2Result.modelId} Vorhersage
                   </div>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>
+                  <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>
                     {iconD2Result.success
                       ? `${iconD2Result.layers.length} Schichten · ${new Date(iconD2Result.modelTime).toLocaleString('de-DE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}`
                       : iconD2Result.errors.join(', ')}
@@ -1416,7 +1426,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                   {/* Modus */}
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>MODUS</div>
+                      <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>MODUS</div>
                       <div style={{ display: 'flex', gap: '4px' }}>
                         {(['merge', 'replace'] as const).map(m => (
                           <button
@@ -1424,9 +1434,9 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                             onClick={() => setImportMode(m)}
                             style={{
                               flex: 1, padding: '5px', fontSize: '10px',
-                              background: importMode === m ? '#0ea5e9' : 'rgba(255,255,255,0.05)',
+                              background: importMode === m ? '#0ea5e9' : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
                               color: 'white',
-                              border: importMode === m ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                              border: importMode === m ? 'none' : `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                               borderRadius: '5px', cursor: 'pointer', fontWeight: 600
                             }}
                           >
@@ -1440,7 +1450,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                   {/* Vorschau */}
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+                      <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                         Windprofil ({iconD2Selected.size}/{iconD2Result.layers.length} ausgewählt)
                       </div>
                       <div style={{ display: 'flex', gap: '6px' }}>
@@ -1452,7 +1462,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         </button>
                         <button
                           onClick={() => setIconD2Selected(new Set())}
-                          style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                         >
                           Keine
                         </button>
@@ -1462,7 +1472,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                       maxHeight: '200px',
                       overflow: 'auto',
                       borderRadius: '6px',
-                      border: '1px solid rgba(255,255,255,0.1)',
+                      border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                       background: 'rgba(0,0,0,0.2)'
                     }}>
                       {iconD2Result.layers.map((layer, i) => {
@@ -1481,7 +1491,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                               alignItems: 'center',
                               padding: '5px 8px',
                               fontSize: '11px',
-                              borderBottom: i < iconD2Result.layers.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                              borderBottom: i < iconD2Result.layers.length - 1 ? `1px solid rgba(255,255,255,${o.on ? 0.12 : 0.05})` : 'none',
                               cursor: 'pointer',
                               opacity: isChecked ? 1 : 0.4,
                               background: isChecked ? 'rgba(14, 165, 233, 0.05)' : 'transparent'
@@ -1491,7 +1501,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                               width: '18px',
                               height: '18px',
                               borderRadius: '4px',
-                              border: isChecked ? '2px solid #0ea5e9' : '2px solid rgba(255,255,255,0.2)',
+                              border: isChecked ? '2px solid #0ea5e9' : `2px solid rgba(255,255,255,${o.on ? 0.35 : 0.2})`,
                               background: isChecked ? '#0ea5e9' : 'transparent',
                               display: 'flex',
                               alignItems: 'center',
@@ -1550,8 +1560,8 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                       width: '100%',
                       padding: '12px',
                       fontSize: '13px',
-                      background: iconD2Selected.size > 0 ? '#22c55e' : 'rgba(255,255,255,0.1)',
-                      color: iconD2Selected.size > 0 ? 'white' : 'rgba(255,255,255,0.4)',
+                      background: iconD2Selected.size > 0 ? '#22c55e' : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                      color: iconD2Selected.size > 0 ? 'white' : `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                       border: 'none',
                       borderRadius: '8px',
                       cursor: iconD2Selected.size > 0 ? 'pointer' : 'default',
@@ -1571,8 +1581,8 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                   padding: '8px',
                   fontSize: '11px',
                   background: 'transparent',
-                  color: 'rgba(255,255,255,0.5)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: `rgba(255,255,255,${o.textMuted})`,
+                  border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   borderRadius: '6px',
                   cursor: 'pointer'
                 }}
@@ -1587,7 +1597,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
             <div style={{ textAlign: 'center', padding: '8px 12px' }}>
               <div style={{
                 fontSize: '10px',
-                color: 'rgba(255,255,255,0.4)',
+                color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                 marginBottom: '8px',
                 textTransform: 'uppercase',
                 fontWeight: 600
@@ -1600,7 +1610,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                   width: '100%',
                   padding: '12px',
                   fontSize: '12px',
-                  background: 'rgba(255,255,255,0.05)',
+                  background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
                   color: 'white',
                   border: '2px dashed rgba(255,255,255,0.2)',
                   borderRadius: '8px',
@@ -1610,7 +1620,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
               >
                 Datei auswählen...
               </button>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '6px' }}>
+              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})`, marginTop: '6px' }}>
                 .xml (oziTarget), .dat (Windsond), .csv, .txt, .gpx/.kml (Trajektorien)
               </div>
               {trajImportMsg && (
@@ -1629,13 +1639,13 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                 padding: '8px 10px',
                 background: 'rgba(0,0,0,0.3)',
                 borderRadius: '8px',
-                border: '1px solid rgba(255,255,255,0.1)'
+                border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`
               }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '12px', fontWeight: 600, color: 'white' }}>
                     {importFilename}
                   </div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
+                  <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textMuted})` }}>
                     {formatName(importResult.format)} - {importResult.rows.length} Einträge
                   </div>
                 </div>
@@ -1670,73 +1680,37 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
 
               {importResult.success && (
                 <>
-                  {/* Einstellungen - kompakt */}
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>HÖHE</div>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        {(['meters', 'feet'] as const).map(u => (
-                          <button
-                            key={u}
-                            onClick={() => setImportSettings(s => ({ ...s, altitudeUnit: u }))}
-                            style={{
-                              flex: 1, padding: '5px', fontSize: '10px',
-                              background: importSettings.altitudeUnit === u ? '#3b82f6' : 'rgba(255,255,255,0.05)',
-                              color: 'white',
-                              border: importSettings.altitudeUnit === u ? 'none' : '1px solid rgba(255,255,255,0.1)',
-                              borderRadius: '5px', cursor: 'pointer', fontWeight: 600
-                            }}
-                          >
-                            {u === 'meters' ? 'm' : 'ft'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{ flex: 1.5 }}>
-                      <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>GESCHW.</div>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        {(['kmh', 'ms', 'knots'] as const).map(u => (
-                          <button
-                            key={u}
-                            onClick={() => setImportSettings(s => ({ ...s, speedUnit: u }))}
-                            style={{
-                              flex: 1, padding: '5px', fontSize: '9px',
-                              background: importSettings.speedUnit === u ? '#3b82f6' : 'rgba(255,255,255,0.05)',
-                              color: 'white',
-                              border: importSettings.speedUnit === u ? 'none' : '1px solid rgba(255,255,255,0.1)',
-                              borderRadius: '5px', cursor: 'pointer', fontWeight: 600
-                            }}
-                          >
-                            {u === 'kmh' ? 'km/h' : u === 'ms' ? 'm/s' : 'kts'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  {/* Erkannte Einheiten - Info */}
+                  <div style={{
+                    padding: '6px 10px',
+                    background: `rgba(59,130,246,${o.on ? 0.15 : 0.08})`,
+                    border: `1px solid rgba(59,130,246,${o.on ? 0.3 : 0.15})`,
+                    borderRadius: '6px',
+                    fontSize: '10px',
+                    color: `rgba(255,255,255,${o.on ? 0.85 : 0.6})`,
+                    display: 'flex', flexWrap: 'wrap', gap: '6px'
+                  }}>
+                    <span>{importSettings.altitudeUnit === 'feet' ? 'ft' : 'm'}</span>
+                    <span style={{ opacity: 0.4 }}>|</span>
+                    <span>{importSettings.altitudeReference?.toUpperCase() || 'MSL'}</span>
+                    <span style={{ opacity: 0.4 }}>|</span>
+                    <span>{importSettings.speedUnit === 'kmh' ? 'km/h' : importSettings.speedUnit === 'ms' ? 'm/s' : 'kts'}</span>
+                    <span style={{ opacity: 0.4 }}>|</span>
+                    <span>{importSettings.directionMode === 'to' ? 'Heading' : 'Von'}</span>
+                    <span style={{ opacity: 0.4 }}>|</span>
+                    <span>{importSettings.directionReference === 'magnetic' ? 'Mag' : 'True'}</span>
+                    {importSettings.launchElevation > 0 && (
+                      <>
+                        <span style={{ opacity: 0.4 }}>|</span>
+                        <span>GND {importSettings.launchElevation}m</span>
+                      </>
+                    )}
                   </div>
 
+                  {/* Modus + Schichtdicke */}
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>RICHTUNG</div>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        {(['from', 'to'] as const).map(m => (
-                          <button
-                            key={m}
-                            onClick={() => setImportSettings(s => ({ ...s, directionMode: m }))}
-                            style={{
-                              flex: 1, padding: '5px', fontSize: '10px',
-                              background: importSettings.directionMode === m ? '#3b82f6' : 'rgba(255,255,255,0.05)',
-                              color: 'white',
-                              border: importSettings.directionMode === m ? 'none' : '1px solid rgba(255,255,255,0.1)',
-                              borderRadius: '5px', cursor: 'pointer', fontWeight: 600
-                            }}
-                          >
-                            {m === 'from' ? 'VON' : 'ZU'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>MODUS</div>
+                      <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>MODUS</div>
                       <div style={{ display: 'flex', gap: '4px' }}>
                         {(['merge', 'replace'] as const).map(m => (
                           <button
@@ -1744,9 +1718,9 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                             onClick={() => setImportMode(m)}
                             style={{
                               flex: 1, padding: '5px', fontSize: '9px',
-                              background: importMode === m ? '#3b82f6' : 'rgba(255,255,255,0.05)',
+                              background: importMode === m ? '#3b82f6' : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
                               color: 'white',
-                              border: importMode === m ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                              border: importMode === m ? 'none' : `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                               borderRadius: '5px', cursor: 'pointer', fontWeight: 600
                             }}
                           >
@@ -1755,44 +1729,81 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         ))}
                       </div>
                     </div>
+                    <div style={{ flex: 1.5 }}>
+                      <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>SCHICHTDICKE</div>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        {([0, 100, 200, 500] as const).map(ft => {
+                          const isActive = ft === 0 ? !importSettings.layerThicknessFt : importSettings.layerThicknessFt === ft
+                          return (
+                            <button
+                              key={ft}
+                              onClick={() => setImportSettings(s => ({
+                                ...s,
+                                layerThicknessFt: ft === 0 ? undefined : ft
+                              }))}
+                              style={{
+                                flex: 1, padding: '5px', fontSize: '9px',
+                                background: isActive ? '#3b82f6' : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
+                                color: 'white',
+                                border: isActive ? 'none' : `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                                borderRadius: '5px', cursor: 'pointer', fontWeight: 600
+                              }}
+                            >
+                              {ft === 0 ? 'Alle' : `${ft}ft`}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Vorschau - scrollbar */}
+                  {/* Vorschau - scrollbar, in App-Anzeigeeinheiten */}
                   {previewLayers.length > 0 && (
                     <div>
-                      <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px', textTransform: 'uppercase' }}>
+                      <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px', textTransform: 'uppercase' }}>
                         Vorschau ({previewLayers.length} Schichten)
                       </div>
                       <div style={{
                         maxHeight: '120px',
                         overflow: 'auto',
                         borderRadius: '6px',
-                        border: '1px solid rgba(255,255,255,0.1)',
+                        border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                         background: 'rgba(0,0,0,0.2)'
                       }}>
-                        {previewLayers.slice(0, 20).map((layer, i) => (
-                          <div
-                            key={i}
-                            style={{
-                              display: 'flex',
-                              padding: '4px 8px',
-                              fontSize: '11px',
-                              borderBottom: i < previewLayers.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none'
-                            }}
-                          >
-                            <span style={{ flex: 1, color: 'white', fontFamily: 'monospace' }}>
-                              {altitudeUnit === 'ft' ? `${Math.round(layer.altitude * 3.28084)} ft` : `${Math.round(layer.altitude)} m`}
-                            </span>
-                            <span style={{ flex: 1, color: 'rgba(255,255,255,0.6)', fontFamily: 'monospace' }}>
-                              {formatWindDirection(layer.direction)} {getWindDirectionName(settings.windDirectionMode === 'from' ? layer.direction : (layer.direction + 180) % 360)}
-                            </span>
-                            <span style={{ color: getWindColor(layer.speed), fontFamily: 'monospace' }}>
-                              {layer.speed.toFixed(1)} km/h
-                            </span>
-                          </div>
-                        ))}
+                        {previewLayers.slice(0, 20).map((layer, i) => {
+                          // Geschwindigkeit in App-Einheit anzeigen
+                          const displaySpeed = settings.windSpeedUnit === 'ms'
+                            ? (layer.speed / 3.6).toFixed(1)
+                            : layer.speed.toFixed(1)
+                          const speedUnitLabel = settings.windSpeedUnit === 'ms' ? 'm/s' : 'km/h'
+                          // Richtung je nach App-Einstellung (von/zu)
+                          const displayDir = settings.windDirectionMode === 'from'
+                            ? layer.direction
+                            : (layer.direction + 180) % 360
+                          return (
+                            <div
+                              key={i}
+                              style={{
+                                display: 'flex',
+                                padding: '4px 8px',
+                                fontSize: '11px',
+                                borderBottom: i < previewLayers.length - 1 ? `1px solid rgba(255,255,255,${o.on ? 0.12 : 0.05})` : 'none'
+                              }}
+                            >
+                              <span style={{ flex: 1, color: 'white', fontFamily: 'monospace' }}>
+                                {altitudeUnit === 'ft' ? `${Math.round(layer.altitude * 3.28084)} ft` : `${Math.round(layer.altitude)} m`}
+                              </span>
+                              <span style={{ flex: 1, color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, fontFamily: 'monospace' }}>
+                                {formatWindDirection(displayDir)} {getWindDirectionName(layer.direction)}
+                              </span>
+                              <span style={{ color: getWindColor(layer.speed), fontFamily: 'monospace' }}>
+                                {displaySpeed} {speedUnitLabel}
+                              </span>
+                            </div>
+                          )
+                        })}
                         {previewLayers.length > 20 && (
-                          <div style={{ padding: '4px 8px', fontSize: '10px', color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>
+                          <div style={{ padding: '4px 8px', fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, textAlign: 'center' }}>
                             ... und {previewLayers.length - 20} weitere
                           </div>
                         )}
@@ -1808,8 +1819,8 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                       width: '100%',
                       padding: '12px',
                       fontSize: '13px',
-                      background: previewLayers.length > 0 ? '#22c55e' : 'rgba(255,255,255,0.1)',
-                      color: previewLayers.length > 0 ? 'white' : 'rgba(255,255,255,0.4)',
+                      background: previewLayers.length > 0 ? '#22c55e' : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                      color: previewLayers.length > 0 ? 'white' : `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                       border: 'none',
                       borderRadius: '8px',
                       cursor: previewLayers.length > 0 ? 'pointer' : 'default',
@@ -1826,8 +1837,8 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                       padding: '8px',
                       fontSize: '11px',
                       background: 'transparent',
-                      color: 'rgba(255,255,255,0.5)',
-                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: `rgba(255,255,255,${o.textMuted})`,
+                      border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                       borderRadius: '6px',
                       cursor: 'pointer'
                     }}
@@ -1858,7 +1869,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
             borderRadius: '8px',
             border: '1px solid rgba(34, 197, 94, 0.2)',
             fontSize: '11px',
-            color: 'rgba(255,255,255,0.7)',
+            color: `rgba(255,255,255,${o.textSec})`,
             display: 'flex',
             alignItems: 'center',
             gap: '8px'
@@ -1872,7 +1883,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
 
           {/* Team Windprofile Header mit Windsuche Button */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
+            <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textMuted})` }}>
               TEAM WINDPROFILE ({teamWindProfiles.length})
             </div>
             <button
@@ -1916,7 +1927,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                     flex: 1,
                     padding: '8px 10px',
                     background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                     borderRadius: '6px',
                     color: 'white',
                     fontSize: '12px'
@@ -1969,7 +1980,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                             display: 'flex',
                             alignItems: 'center',
                             padding: '8px 12px',
-                            borderBottom: i < windSearchResults.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                            borderBottom: i < windSearchResults.length - 1 ? `1px solid rgba(255,255,255,${o.on ? 0.12 : 0.05})` : 'none',
                             background: isLineActive ? 'rgba(6, 182, 212, 0.15)' : 'transparent'
                           }}
                         >
@@ -1995,7 +2006,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                             <span style={{ color: altColor }}>
                               {altitudeUnit === 'ft' ? Math.round(result.layer.altitude * 3.28084) : Math.round(result.layer.altitude)}
                             </span>
-                            <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '11px', marginLeft: '1px' }}>
+                            <span style={{ color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, fontSize: '11px', marginLeft: '1px' }}>
                               {altitudeUnit}
                             </span>
                           </div>
@@ -2009,7 +2020,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                             display: 'flex',
                             alignItems: 'center',
                             gap: '3px',
-                            borderLeft: '1px solid rgba(255,255,255,0.2)',
+                            borderLeft: `1px solid rgba(255,255,255,${o.on ? 0.35 : 0.2})`,
                             paddingLeft: '8px',
                             marginLeft: '4px'
                           }}>
@@ -2035,7 +2046,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                             color: windColor,
                             fontFamily: 'monospace',
                             whiteSpace: 'nowrap',
-                            borderLeft: '1px solid rgba(255,255,255,0.2)',
+                            borderLeft: `1px solid rgba(255,255,255,${o.on ? 0.35 : 0.2})`,
                             paddingLeft: '8px',
                             marginLeft: '4px'
                           }}>
@@ -2049,7 +2060,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                               fontWeight: 700,
                               fontFamily: 'monospace',
                               whiteSpace: 'nowrap',
-                              borderLeft: '1px solid rgba(255,255,255,0.2)',
+                              borderLeft: `1px solid rgba(255,255,255,${o.on ? 0.35 : 0.2})`,
                               paddingLeft: '6px',
                               marginLeft: '4px'
                             }}>
@@ -2070,7 +2081,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                               setWindLineMode(!isLineActive, result.layer)
                             }}
                             style={{
-                              background: isLineActive ? '#06b6d4' : 'rgba(255,255,255,0.1)',
+                              background: isLineActive ? '#06b6d4' : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                               border: 'none',
                               borderRadius: '4px',
                               padding: '4px 6px',
@@ -2093,7 +2104,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
               {searchDirection && windSearchResults.length === 0 && (
                 <div style={{
                   textAlign: 'center',
-                  color: 'rgba(255,255,255,0.4)',
+                  color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                   fontSize: '10px',
                   padding: '10px'
                 }}>
@@ -2107,7 +2118,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
             <div style={{
               textAlign: 'center',
               padding: '24px 16px',
-              color: 'rgba(255,255,255,0.4)',
+              color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
               fontSize: '12px'
             }}>
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin: '0 auto 8px', opacity: 0.5 }}>
@@ -2153,7 +2164,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         style={{
                           padding: '10px 12px',
                           cursor: 'pointer',
-                          background: isExpanded ? 'rgba(255,255,255,0.03)' : 'transparent'
+                          background: isExpanded ? `rgba(255,255,255,${o.on ? 0.08 : 0.03})` : 'transparent'
                         }}
                       >
                         {/* Erste Zeile: Name, Anzahl, Zeit, Pfeil */}
@@ -2168,12 +2179,12 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                             <span style={{ fontSize: '13px', fontWeight: 600, color: 'white' }}>
                               {profile.callsign}
                             </span>
-                            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
+                            <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
                               ({profile.windLayers.length})
                             </span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
+                            <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
                               {new Date(profile.sharedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
                             </span>
                             <svg
@@ -2207,7 +2218,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                               <span style={{ color: getAltitudeColor(pos.altitude, 0, 4000), fontWeight: 800, fontSize: '13px' }}>
                                 {altitudeUnit === 'ft' ? Math.round(pos.altitude * 3.28084) : Math.round(pos.altitude)}
                               </span>
-                              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', marginLeft: '1px' }}>
+                              <span style={{ color: `rgba(255,255,255,${o.textMuted})`, fontSize: '10px', marginLeft: '1px' }}>
                                 {altitudeUnit}
                               </span>
                             </div>
@@ -2245,7 +2256,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                             <span style={{
                               fontSize: '12px',
                               fontWeight: 600,
-                              color: pos.vario > 0.3 ? '#22c55e' : pos.vario < -0.3 ? '#ef4444' : 'rgba(255,255,255,0.5)',
+                              color: pos.vario > 0.3 ? '#22c55e' : pos.vario < -0.3 ? '#ef4444' : `rgba(255,255,255,${o.textMuted})`,
                               borderLeft: '1px solid rgba(255,255,255,0.15)',
                               paddingLeft: '8px'
                             }}>
@@ -2262,7 +2273,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                     <div style={{
                       maxHeight: '250px',
                       overflow: 'auto',
-                      borderTop: '1px solid rgba(255,255,255,0.1)',
+                      borderTop: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                       background: 'rgba(0,0,0,0.2)'
                     }}>
                       {(() => {
@@ -2284,7 +2295,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                                 display: 'flex',
                                 alignItems: 'center',
                                 padding: '8px 12px',
-                                borderBottom: i < teamLayers.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                                borderBottom: i < teamLayers.length - 1 ? `1px solid rgba(255,255,255,${o.on ? 0.12 : 0.05})` : 'none',
                                 background: isLineActive ? 'rgba(6, 182, 212, 0.15)' : 'transparent'
                               }}
                             >
@@ -2300,7 +2311,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                                 <span style={{ color: teamAltColor }}>
                                   {altitudeUnit === 'ft' ? Math.round(layer.altitude * 3.28084) : Math.round(layer.altitude)}
                                 </span>
-                                <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '11px', marginLeft: '1px' }}>
+                                <span style={{ color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, fontSize: '11px', marginLeft: '1px' }}>
                                   {altitudeUnit}
                                 </span>
                               </div>
@@ -2314,7 +2325,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '3px',
-                                borderLeft: '1px solid rgba(255,255,255,0.2)',
+                                borderLeft: `1px solid rgba(255,255,255,${o.on ? 0.35 : 0.2})`,
                                 paddingLeft: '8px',
                                 marginLeft: '4px'
                               }}>
@@ -2340,7 +2351,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                                 color: teamWindColor,
                                 fontFamily: 'monospace',
                                 whiteSpace: 'nowrap',
-                                borderLeft: '1px solid rgba(255,255,255,0.2)',
+                                borderLeft: `1px solid rgba(255,255,255,${o.on ? 0.35 : 0.2})`,
                                 paddingLeft: '8px',
                                 marginLeft: '4px'
                               }}>
@@ -2354,7 +2365,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                                   fontWeight: 700,
                                   fontFamily: 'monospace',
                                   whiteSpace: 'nowrap',
-                                  borderLeft: '1px solid rgba(255,255,255,0.2)',
+                                  borderLeft: `1px solid rgba(255,255,255,${o.on ? 0.35 : 0.2})`,
                                   paddingLeft: '6px',
                                   marginLeft: '4px'
                                 }}>
@@ -2377,7 +2388,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                                 style={{
                                   background: isLineActive
                                     ? '#06b6d4'
-                                    : 'rgba(255,255,255,0.1)',
+                                    : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                                   border: 'none',
                                   borderRadius: '4px',
                                   padding: '4px 6px',

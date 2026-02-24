@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useFlightStore } from '../stores/flightStore'
+import { getOutdoor } from '../utils/outdoorStyles'
 import { usePanelDrag } from '../hooks/usePanelDrag'
 import { ScoringArea, GPSPosition } from '../../shared/types'
 
@@ -23,6 +24,7 @@ export function DrawingPanel({
   onAddStartPoint
 }: DrawingPanelProps) {
   const { settings, updateSettings, addScoringArea, scoringAreas, removeScoringArea, activeCompetitionMap } = useFlightStore()
+  const o = getOutdoor(settings.outdoorMode)
 
   // UTM Bounds aus aktiver Wettkampfkarte (Priorität vor Settings)
   const mapUtmBounds = activeCompetitionMap?.utmReprojection?.utmBounds
@@ -81,6 +83,7 @@ export function DrawingPanel({
   return (
     <div
       ref={panelRef}
+      className="drawing-panel"
       style={{
         position: 'fixed',
         left: position.x,
@@ -91,7 +94,7 @@ export function DrawingPanel({
         background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
         borderRadius: '16px',
         boxShadow: '0 12px 48px rgba(0,0,0,0.6)',
-        border: '1px solid rgba(255,255,255,0.1)',
+        border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
         overflow: 'hidden',
         cursor: isDragging ? 'grabbing' : 'grab',
         transform: `scale(${scale})`,
@@ -103,7 +106,7 @@ export function DrawingPanel({
       {/* Header */}
       <div style={{
         padding: '16px 20px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        borderBottom: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
@@ -124,7 +127,7 @@ export function DrawingPanel({
             </div>
             <div style={{
               fontSize: '11px',
-              color: 'rgba(255,255,255,0.4)',
+              color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
               marginTop: '2px'
             }}>
               {scoringAreas?.length || 0} Area{(scoringAreas?.length || 0) !== 1 ? 's' : ''}
@@ -134,11 +137,11 @@ export function DrawingPanel({
         <button
           onClick={onClose}
           style={{
-            background: 'rgba(255,255,255,0.1)',
+            background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
             border: 'none',
             fontSize: '20px',
             cursor: 'pointer',
-            color: 'rgba(255,255,255,0.6)',
+            color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`,
             padding: '6px 10px',
             borderRadius: '8px',
             transition: 'all 0.15s'
@@ -231,7 +234,7 @@ export function DrawingPanel({
               background: 'rgba(59, 130, 246, 0.1)',
               borderRadius: '8px',
               fontSize: '12px',
-              color: 'rgba(255,255,255,0.7)'
+              color: `rgba(255,255,255,${o.textSec})`
             }}>
               {drawingMode === 'circle' && '⭕ Klicke auf die Karte um Kreis-Zentrum zu setzen'}
               {drawingMode === 'line' && '📏 Klicke 2 Punkte für Start und Ende der Linie'}
@@ -245,7 +248,7 @@ export function DrawingPanel({
           <div style={{
             marginBottom: '20px',
             padding: '16px',
-            background: 'rgba(255,255,255,0.03)',
+            background: `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
             borderRadius: '12px'
           }}>
             <div style={{
@@ -260,7 +263,7 @@ export function DrawingPanel({
             <div style={{ marginBottom: '16px' }}>
               <label style={{
                 fontSize: '11px',
-                color: 'rgba(255,255,255,0.5)',
+                color: `rgba(255,255,255,${o.textMuted})`,
                 display: 'block',
                 marginBottom: '6px'
               }}>
@@ -280,8 +283,8 @@ export function DrawingPanel({
                 style={{
                   width: '100%',
                   padding: '8px',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
+                  border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   borderRadius: '6px',
                   color: 'white',
                   fontSize: '13px'
@@ -315,7 +318,7 @@ export function DrawingPanel({
             {/* Koordinaten-Eingabe für Kreis */}
             <div style={{
               paddingTop: '12px',
-              borderTop: '1px solid rgba(255,255,255,0.1)'
+              borderTop: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`
             }}>
               <div style={{
                 fontSize: '12px',
@@ -329,7 +332,7 @@ export function DrawingPanel({
               {/* Precision Info */}
               <div style={{
                 fontSize: '10px',
-                color: 'rgba(255,255,255,0.4)',
+                color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                 marginBottom: '8px'
               }}>
                 Format: {(() => {
@@ -345,7 +348,7 @@ export function DrawingPanel({
               {/* East/North Inputs */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
                 <div>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>
                     EAST
                   </div>
                   <input
@@ -377,7 +380,7 @@ export function DrawingPanel({
                   />
                 </div>
                 <div>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>
                     NORTH
                   </div>
                   <input
@@ -544,7 +547,7 @@ export function DrawingPanel({
 
               <div style={{
                 fontSize: '10px',
-                color: 'rgba(255,255,255,0.4)',
+                color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                 marginTop: '8px',
                 fontStyle: 'italic'
               }}>
@@ -558,7 +561,7 @@ export function DrawingPanel({
         <div style={{
           marginBottom: '20px',
           padding: '16px',
-          background: 'rgba(255,255,255,0.03)',
+          background: `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
           borderRadius: '12px'
         }}>
           <div style={{
@@ -578,7 +581,7 @@ export function DrawingPanel({
             <div>
               <label style={{
                 fontSize: '11px',
-                color: 'rgba(255,255,255,0.5)',
+                color: `rgba(255,255,255,${o.textMuted})`,
                 display: 'block',
                 marginBottom: '6px'
               }}>
@@ -591,7 +594,7 @@ export function DrawingPanel({
                 style={{
                   width: '100%',
                   height: '40px',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   borderRadius: '8px',
                   cursor: 'pointer'
                 }}
@@ -601,7 +604,7 @@ export function DrawingPanel({
             <div>
               <label style={{
                 fontSize: '11px',
-                color: 'rgba(255,255,255,0.5)',
+                color: `rgba(255,255,255,${o.textMuted})`,
                 display: 'block',
                 marginBottom: '6px'
               }}>
@@ -614,7 +617,7 @@ export function DrawingPanel({
                 style={{
                   width: '100%',
                   height: '40px',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   borderRadius: '8px',
                   cursor: 'pointer'
                 }}
@@ -628,7 +631,7 @@ export function DrawingPanel({
           <div style={{
             marginBottom: '20px',
             padding: '16px',
-            background: 'rgba(255,255,255,0.03)',
+            background: `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
             borderRadius: '12px'
           }}>
             <div style={{
@@ -662,7 +665,7 @@ export function DrawingPanel({
             </label>
             <div style={{
               fontSize: '10px',
-              color: 'rgba(255,255,255,0.4)',
+              color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
               marginTop: '4px',
               marginLeft: '26px',
               fontStyle: 'italic'
@@ -677,7 +680,7 @@ export function DrawingPanel({
           <div style={{
             marginBottom: '20px',
             padding: '16px',
-            background: 'rgba(255,255,255,0.03)',
+            background: `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
             borderRadius: '12px'
           }}>
             <div style={{
@@ -746,7 +749,7 @@ export function DrawingPanel({
             {/* Easting Line (NS) - Vertikale Linie */}
             <div style={{
               paddingTop: '12px',
-              borderTop: '1px solid rgba(255,255,255,0.1)'
+              borderTop: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`
             }}>
               <div style={{
                 fontSize: '12px',
@@ -760,7 +763,7 @@ export function DrawingPanel({
                 <span style={{ fontSize: '16px' }}>↕️</span>
                 Easting Line (N-S)
               </div>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px' }}>
+              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '8px' }}>
                 Vertikale Linie bei E-Koordinate
               </div>
 
@@ -965,7 +968,7 @@ export function DrawingPanel({
             <div style={{
               paddingTop: '16px',
               marginTop: '16px',
-              borderTop: '1px solid rgba(255,255,255,0.1)'
+              borderTop: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`
             }}>
               <div style={{
                 fontSize: '12px',
@@ -979,7 +982,7 @@ export function DrawingPanel({
                 <span style={{ fontSize: '16px' }}>↔️</span>
                 Northing Line (E-W)
               </div>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px' }}>
+              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '8px' }}>
                 Horizontale Linie bei N-Koordinate
               </div>
 
@@ -1200,7 +1203,7 @@ export function DrawingPanel({
                   key={area.id}
                   style={{
                     padding: '12px',
-                    background: 'rgba(255,255,255,0.05)',
+                    background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
                     borderRadius: '8px',
                     display: 'flex',
                     alignItems: 'center',
@@ -1229,7 +1232,7 @@ export function DrawingPanel({
                       </div>
                       <div style={{
                         fontSize: '11px',
-                        color: 'rgba(255,255,255,0.4)'
+                        color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`
                       }}>
                         {area.type === 'circle' && `Radius: ${area.radius}m`}
                         {area.type === 'polygon' && `${area.points?.length || 0} Punkte`}

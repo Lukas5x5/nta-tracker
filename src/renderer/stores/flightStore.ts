@@ -178,10 +178,10 @@ import type {
   CompetitionMap,
   ProhibitedZone
 } from '../../shared/types'
-import { WindSource, WindSourceFilter, GPSFix } from '../../shared/types'
+import { WindSource, WindSourceFilter, GPSFix, GasBottleState } from '../../shared/types'
 import { useTeamStore } from './teamStore'
 import { saveTrackData, loadTrackData, clearTrackData } from '../utils/trackDb'
-import { calculateMarkerDrop, calculateDistance as calcDist, calculateBearing as calcBrg } from '../utils/navigation'
+import { calculateMarkerDrop, calculateDropAngle, calculateDistance as calcDist, calculateBearing as calcBrg } from '../utils/navigation'
 
 // HDG Kurs-Linie (von Klick-Position in Kurs-Richtung)
 export interface HdgCourseLine {
@@ -370,6 +370,10 @@ interface FlightState {
   // Fly-To Position (für Navigation zu einem Punkt auf der Karte)
   flyToPosition: { lat: number; lon: number; zoom?: number } | null
 
+  // Letzte Kartenposition (wird beim Schließen/Re-Login wiederhergestellt)
+  lastMapCenter: { lat: number; lon: number } | null
+  lastMapZoom: number | null
+
   // Tasksheet Koordinaten-Picker (für Tasks ohne Koordinaten)
   tasksheetCoordPicker: {
     active: boolean
@@ -397,6 +401,9 @@ interface FlightState {
     followWind: boolean  // Folgt aufgezeichneten Wind-Layern (Kurs+Speed automatisch)
   }
 
+  // Gas-Tracker (Runtime, nicht persistiert)
+  gasBottleState: GasBottleState
+
   // Einstellungen
   settings: AppSettings
 
@@ -417,6 +424,7 @@ interface FlightState {
   setActiveToolPanel: (panel: FlightState['activeToolPanel']) => void
   setMousePosition: (position: { lat: number; lon: number } | null) => void
   setFlyToPosition: (position: { lat: number; lon: number; zoom?: number } | null) => void
+  setLastMapPosition: (center: { lat: number; lon: number }, zoom: number) => void
 
   // Tasksheet Koordinaten-Picker Actions
   setTasksheetCoordPicker: (picker: { active: boolean; taskNumber: number | null; taskType: string | null; callback: ((lat: number, lon: number) => void) | null }) => void
@@ -441,6 +449,7 @@ interface FlightState {
   addTask: (task: Task) => void
   removeTask: (taskId: string) => void
   updateTask: (task: Task) => void
+  reorderTasks: (taskIds: string[]) => void
   setActiveTask: (task: Task | null) => void
   setSelectedGoal: (goal: Goal | null) => void
   updateGoalPosition: (goalId: string, lat: number, lon: number) => void
@@ -532,6 +541,12 @@ interface FlightState {
   loadFlightData: (data: FlightDataSnapshot) => void
   clearFlightData: () => void
 
+  // Gas-Tracker Actions
+  activateGasBottle: (bottleId: string) => void
+  deactivateGasBottle: () => void
+  switchToNextBottle: () => void
+  resetGasTracker: () => void
+
   updateSettings: (settings: Partial<AppSettings>) => void
 }
 
@@ -550,6 +565,7 @@ const defaultSettings: AppSettings = {
   displayFields: [],
   fontSize: 'medium',
   theme: 'dark',
+  outdoorMode: false,
   audioAlerts: true,
   variometerAudio: false,
   variometerVolume: 0.5,
@@ -622,6 +638,9 @@ const defaultSettings: AppSettings = {
   // BLS Sensor Settings
   lastConnectedBLS: null as string | null,  // ID des zuletzt verbundenen BLS
   lastConnectedBLSName: null as string | null,  // Name des zuletzt verbundenen BLS
+  // Timer & Wecker
+  timerAlarmSound: true,
+  timerAlarmVolume: 0.7,
   // Track Recording Settings
   trackRecordingMode: 'distance',
   trackRecordingTimeInterval: 5,
@@ -647,10 +666,24 @@ const defaultSettings: AppSettings = {
   pzCircleColor: '#ef4444',
   pzCircleOpacity: 0.15,
   pzCircleDashed: true,
-  pzAltitudeUnit: 'feet'
+  pzAltitudeUnit: 'feet',
+  // Gas-Tracker Konfiguration
+  gasBottles: [],
+  gasReserveMinutes: 10,
+  // Funktionstasten
+  functionKeyBindings: {}
 }
 
 // Throttle-Timestamps für teure Seiteneffekte in setGPSData
+// Hilfsfunktion: Tasks nach taskNumber sortieren (numerisch, z.B. "1" < "2" < "10")
+function sortTasksByNumber(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const numA = parseInt((a.taskNumber || '').replace(/\D/g, '')) || Infinity
+    const numB = parseInt((b.taskNumber || '').replace(/\D/g, '')) || Infinity
+    return numA - numB
+  })
+}
+
 // Elevation und Wind brauchen nicht bei jedem 5Hz GPS-Update berechnet werden.
 // Verhindert unnötige Zustand-Re-renders die die Marker-Animation blockieren.
 let _lastElevationUpdate = 0   // Letztes Elevation-Update (ms) — max 1Hz
@@ -780,6 +813,10 @@ export const useFlightStore = create<FlightState>()(
       // Fly-To Position
       flyToPosition: null,
 
+      // Letzte Kartenposition
+      lastMapCenter: null,
+      lastMapZoom: null,
+
       // Tasksheet Koordinaten-Picker
       tasksheetCoordPicker: {
         active: false,
@@ -798,6 +835,13 @@ export const useFlightStore = create<FlightState>()(
         vario: 0,
         pickingStartPoint: false,
         followWind: false
+      },
+
+      // Gas-Tracker Runtime State
+      gasBottleState: {
+        activeBottleId: null,
+        activeSince: null,
+        usedBottles: []
       },
 
       settings: defaultSettings,
@@ -1063,6 +1107,9 @@ export const useFlightStore = create<FlightState>()(
 
   // Fly-To Action
   setFlyToPosition: (position) => set({ flyToPosition: position }),
+
+  // Letzte Kartenposition speichern
+  setLastMapPosition: (center, zoom) => set({ lastMapCenter: center, lastMapZoom: zoom }),
 
   // Tasksheet Koordinaten-Picker Actions
   setTasksheetCoordPicker: (picker) => set({ tasksheetCoordPicker: picker }),
@@ -1484,9 +1531,20 @@ export const useFlightStore = create<FlightState>()(
       lastRecordedTrackPoint: null,
       recordingStartTime: new Date()
     })
+
+    // Gas-Tracker: Erste Flasche automatisch aktivieren
+    const bottles = state.settings.gasBottles || []
+    if (bottles.length > 0 && !state.gasBottleState.activeBottleId) {
+      get().activateGasBottle(bottles[0].id)
+    }
   },
 
   stopRecording: () => {
+    // Gas-Tracker: Aktive Flasche stoppen
+    if (get().gasBottleState.activeBottleId) {
+      get().deactivateGasBottle()
+    }
+
     set((state) => ({
       isRecording: false,
       lastRecordedTrackPoint: null,
@@ -1508,7 +1566,7 @@ export const useFlightStore = create<FlightState>()(
 
   // Task Actions
   addTask: (task) => set((state) => ({
-    tasks: [...state.tasks, task]
+    tasks: sortTasksByNumber([...state.tasks, task])
   })),
 
   removeTask: (taskId) => set((state) => {
@@ -1523,6 +1581,13 @@ export const useFlightStore = create<FlightState>()(
       activeTask: state.activeTask?.id === taskId ? null : state.activeTask,
       selectedGoal: selectedGoalBelongsToDeletedTask ? null : state.selectedGoal
     }
+  }),
+
+  reorderTasks: (taskIds) => set((state) => {
+    // Manuelles Umsortieren nach übergebener ID-Reihenfolge
+    const taskMap = new Map(state.tasks.map(t => [t.id, t]))
+    const reordered = taskIds.map(id => taskMap.get(id)).filter(Boolean) as Task[]
+    return { tasks: reordered }
   }),
 
   updateTask: (task) => set((state) => {
@@ -1598,6 +1663,18 @@ export const useFlightStore = create<FlightState>()(
     const state = get()
     if (!state.gpsData) return null
 
+    // Klinometerwinkel berechnen (Winkel vom Ballon zum Aufschlagpunkt)
+    let clinoAngle: number | undefined
+    if (state.agl > 0) {
+      const groundSpeedMs = (state.gpsData.speed || 0) / 3.6 // km/h → m/s
+      if (groundSpeedMs > 0.5) {
+        const result = calculateDropAngle(state.agl, groundSpeedMs, state.gpsData.heading || 0)
+        clinoAngle = Math.round(result.angle * 10) / 10
+      } else {
+        clinoAngle = 90 // Direkt unter dem Ballon bei kaum Bewegung
+      }
+    }
+
     const marker: MarkerDrop = {
       id: crypto.randomUUID(),
       number: state.markers.length + 1,
@@ -1609,7 +1686,8 @@ export const useFlightStore = create<FlightState>()(
       },
       altitude: state.baroData?.pressureAltitude || state.gpsData.altitude,
       timestamp: new Date(),
-      taskId: state.activeTask?.id
+      taskId: state.activeTask?.id,
+      clinoAngle
     }
 
     set((s) => ({ markers: [...s.markers, marker] }))
@@ -2180,6 +2258,77 @@ export const useFlightStore = create<FlightState>()(
         })
       },
 
+      // Gas-Tracker Actions
+      activateGasBottle: (bottleId: string) => {
+        const state = get()
+        const now = new Date().toISOString()
+        const gasState = { ...state.gasBottleState }
+
+        // Aktive Flasche beenden
+        if (gasState.activeBottleId && gasState.activeSince) {
+          const activeBottle = state.settings.gasBottles?.find(b => b.id === gasState.activeBottleId)
+          if (activeBottle) {
+            const elapsedMs = Date.now() - new Date(gasState.activeSince).getTime()
+            const elapsedHours = elapsedMs / (1000 * 60 * 60)
+            const litersUsed = Math.round(activeBottle.consumptionPerHour * elapsedHours * 100) / 100
+            gasState.usedBottles = [...gasState.usedBottles, {
+              bottleId: gasState.activeBottleId,
+              startTime: gasState.activeSince,
+              endTime: now,
+              litersUsed
+            }]
+          }
+        }
+
+        gasState.activeBottleId = bottleId
+        gasState.activeSince = now
+        set({ gasBottleState: gasState })
+      },
+
+      deactivateGasBottle: () => {
+        const state = get()
+        const now = new Date().toISOString()
+        const gasState = { ...state.gasBottleState }
+
+        if (gasState.activeBottleId && gasState.activeSince) {
+          const activeBottle = state.settings.gasBottles?.find(b => b.id === gasState.activeBottleId)
+          if (activeBottle) {
+            const elapsedMs = Date.now() - new Date(gasState.activeSince).getTime()
+            const elapsedHours = elapsedMs / (1000 * 60 * 60)
+            const litersUsed = Math.round(activeBottle.consumptionPerHour * elapsedHours * 100) / 100
+            gasState.usedBottles = [...gasState.usedBottles, {
+              bottleId: gasState.activeBottleId,
+              startTime: gasState.activeSince,
+              endTime: now,
+              litersUsed
+            }]
+          }
+        }
+
+        gasState.activeBottleId = null
+        gasState.activeSince = null
+        set({ gasBottleState: gasState })
+      },
+
+      switchToNextBottle: () => {
+        const state = get()
+        const bottles = state.settings.gasBottles || []
+        if (bottles.length === 0) return
+        const currentIdx = bottles.findIndex(b => b.id === state.gasBottleState.activeBottleId)
+        const nextIdx = (currentIdx + 1) % bottles.length
+        get().activateGasBottle(bottles[nextIdx].id)
+      },
+
+      resetGasTracker: () => {
+        set({
+          gasBottleState: {
+            activeBottleId: null,
+            activeSince: null,
+            usedBottles: []
+          }
+        })
+      },
+
       // Settings Actions
       updateSettings: (newSettings) => set((state) => ({
         settings: { ...state.settings, ...newSettings }
@@ -2222,6 +2371,9 @@ export const useFlightStore = create<FlightState>()(
         markers: state.markers,
         declarations: state.declarations,
         logPoints: state.logPoints,
+        // Letzte Kartenposition persistieren
+        lastMapCenter: state.lastMapCenter,
+        lastMapZoom: state.lastMapZoom,
       }),
       // Merge: Settings beim Laden validieren und korrigieren
       merge: (persistedState: any, currentState: FlightState) => {
@@ -2264,6 +2416,11 @@ export const useFlightStore = create<FlightState>()(
         // Wind-Quellen-Filter wiederherstellen
         if (persistedState.windSourceFilter) {
           merged.windSourceFilter = persistedState.windSourceFilter
+        }
+
+        // Tasks nach taskNumber sortieren
+        if (merged.tasks && merged.tasks.length > 0) {
+          merged.tasks = sortTasksByNumber(merged.tasks)
         }
 
         return merged

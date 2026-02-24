@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useFlightStore } from '../stores/flightStore'
-import { AppSettings } from '../../shared/types'
+import { AppSettings, FKEY_ACTION_LABELS, FKeyAction } from '../../shared/types'
 
 interface TaskSettingsPanelProps {
   isOpen: boolean
   onClose: () => void
 }
 
-type SettingsTab = 'einheiten' | 'koordinaten' | 'pilot' | 'mma' | 'utm' | 'navigation' | 'taskrings' | 'kurslinien' | 'windlinien' | 'ballon' | 'farben' | 'sperrgebiete' | 'pzwarnung' | 'erinnerung' | 'audio' | 'uigroesse' | 'taskicon' | 'tasklabel' | 'aufzeichnung' | 'zeichnen'
+type SettingsTab = 'einheiten' | 'koordinaten' | 'pilot' | 'gas' | 'ftasten' | 'mma' | 'utm' | 'navigation' | 'taskrings' | 'kurslinien' | 'windlinien' | 'ballon' | 'farben' | 'sperrgebiete' | 'pzwarnung' | 'erinnerung' | 'audio' | 'uigroesse' | 'taskicon' | 'tasklabel' | 'aufzeichnung' | 'zeichnen'
 
 const TABS: { key: SettingsTab; label: string; icon: string }[] = [
   { key: 'einheiten', label: 'Einheiten', icon: 'M3 6h18M3 12h18M3 18h18' },
   { key: 'koordinaten', label: 'Koordinaten', icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z' },
   { key: 'pilot', label: 'Pilot', icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z' },
+  { key: 'gas', label: 'Gas', icon: 'M12 2C8 2 6 4 6 7v10c0 2.5 2 5 6 5s6-2.5 6-5V7c0-3-2-5-6-5zM6 12h12' },
+  { key: 'ftasten', label: 'F-Tasten', icon: 'M4 2h16a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM7 8h2M7 12h4M7 16h6' },
   { key: 'mma', label: 'MMA', icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z' },
   { key: 'utm', label: 'UTM Grid', icon: 'M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18' },
   { key: 'navigation', label: 'Navigation', icon: 'M3 11l19-9-9 19-2-8-8-2z' },
@@ -208,6 +210,151 @@ export function TaskSettingsPanel({ isOpen, onClose }: TaskSettingsPanelProps) {
                   Kein BLS Sensor verbunden
                 </div>
               )}
+            </div>
+          </div>
+        )
+
+      case 'gas':
+        const gasInputStyle: React.CSSProperties = {
+          width: '100%', padding: '10px', borderRadius: '8px',
+          border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)',
+          color: 'white', fontSize: '13px', boxSizing: 'border-box'
+        }
+        return (
+          <div>
+            {/* Reserve-Zeit */}
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '8px' }}>Reservezeit (Minuten)</div>
+              <input
+                type="number" min="0" max="60"
+                value={settings.gasReserveMinutes ?? 10}
+                onChange={(e) => updateLocalSettings({ gasReserveMinutes: Math.max(0, Math.min(60, parseInt(e.target.value) || 0)) })}
+                style={{ ...gasInputStyle, width: '100px' }}
+              />
+              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: '4px' }}>
+                Wird von der Restzeit abgezogen
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }}>
+              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginBottom: '12px', fontWeight: 600 }}>Gasflaschen</div>
+
+              {(settings.gasBottles || []).map((bottle, idx) => (
+                <div key={bottle.id} style={{
+                  padding: '12px', borderRadius: '10px', marginBottom: '8px',
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <input
+                      value={bottle.name}
+                      onChange={(e) => {
+                        const updated = [...(settings.gasBottles || [])]
+                        updated[idx] = { ...updated[idx], name: e.target.value }
+                        updateLocalSettings({ gasBottles: updated })
+                      }}
+                      style={{ ...gasInputStyle, flex: 1, fontWeight: 600 }}
+                    />
+                    <button
+                      onClick={() => {
+                        const updated = (settings.gasBottles || []).filter(b => b.id !== bottle.id)
+                        updateLocalSettings({ gasBottles: updated })
+                      }}
+                      style={{
+                        background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                        color: '#ef4444', fontSize: '12px', cursor: 'pointer', padding: '8px 12px',
+                        borderRadius: '8px', fontWeight: 600
+                      }}
+                    >Löschen</button>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Gesamtliter</div>
+                      <input type="number" min="1" value={bottle.totalLiters}
+                        onChange={(e) => {
+                          const updated = [...(settings.gasBottles || [])]
+                          updated[idx] = { ...updated[idx], totalLiters: Math.max(1, parseFloat(e.target.value) || 1) }
+                          updateLocalSettings({ gasBottles: updated })
+                        }}
+                        style={gasInputStyle}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Verbrauch (L/h)</div>
+                      <input type="number" min="0.1" step="0.1" value={bottle.consumptionPerHour}
+                        onChange={(e) => {
+                          const updated = [...(settings.gasBottles || [])]
+                          updated[idx] = { ...updated[idx], consumptionPerHour: Math.max(0.1, parseFloat(e.target.value) || 1) }
+                          updateLocalSettings({ gasBottles: updated })
+                        }}
+                        style={gasInputStyle}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                onClick={() => {
+                  const bottles = settings.gasBottles || []
+                  updateLocalSettings({ gasBottles: [...bottles, {
+                    id: crypto.randomUUID(),
+                    name: `Flasche ${bottles.length + 1}`,
+                    totalLiters: 40,
+                    consumptionPerHour: 30
+                  }] })
+                }}
+                style={{
+                  width: '100%', padding: '10px', borderRadius: '8px', cursor: 'pointer',
+                  background: 'rgba(255,255,255,0.04)', border: '1px dashed rgba(255,255,255,0.2)',
+                  color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 600
+                }}
+              >+ Flasche hinzufügen</button>
+            </div>
+          </div>
+        )
+
+      case 'ftasten':
+        return (
+          <div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '12px' }}>
+              Tastenkürzel F1-F12 mit Aktionen belegen
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {Array.from({ length: 12 }, (_, i) => {
+                const key = `F${i + 1}`
+                const currentAction = (settings.functionKeyBindings || {})[key] || 'none'
+                return (
+                  <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{
+                      fontSize: '13px', fontWeight: 700, color: currentAction !== 'none' ? '#3b82f6' : 'rgba(255,255,255,0.6)',
+                      minWidth: '32px', fontFamily: 'monospace'
+                    }}>{key}</span>
+                    <select
+                      value={currentAction}
+                      onChange={(e) => {
+                        const bindings = { ...(settings.functionKeyBindings || {}) }
+                        if (e.target.value === 'none') {
+                          delete bindings[key]
+                        } else {
+                          bindings[key] = e.target.value
+                        }
+                        updateLocalSettings({ functionKeyBindings: bindings })
+                      }}
+                      style={{
+                        flex: 1, padding: '8px 10px', borderRadius: '8px',
+                        background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.2)',
+                        color: 'white', fontSize: '12px', cursor: 'pointer'
+                      }}
+                    >
+                      {(Object.entries(FKEY_ACTION_LABELS) as [FKeyAction, string][]).map(([action, label]) => (
+                        <option key={action} value={action} style={{ background: '#1a1a2e', color: 'white' }}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )
@@ -1416,7 +1563,8 @@ export function TaskSettingsPanel({ isOpen, onClose }: TaskSettingsPanelProps) {
                 { key: 'lrnPanelScale', label: 'Land Run' },
                 { key: 'aptPanelScale', label: 'Altitude Profile' },
                 { key: 'angPanelScale', label: 'ANG' },
-                { key: 'windRoseScale', label: 'Windrose' }
+                { key: 'windRoseScale', label: 'Windrose' },
+                { key: 'gasPanelScale', label: 'Gas-Tracker' }
               ].map(({ key, label }) => (
                 uiStepperRow(label, (settings as any)[key] || 1, 0.6, 1.5, 0.1, v => `${Math.round(v * 100)}%`, v => updateLocalSettings({ [key]: v }))
               ))}
@@ -2102,7 +2250,7 @@ export function TaskSettingsPanel({ isOpen, onClose }: TaskSettingsPanelProps) {
         </div>
       )}
 
-      <div style={{
+      <div className="task-settings-panel" style={{
         background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
         borderRadius: '16px', width: '700px', maxWidth: '95vw', height: '650px', maxHeight: '90vh',
         boxShadow: '0 25px 80px rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)',

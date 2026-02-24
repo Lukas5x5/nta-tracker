@@ -55,7 +55,6 @@ const TASK_TYPE_MAP: Record<string, TaskType> = {
   'XDD': TaskType.XDD,
   'ANG': TaskType.ANG,
   'SFL': TaskType.SFL,
-  '3DT': TaskType.ThreeD,
   'LTT': TaskType.LTT,
   'MTT': TaskType.MTT,
   'APT': TaskType.APT
@@ -100,13 +99,7 @@ function importTasksDirectly(
     const recognizedColor = colorNameToHex(parsedTask.markerColor)
     const taskColor = recognizedColor || settings.taskMarkerColors[(parsedTask.taskNumber - 1) % settings.taskMarkerColors.length]
 
-    // Rings für 3DT
     let rings: number[] | undefined
-    if (parsedTask.is3DT && (parsedTask.innerRadius || parsedTask.outerRadius)) {
-      const innerM = (parsedTask.innerRadius || 2) * 1000
-      const outerM = (parsedTask.outerRadius || 3) * 1000
-      rings = [innerM, outerM]
-    }
 
     // Bei Tasks mit mehreren Goals (z.B. HWZ): Für jedes Goal einen separaten Task erstellen
     if (parsedTask.goals.length > 1) {
@@ -868,7 +861,6 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
       'XDD': TaskType.XDD,
       'ANG': TaskType.ANG,
       'SFL': TaskType.SFL,
-      '3DT': TaskType.ThreeD,
       'LTT': TaskType.LTT,
       'MTT': TaskType.MTT
     }
@@ -878,13 +870,7 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
       const recognizedColor = colorNameToHex(parsedTask.markerColor)
       const taskColor = recognizedColor || availableColors[(parsedTask.taskNumber - 1) % availableColors.length]
 
-      // Rings für 3DT
       let rings: number[] | undefined
-      if (parsedTask.is3DT && (parsedTask.innerRadius || parsedTask.outerRadius)) {
-        const innerM = (parsedTask.innerRadius || 2) * 1000
-        const outerM = (parsedTask.outerRadius || 3) * 1000
-        rings = [innerM, outerM]
-      }
 
       // Bei Tasks mit mehreren Goals (z.B. HWZ): Für jedes Goal einen separaten Task erstellen
       if (parsedTask.goals.length > 1) {

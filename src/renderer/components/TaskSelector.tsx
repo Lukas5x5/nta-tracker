@@ -87,10 +87,6 @@ const TASK_DESCRIPTIONS: Record<TaskType, { name: string; description: string }>
     name: 'Most Time Task',
     description: 'Langsamste Durchquerung'
   },
-  [TaskType.ThreeD]: {
-    name: '3D Task',
-    description: 'Ziel in definierter Höhe'
-  },
   [TaskType.APT]: {
     name: 'Altitude Profile Task',
     description: 'Höhenprofil so genau wie möglich folgen'
@@ -249,30 +245,6 @@ export function TaskSelector({ onClose }: TaskSelectorProps) {
                 />
               </div>
             </div>
-
-            {/* 3D Task Höhen */}
-            {selectedType === TaskType.ThreeD && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div className="input-group">
-                  <label className="input-label">Min Altitude (m)</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={taskConfig.minAltitude}
-                    onChange={e => setTaskConfig(prev => ({ ...prev, minAltitude: e.target.value }))}
-                  />
-                </div>
-                <div className="input-group">
-                  <label className="input-label">Max Altitude (m)</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={taskConfig.maxAltitude}
-                    onChange={e => setTaskConfig(prev => ({ ...prev, maxAltitude: e.target.value }))}
-                  />
-                </div>
-              </div>
-            )}
 
             {/* Goals (für JDG, HWZ, FIN) */}
             {[TaskType.JDG, TaskType.HWZ, TaskType.FIN].includes(selectedType) && (

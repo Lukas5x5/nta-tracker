@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
+import { getOutdoor } from '../utils/outdoorStyles'
 import { useFlightStore } from '../stores/flightStore'
 import { formatAltitude, formatSpeed, formatHeading, formatVariometer, formatDistance } from '../utils/formatting'
 import { calculateDistance, calculateBearing, calculateDestination, calculateClimbPoint, ClimbPointResult, calculateLandRun, LandRunResult, LandRunLimits, calculateAngleTask, AngleTaskResult, interpolateWind } from '../utils/navigation'
@@ -102,6 +103,9 @@ export function NavigationPanel() {
     activeToolPanel, setActiveToolPanel
   } = useFlightStore()
 
+  // ─── Outdoor-Modus Opacities ─────────────────────────────
+  const o = getOutdoor(settings.outdoorMode)
+
   // Gefilterte Windschichten fuer Berechnungen (nach aktivem Quellen-Filter)
   const filteredWindLayers = useMemo(() => {
     if (windSourceFilter === 'all') return windLayers
@@ -152,6 +156,7 @@ export function NavigationPanel() {
   const [angCalculating, setAngCalculating] = useState(false)
   const [angSelectedAlt, setAngSelectedAlt] = useState<number>(-1)
   const setAngleResult = useFlightStore(s => s.setAngleResult)
+  const updateGoalPosition = useFlightStore(s => s.updateGoalPosition)
   // Punkt A Koordinaten-Eingabe (optional)
   const [angPointAEast, setAngPointAEast] = useState('')
   const [angPointANorth, setAngPointANorth] = useState('')
@@ -709,8 +714,9 @@ export function NavigationPanel() {
         const markerUtm = latLonToUTM(lastMarker.position.latitude, lastMarker.position.longitude)
         const markerEasting = Math.round(markerUtm.easting % 100000).toString().padStart(5, '0')
         const markerNorthing = Math.round(markerUtm.northing % 100000).toString().padStart(5, '0')
+        const clinoStr = lastMarker.clinoAngle !== undefined ? ` ${lastMarker.clinoAngle.toFixed(0)}°` : ''
         return {
-          value: `#${lastMarker.number} ${markerEasting}/${markerNorthing}`,
+          value: `#${lastMarker.number} ${markerEasting}/${markerNorthing}${clinoStr}`,
           unit: `(${markers.length})`
         }
       case 'cpa':
@@ -805,6 +811,7 @@ export function NavigationPanel() {
     <>
     <div
       ref={panelRef}
+      className="nav-panel"
       style={{
         position: 'fixed',
         left: position.x,
@@ -837,7 +844,7 @@ export function NavigationPanel() {
         <div style={{
           fontSize: '14px',
           fontWeight: 600,
-          color: 'rgba(255,255,255,0.7)',
+          color: `rgba(255,255,255,${o.textSec})`,
           letterSpacing: '1px'
         }}>
           NAVIGATION
@@ -850,7 +857,7 @@ export function NavigationPanel() {
               distanceUnit: settings.altitudeUnit === 'meters' ? 'feet' : 'meters'
             })}
             style={{
-              background: 'rgba(255,255,255,0.08)',
+              background: `rgba(255,255,255,${o.border})`,
               border: 'none',
               color: 'white',
               fontSize: '11px',
@@ -871,7 +878,7 @@ export function NavigationPanel() {
             style={{
               background: showSettings ? 'rgba(59, 130, 246, 0.3)' : 'transparent',
               border: 'none',
-              color: showSettings ? '#3b82f6' : 'rgba(255,255,255,0.4)',
+              color: showSettings ? '#3b82f6' : `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
               fontSize: '18px',
               cursor: 'pointer',
               padding: '4px 8px',
@@ -893,7 +900,7 @@ export function NavigationPanel() {
           maxHeight: '300px',
           overflowY: 'auto'
         }}>
-          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '10px' }}>
+          <div style={{ fontSize: '12px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '10px' }}>
             Felder anzeigen/verbergen:
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -904,7 +911,7 @@ export function NavigationPanel() {
                 style={{
                   padding: '8px 10px',
                   borderRadius: '8px',
-                  background: field.enabled ? 'rgba(34, 197, 94, 0.15)' : 'rgba(255,255,255,0.03)',
+                  background: field.enabled ? 'rgba(34, 197, 94, 0.15)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
                   border: field.enabled ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(255,255,255,0.08)',
                   cursor: 'pointer',
                   transition: 'all 0.15s'
@@ -920,7 +927,7 @@ export function NavigationPanel() {
                     width: '16px',
                     height: '16px',
                     borderRadius: '4px',
-                    background: field.enabled ? '#22c55e' : 'rgba(255,255,255,0.1)',
+                    background: field.enabled ? '#22c55e' : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -932,14 +939,14 @@ export function NavigationPanel() {
                   <span style={{
                     fontSize: '12px',
                     fontWeight: 600,
-                    color: field.enabled ? '#22c55e' : 'rgba(255,255,255,0.6)'
+                    color: field.enabled ? '#22c55e' : `rgba(255,255,255,${o.on ? 0.92 : 0.6})`
                   }}>
                     {field.label}
                   </span>
                 </div>
                 <div style={{
                   fontSize: '10px',
-                  color: 'rgba(255,255,255,0.4)',
+                  color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                   paddingLeft: '24px',
                   lineHeight: 1.3
                 }}>
@@ -950,7 +957,7 @@ export function NavigationPanel() {
           </div>
 
           {/* Trennlinie */}
-          <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '12px 0' }} />
+          <div style={{ height: '1px', background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`, margin: '12px 0' }} />
 
           {/* GPS Simulation Button */}
           <button
@@ -965,11 +972,11 @@ export function NavigationPanel() {
               borderRadius: '8px',
               background: gpsSimulation.active
                 ? 'linear-gradient(135deg, rgba(34,197,94,0.2), rgba(34,197,94,0.1))'
-                : 'rgba(255,255,255,0.05)',
+                : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
               border: gpsSimulation.active
                 ? '1px solid rgba(34, 197, 94, 0.4)'
                 : '1px solid rgba(255,255,255,0.1)',
-              color: gpsSimulation.active ? '#22c55e' : 'rgba(255,255,255,0.7)',
+              color: gpsSimulation.active ? '#22c55e' : `rgba(255,255,255,${o.textSec})`,
               fontSize: '13px',
               fontWeight: 600,
               cursor: 'pointer',
@@ -1014,7 +1021,7 @@ export function NavigationPanel() {
                 borderRadius: '8px',
                 background: isSelected
                   ? 'rgba(59, 130, 246, 0.15)'
-                  : field.bgColor || 'rgba(255,255,255,0.03)',
+                  : field.bgColor || `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
                 border: isSelected ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid transparent',
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -1026,7 +1033,7 @@ export function NavigationPanel() {
               {/* Label */}
               <div style={{
                 fontSize: '12px',
-                color: 'rgba(255,255,255,0.5)',
+                color: `rgba(255,255,255,${o.textMuted})`,
                 fontWeight: 600,
                 letterSpacing: '0.5px',
                 minWidth: '40px'
@@ -1059,7 +1066,7 @@ export function NavigationPanel() {
       {/* Trennlinie */}
       <div style={{
         height: '1px',
-        background: 'rgba(255,255,255,0.08)',
+        background: `rgba(255,255,255,${o.border})`,
         margin: '10px 0'
       }} />
 
@@ -1078,9 +1085,9 @@ export function NavigationPanel() {
             minWidth: '60px',
             padding: '8px 10px',
             borderRadius: '6px',
-            background: gpsData ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.03)',
+            background: gpsData ? 'rgba(239, 68, 68, 0.15)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
             border: 'none',
-            color: gpsData ? '#ef4444' : 'rgba(255,255,255,0.3)',
+            color: gpsData ? '#ef4444' : `rgba(255,255,255,${o.on ? 0.5 : 0.3})`,
             fontSize: '11px',
             fontWeight: 600,
             cursor: gpsData ? 'pointer' : 'not-allowed',
@@ -1107,9 +1114,9 @@ export function NavigationPanel() {
             borderRadius: '6px',
             background: (showDropsPanel || markers.length > 0)
               ? 'rgba(239, 68, 68, 0.15)'
-              : 'rgba(255,255,255,0.03)',
+              : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
             border: 'none',
-            color: (showDropsPanel || markers.length > 0) ? '#ef4444' : 'rgba(255,255,255,0.5)',
+            color: (showDropsPanel || markers.length > 0) ? '#ef4444' : `rgba(255,255,255,${o.textMuted})`,
             fontSize: '11px',
             fontWeight: 600,
             cursor: 'pointer',
@@ -1137,9 +1144,9 @@ export function NavigationPanel() {
             borderRadius: '6px',
             background: (showCoursePanel || hdgCourseLines.length > 0)
               ? 'rgba(245, 158, 11, 0.15)'
-              : 'rgba(255,255,255,0.03)',
+              : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
             border: 'none',
-            color: (showCoursePanel || hdgCourseLines.length > 0) ? '#f59e0b' : 'rgba(255,255,255,0.5)',
+            color: (showCoursePanel || hdgCourseLines.length > 0) ? '#f59e0b' : `rgba(255,255,255,${o.textMuted})`,
             fontSize: '11px',
             fontWeight: 600,
             cursor: 'pointer',
@@ -1204,7 +1211,7 @@ export function NavigationPanel() {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: 'rgba(255,255,255,0.4)',
+                  color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                   fontSize: '18px',
                   cursor: 'pointer',
                   padding: '4px 8px'
@@ -1217,7 +1224,7 @@ export function NavigationPanel() {
             {/* Beschreibung */}
             <div style={{
               fontSize: '11px',
-              color: 'rgba(255,255,255,0.5)',
+              color: `rgba(255,255,255,${o.textMuted})`,
               marginBottom: '16px',
               lineHeight: 1.4
             }}>
@@ -1226,7 +1233,7 @@ export function NavigationPanel() {
 
             {/* Position */}
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '8px' }}>
                 Position
               </div>
               <div style={{ display: 'flex', gap: '6px' }}>
@@ -1237,9 +1244,9 @@ export function NavigationPanel() {
                     flex: 1,
                     padding: '8px',
                     borderRadius: '8px',
-                    background: 'rgba(255,255,255,0.1)',
+                    background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                     border: 'none',
-                    color: fields.findIndex(f => f.id === editingField) === 0 ? 'rgba(255,255,255,0.2)' : 'white',
+                    color: fields.findIndex(f => f.id === editingField) === 0 ? `rgba(255,255,255,${o.on ? 0.35 : 0.2})` : 'white',
                     fontSize: '14px',
                     cursor: fields.findIndex(f => f.id === editingField) === 0 ? 'not-allowed' : 'pointer'
                   }}
@@ -1253,9 +1260,9 @@ export function NavigationPanel() {
                     flex: 1,
                     padding: '8px',
                     borderRadius: '8px',
-                    background: 'rgba(255,255,255,0.1)',
+                    background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                     border: 'none',
-                    color: fields.findIndex(f => f.id === editingField) === fields.length - 1 ? 'rgba(255,255,255,0.2)' : 'white',
+                    color: fields.findIndex(f => f.id === editingField) === fields.length - 1 ? `rgba(255,255,255,${o.on ? 0.35 : 0.2})` : 'white',
                     fontSize: '14px',
                     cursor: fields.findIndex(f => f.id === editingField) === fields.length - 1 ? 'not-allowed' : 'pointer'
                   }}
@@ -1273,7 +1280,7 @@ export function NavigationPanel() {
                 alignItems: 'center',
                 marginBottom: '8px'
               }}>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
+                <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
                   Schriftgröße
                 </span>
                 <span style={{
@@ -1301,7 +1308,7 @@ export function NavigationPanel() {
                   width: '100%',
                   height: '6px',
                   borderRadius: '3px',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   appearance: 'none',
                   cursor: 'pointer'
                 }}
@@ -1311,8 +1318,8 @@ export function NavigationPanel() {
                 justifyContent: 'space-between',
                 marginTop: '4px'
               }}>
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>12px</span>
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>48px</span>
+                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})` }}>12px</span>
+                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})` }}>48px</span>
               </div>
             </div>
 
@@ -1324,7 +1331,7 @@ export function NavigationPanel() {
                 alignItems: 'center',
                 marginBottom: '8px'
               }}>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
+                <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
                   Feldhöhe
                 </span>
                 <span style={{
@@ -1346,7 +1353,7 @@ export function NavigationPanel() {
                   width: '100%',
                   height: '6px',
                   borderRadius: '3px',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   appearance: 'none',
                   cursor: 'pointer'
                 }}
@@ -1356,14 +1363,14 @@ export function NavigationPanel() {
                 justifyContent: 'space-between',
                 marginTop: '4px'
               }}>
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>24px</span>
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>60px</span>
+                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})` }}>24px</span>
+                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})` }}>60px</span>
               </div>
             </div>
 
             {/* Textfarbe */}
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '8px' }}>
                 Textfarbe
               </div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -1388,7 +1395,7 @@ export function NavigationPanel() {
 
             {/* Hintergrundfarbe */}
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '8px' }}>
                 Hintergrund
               </div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -1475,7 +1482,7 @@ export function NavigationPanel() {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: 'rgba(255,255,255,0.4)',
+                color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                 fontSize: '18px',
                 cursor: 'pointer',
                 padding: '4px 8px'
@@ -1487,7 +1494,7 @@ export function NavigationPanel() {
 
           {/* Linientyp-Auswahl */}
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '6px' }}>
+            <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '6px' }}>
               Linientyp
             </div>
             <div style={{ display: 'flex', gap: '4px' }}>
@@ -1505,9 +1512,9 @@ export function NavigationPanel() {
                     borderRadius: '6px',
                     background: hdgPendingLineMode === mode
                       ? '#f59e0b'
-                      : 'rgba(255,255,255,0.1)',
+                      : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                     border: 'none',
-                    color: hdgPendingLineMode === mode ? 'black' : 'rgba(255,255,255,0.7)',
+                    color: hdgPendingLineMode === mode ? 'black' : `rgba(255,255,255,${o.textSec})`,
                     fontSize: '11px',
                     fontWeight: 600,
                     cursor: 'pointer',
@@ -1541,7 +1548,7 @@ export function NavigationPanel() {
                   : 'rgba(245, 158, 11, 0.2)'}`,
               marginBottom: '12px'
             }}>
-              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginBottom: '8px' }}>
+              <div style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, marginBottom: '8px' }}>
                 {editingCourseLineId ? 'Kurs bearbeiten (0-360°)' : 'Kurs eingeben (0-360°)'}
               </div>
               <input
@@ -1575,12 +1582,49 @@ export function NavigationPanel() {
                 placeholder="180"
               />
               {!editingCourseLineId && hdgCourseMode && (
-                <div style={{ fontSize: '11px', color: '#22c55e', marginTop: '8px', fontWeight: 600 }}>
-                  Jetzt auf Karte oder Ziel klicken
+                <div style={{ marginTop: '8px' }}>
+                  <div style={{ fontSize: '11px', color: '#22c55e', fontWeight: 600 }}>
+                    Jetzt auf Karte oder Ziel klicken
+                  </div>
+                  {gpsData && hdgPendingCourse !== null && (
+                    <button
+                      onClick={() => {
+                        addHdgCourseLine({
+                          startPosition: { lat: gpsData.latitude, lon: gpsData.longitude },
+                          course: hdgPendingCourse,
+                          lineMode: hdgPendingLineMode
+                        })
+                        setShowCourseInput(false)
+                        setCourseInputValue('')
+                      }}
+                      style={{
+                        width: '100%',
+                        marginTop: '6px',
+                        padding: '8px',
+                        borderRadius: '6px',
+                        background: 'rgba(34, 197, 94, 0.15)',
+                        border: '1px solid rgba(34, 197, 94, 0.3)',
+                        color: '#22c55e',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                      Von aktueller Position
+                    </button>
+                  )}
                 </div>
               )}
               {!editingCourseLineId && !hdgCourseMode && courseInputValue && (
-                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '8px' }}>
+                <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginTop: '8px' }}>
                   Gueltigen Kurs eingeben (0-360)
                 </div>
               )}
@@ -1596,9 +1640,9 @@ export function NavigationPanel() {
                   marginTop: '8px',
                   padding: '8px',
                   borderRadius: '6px',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   border: 'none',
-                  color: 'rgba(255,255,255,0.6)',
+                  color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`,
                   fontSize: '12px',
                   cursor: 'pointer'
                 }}
@@ -1643,7 +1687,7 @@ export function NavigationPanel() {
                     display: 'flex',
                     flexDirection: 'column',
                     padding: '12px 14px',
-                    background: isRepositioning ? 'rgba(34, 197, 94, 0.1)' : editingCourseLineId === line.id ? 'rgba(59, 130, 246, 0.08)' : 'rgba(255,255,255,0.03)',
+                    background: isRepositioning ? 'rgba(34, 197, 94, 0.1)' : editingCourseLineId === line.id ? 'rgba(59, 130, 246, 0.08)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
                     borderRadius: '10px',
                     border: `2px solid ${isRepositioning ? '#22c55e' : editingCourseLineId === line.id ? '#3b82f6' : line.color + '40'}`
                   }}
@@ -1697,26 +1741,62 @@ export function NavigationPanel() {
                       background: 'rgba(34, 197, 94, 0.15)',
                       borderRadius: '6px',
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
+                      flexDirection: 'column',
+                      gap: '6px'
                     }}>
                       <span style={{ fontSize: '11px', color: '#22c55e', fontWeight: 600 }}>
                         Jetzt auf Karte klicken
                       </span>
-                      <button
-                        onClick={() => setEditingHdgCourseLineId(null)}
-                        style={{
-                          background: 'rgba(255,255,255,0.1)',
-                          border: 'none',
-                          color: 'rgba(255,255,255,0.7)',
-                          fontSize: '11px',
-                          cursor: 'pointer',
-                          padding: '4px 8px',
-                          borderRadius: '4px'
-                        }}
-                      >
-                        Abbrechen
-                      </button>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        {gpsData && (
+                          <button
+                            onClick={() => {
+                              updateHdgCourseLine(line.id, {
+                                startPosition: { lat: gpsData.latitude, lon: gpsData.longitude }
+                              })
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: '6px 8px',
+                              borderRadius: '4px',
+                              background: 'rgba(34, 197, 94, 0.2)',
+                              border: '1px solid rgba(34, 197, 94, 0.4)',
+                              color: '#22c55e',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="12" cy="12" r="10" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                            Aktuelle Pos.
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setEditingHdgCourseLineId(null)
+                            setHdgCourseMode(false)
+                          }}
+                          style={{
+                            flex: gpsData ? 1 : undefined,
+                            background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                            border: 'none',
+                            color: `rgba(255,255,255,${o.textSec})`,
+                            fontSize: '11px',
+                            cursor: 'pointer',
+                            padding: '6px 8px',
+                            borderRadius: '4px'
+                          }}
+                        >
+                          Abbrechen
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <button
@@ -1724,14 +1804,15 @@ export function NavigationPanel() {
                         setEditingCourseLineId(null)
                         setShowCourseInput(false)
                         setEditingHdgCourseLineId(line.id)
+                        setHdgCourseMode(true)
                       }}
                       style={{
                         marginTop: '8px',
                         padding: '6px 10px',
-                        background: 'rgba(255,255,255,0.05)',
+                        background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
                         border: '1px solid rgba(255,255,255,0.1)',
                         borderRadius: '6px',
-                        color: 'rgba(255,255,255,0.6)',
+                        color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`,
                         fontSize: '11px',
                         cursor: 'pointer',
                         display: 'flex',
@@ -1778,7 +1859,7 @@ export function NavigationPanel() {
               marginTop: '16px',
               padding: '12px',
               borderRadius: '8px',
-              background: 'rgba(255,255,255,0.1)',
+              background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
               border: 'none',
               color: 'white',
               fontSize: '14px',
@@ -1847,7 +1928,7 @@ export function NavigationPanel() {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: 'rgba(255,255,255,0.4)',
+                color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                 fontSize: '18px',
                 cursor: 'pointer',
                 padding: '4px 8px'
@@ -1859,7 +1940,7 @@ export function NavigationPanel() {
 
           {/* Startpunkt */}
           <div style={{ marginBottom: '10px' }}>
-            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '6px' }}>
+            <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '6px' }}>
               Startpunkt
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -1906,7 +1987,7 @@ export function NavigationPanel() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
             {/* Kurs */}
             <div style={{ opacity: gpsSimulation.followWind ? 0.4 : 1 }}>
-              <div style={{ fontSize: '10px', color: gpsSimulation.followWind ? 'rgba(96,165,250,0.6)' : 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>
+              <div style={{ fontSize: '10px', color: gpsSimulation.followWind ? 'rgba(96,165,250,0.6)' : `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>
                 Kurs (°) {gpsSimulation.followWind && '🌬️'}
               </div>
               <input
@@ -1933,7 +2014,7 @@ export function NavigationPanel() {
 
             {/* Geschwindigkeit */}
             <div style={{ opacity: gpsSimulation.followWind ? 0.4 : 1 }}>
-              <div style={{ fontSize: '10px', color: gpsSimulation.followWind ? 'rgba(96,165,250,0.6)' : 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>
+              <div style={{ fontSize: '10px', color: gpsSimulation.followWind ? 'rgba(96,165,250,0.6)' : `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>
                 Speed (km/h) {gpsSimulation.followWind && '🌬️'}
               </div>
               <input
@@ -1961,7 +2042,7 @@ export function NavigationPanel() {
 
             {/* Höhe */}
             <div>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>
+              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>
                 Höhe ({settings.altitudeUnit === 'feet' ? 'ft' : 'm'})
               </div>
               <input
@@ -2000,7 +2081,7 @@ export function NavigationPanel() {
 
             {/* Vario */}
             <div>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>
+              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>
                 Vario (m/s)
               </div>
               <input
@@ -2037,11 +2118,11 @@ export function NavigationPanel() {
               borderRadius: '8px',
               background: gpsSimulation.followWind
                 ? 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(139,92,246,0.2))'
-                : 'rgba(255,255,255,0.05)',
+                : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
               border: gpsSimulation.followWind
                 ? '1px solid rgba(59,130,246,0.5)'
                 : '1px solid rgba(255,255,255,0.1)',
-              color: gpsSimulation.followWind ? '#60a5fa' : 'rgba(255,255,255,0.5)',
+              color: gpsSimulation.followWind ? '#60a5fa' : `rgba(255,255,255,${o.textMuted})`,
               fontSize: '12px',
               fontWeight: 600,
               cursor: windLayers.length === 0 ? 'not-allowed' : 'pointer',
@@ -2068,7 +2149,7 @@ export function NavigationPanel() {
             )}
             {!gpsSimulation.followWind && windLayers.length > 0 && (
               <span style={{
-                color: 'rgba(255,255,255,0.3)',
+                color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})`,
                 fontSize: '10px',
                 marginLeft: 'auto'
               }}>
@@ -2100,7 +2181,7 @@ export function NavigationPanel() {
                   padding: '10px',
                   background: gpsSimulation.startPosition
                     ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                    : 'rgba(255,255,255,0.1)',
+                    : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   border: 'none',
                   borderRadius: '8px',
                   color: 'white',
@@ -2165,20 +2246,20 @@ export function NavigationPanel() {
             <div style={{
               fontSize: '13px',
               fontWeight: 600,
-              color: showLandingPrediction ? '#a855f7' : 'rgba(255,255,255,0.8)',
+              color: showLandingPrediction ? '#a855f7' : `rgba(255,255,255,${o.on ? 0.95 : 0.8})`,
               display: 'flex',
               alignItems: 'center',
               gap: '6px'
             }}>
               Landeprognose
               {landingPredictionLoading && (
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}>...</span>
+                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, fontWeight: 400 }}>...</span>
               )}
             </div>
             <button
               onClick={() => setActiveToolPanel(null)}
               style={{
-                background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)',
+                background: 'none', border: 'none', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                 cursor: 'pointer', fontSize: '16px', padding: '0 2px', lineHeight: 1
               }}
             >x</button>
@@ -2187,11 +2268,11 @@ export function NavigationPanel() {
           {/* Sinkrate Regler */}
           <div style={{ marginBottom: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                 Sinkrate
               </span>
               <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
-                {landingSinkRate.toFixed(1)} m/s
+                {settings.variometerUnit === 'fpm' ? Math.round(landingSinkRate * 196.85) : landingSinkRate.toFixed(1)} {settings.variometerUnit === 'fpm' ? 'fpm' : 'm/s'}
               </span>
             </div>
             <input
@@ -2216,8 +2297,8 @@ export function NavigationPanel() {
               border: 'none',
               background: showLandingPrediction
                 ? 'linear-gradient(135deg, rgba(168,85,247,0.4), rgba(168,85,247,0.2))'
-                : filteredWindLayers.length === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(168,85,247,0.1)',
-              color: showLandingPrediction ? '#fff' : filteredWindLayers.length === 0 ? 'rgba(255,255,255,0.25)' : '#a855f7',
+                : filteredWindLayers.length === 0 ? `rgba(255,255,255,${o.on ? 0.08 : 0.03})` : 'rgba(168,85,247,0.1)',
+              color: showLandingPrediction ? '#fff' : filteredWindLayers.length === 0 ? `rgba(255,255,255,${o.on ? 0.4 : 0.25})` : '#a855f7',
               fontSize: '12px',
               fontWeight: 600,
               cursor: filteredWindLayers.length === 0 ? 'not-allowed' : 'pointer',
@@ -2231,7 +2312,7 @@ export function NavigationPanel() {
           {/* Wind-Info */}
           {filteredWindLayers.length === 0 && (
             <div style={{
-              fontSize: '10px', color: 'rgba(255,255,255,0.35)',
+              fontSize: '10px', color: `rgba(255,255,255,${o.textDim})`,
               marginTop: '6px', textAlign: 'center', fontStyle: 'italic'
             }}>
               Keine Windschichten. Bewege den Ballon um Wind zu messen.
@@ -2246,7 +2327,7 @@ export function NavigationPanel() {
               fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '4px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)' }}>Entfernung</span>
+                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Entfernung</span>
                 <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
                   {landingPrediction.totalDistanceMeters < 1000
                     ? `${Math.round(landingPrediction.totalDistanceMeters)} m`
@@ -2255,20 +2336,20 @@ export function NavigationPanel() {
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)' }}>Flugzeit</span>
+                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Flugzeit</span>
                 <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
                   {Math.floor(landingPrediction.totalTimeSeconds / 60)}:{String(Math.floor(landingPrediction.totalTimeSeconds % 60)).padStart(2, '0')} min
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)' }}>Boden</span>
+                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Boden</span>
                 <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
                   {Math.round(landingPrediction.groundElevation)} m ({Math.round(landingPrediction.groundElevation * 3.28084)} ft)
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)' }}>Wind</span>
-                <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'monospace' }}>
+                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Wind</span>
+                <span style={{ color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, fontFamily: 'monospace' }}>
                   {filteredWindLayers.length}{windSourceFilter !== 'all' ? `/${windLayers.length}` : ''} Schichten
                 </span>
               </div>
@@ -2296,7 +2377,7 @@ export function NavigationPanel() {
           }}>
             <div style={{
               fontSize: '13px', fontWeight: 600,
-              color: dropCalculator.active ? '#f97316' : 'rgba(255,255,255,0.8)',
+              color: dropCalculator.active ? '#f97316' : `rgba(255,255,255,${o.on ? 0.95 : 0.8})`,
               display: 'flex', alignItems: 'center', gap: '6px'
             }}>
               Marker Drop
@@ -2310,7 +2391,7 @@ export function NavigationPanel() {
             <button
               onClick={() => setActiveToolPanel(null)}
               style={{
-                background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)',
+                background: 'none', border: 'none', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                 cursor: 'pointer', fontSize: '16px', padding: '0 2px', lineHeight: 1
               }}
             >x</button>
@@ -2324,9 +2405,9 @@ export function NavigationPanel() {
               width: '100%', padding: '8px', borderRadius: '8px', border: 'none',
               background: dropCalculator.active
                 ? 'linear-gradient(135deg, rgba(249,115,22,0.4), rgba(249,115,22,0.2))'
-                : filteredWindLayers.length === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(249,115,22,0.1)',
+                : filteredWindLayers.length === 0 ? `rgba(255,255,255,${o.on ? 0.08 : 0.03})` : 'rgba(249,115,22,0.1)',
               color: dropCalculator.active ? '#fff'
-                : filteredWindLayers.length === 0 ? 'rgba(255,255,255,0.25)' : '#f97316',
+                : filteredWindLayers.length === 0 ? `rgba(255,255,255,${o.on ? 0.4 : 0.25})` : '#f97316',
               fontSize: '12px', fontWeight: 600,
               cursor: filteredWindLayers.length === 0 ? 'not-allowed' : 'pointer',
               transition: 'all 0.15s',
@@ -2339,7 +2420,7 @@ export function NavigationPanel() {
           {/* Wind-Info */}
           {filteredWindLayers.length === 0 && (
             <div style={{
-              fontSize: '10px', color: 'rgba(255,255,255,0.35)',
+              fontSize: '10px', color: `rgba(255,255,255,${o.textDim})`,
               marginTop: '6px', textAlign: 'center', fontStyle: 'italic'
             }}>
               Keine Windschichten vorhanden.
@@ -2357,7 +2438,7 @@ export function NavigationPanel() {
               {dropCalculator.distanceToGoal !== null ? (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>Abstand Ziel</span>
+                    <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Abstand Ziel</span>
                     <span style={{
                       fontWeight: 700, fontFamily: 'monospace', fontSize: '16px',
                       color: dropCalculator.dropNow ? '#22c55e'
@@ -2380,18 +2461,18 @@ export function NavigationPanel() {
                   )}
                 </>
               ) : (
-                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', textAlign: 'center', fontStyle: 'italic' }}>
+                <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textDim})`, textAlign: 'center', fontStyle: 'italic' }}>
                   Kein Ziel ausgewählt
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)' }}>Fallzeit</span>
+                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Fallzeit</span>
                 <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
                   {dropCalculator.timeToImpact !== null ? `${dropCalculator.timeToImpact.toFixed(1)} s` : '--'}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)' }}>Boden</span>
+                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Boden</span>
                 <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
                   {dropCalculator.groundElevation !== null
                     ? `${Math.round(dropCalculator.groundElevation)} m (${Math.round(dropCalculator.groundElevation * 3.28084)} ft)`
@@ -2399,8 +2480,8 @@ export function NavigationPanel() {
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)' }}>Wind</span>
-                <span style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'monospace' }}>
+                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Wind</span>
+                <span style={{ color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, fontFamily: 'monospace' }}>
                   {filteredWindLayers.length}{windSourceFilter !== 'all' ? `/${windLayers.length}` : ''} Schichten
                 </span>
               </div>
@@ -2436,7 +2517,7 @@ export function NavigationPanel() {
             <button
               onClick={() => setActiveToolPanel(null)}
               style={{
-                background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)',
+                background: 'none', border: 'none', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                 cursor: 'pointer', fontSize: '16px', padding: '0 2px', lineHeight: 1
               }}
             >x</button>
@@ -2444,7 +2525,7 @@ export function NavigationPanel() {
 
           {/* Richtung Toggle */}
           <div style={{ marginBottom: '10px' }}>
-            <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px', textTransform: 'uppercase' }}>
+            <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px', textTransform: 'uppercase' }}>
               Richtung
             </div>
             <div style={{ display: 'flex', gap: '4px' }}>
@@ -2454,7 +2535,7 @@ export function NavigationPanel() {
                   onClick={() => setClimbDirection(dir)}
                   style={{
                     flex: 1, padding: '6px', fontSize: '11px',
-                    background: climbDirection === dir ? '#06b6d4' : 'rgba(255,255,255,0.05)',
+                    background: climbDirection === dir ? '#06b6d4' : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
                     color: 'white',
                     border: climbDirection === dir ? 'none' : '1px solid rgba(255,255,255,0.1)',
                     borderRadius: '6px', cursor: 'pointer', fontWeight: 600
@@ -2466,14 +2547,14 @@ export function NavigationPanel() {
             </div>
           </div>
 
-          {/* Steigrate */}
+          {/* Steig-/Sinkrate */}
           <div style={{ marginBottom: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
-                Steigrate
+              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
+                {climbDirection === 'up' ? 'Steigrate' : 'Sinkrate'}
               </span>
               <span style={{ fontSize: '13px', color: '#06b6d4', fontWeight: 700, fontFamily: 'monospace' }}>
-                {climbRate.toFixed(1)} m/s
+                {settings.variometerUnit === 'fpm' ? Math.round(climbRate * 196.85) : climbRate.toFixed(1)} {settings.variometerUnit === 'fpm' ? 'fpm' : 'm/s'}
               </span>
             </div>
             <input
@@ -2489,7 +2570,7 @@ export function NavigationPanel() {
           {/* Mindest-Höhenänderung */}
           <div style={{ marginBottom: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                 Mindesthöhe
               </span>
               <span style={{ fontSize: '13px', color: '#06b6d4', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -2510,7 +2591,7 @@ export function NavigationPanel() {
           {/* Mindestentfernung */}
           <div style={{ marginBottom: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                 Mindestentfernung
               </span>
               <span style={{ fontSize: '13px', color: '#06b6d4', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -2531,7 +2612,7 @@ export function NavigationPanel() {
           {/* Vorlaufzeit */}
           <div style={{ marginBottom: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                 Vorlaufzeit
               </span>
               <span style={{ fontSize: '13px', color: climbLeadTime > 0 ? '#f59e0b' : '#06b6d4', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -2553,7 +2634,7 @@ export function NavigationPanel() {
           <label style={{
             display: 'flex', alignItems: 'center', gap: '8px',
             marginBottom: '12px', cursor: 'pointer',
-            fontSize: '11px', color: 'rgba(255,255,255,0.7)'
+            fontSize: '11px', color: `rgba(255,255,255,${o.textSec})`
           }}>
             <input
               type="checkbox"
@@ -2592,10 +2673,10 @@ export function NavigationPanel() {
             style={{
               width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
               background: (!gpsData || !selectedGoal || filteredWindLayers.length === 0)
-                ? 'rgba(255,255,255,0.03)'
+                ? `rgba(255,255,255,${o.on ? 0.08 : 0.03})`
                 : '#06b6d4',
               color: (!gpsData || !selectedGoal || filteredWindLayers.length === 0)
-                ? 'rgba(255,255,255,0.25)' : 'white',
+                ? `rgba(255,255,255,${o.on ? 0.4 : 0.25})` : 'white',
               fontSize: '12px', fontWeight: 700,
               cursor: (!gpsData || !selectedGoal || filteredWindLayers.length === 0) ? 'not-allowed' : 'pointer',
               opacity: (!gpsData || !selectedGoal || filteredWindLayers.length === 0) ? 0.5 : 1
@@ -2607,7 +2688,7 @@ export function NavigationPanel() {
           {/* Fehlende Voraussetzungen */}
           {(!selectedGoal || filteredWindLayers.length === 0) && (
             <div style={{
-              fontSize: '10px', color: 'rgba(255,255,255,0.35)',
+              fontSize: '10px', color: `rgba(255,255,255,${o.textDim})`,
               marginTop: '6px', textAlign: 'center', fontStyle: 'italic'
             }}>
               {!selectedGoal && filteredWindLayers.length === 0
@@ -2647,7 +2728,7 @@ export function NavigationPanel() {
                 </div>
               ) : (
                 <>
-                  <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase', marginBottom: '4px' }}>
                     {climbDirection === 'up' ? 'Steigen' : 'Sinken'} beginnen in
                   </div>
                   <div style={{
@@ -2670,7 +2751,7 @@ export function NavigationPanel() {
               fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '6px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)' }}>Abstand Ziel</span>
+                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Abstand Ziel</span>
                 <span style={{
                   fontWeight: 700, fontFamily: 'monospace', fontSize: '16px',
                   color: (goalDistance ?? Infinity) < 100 ? '#22c55e'
@@ -2706,7 +2787,7 @@ export function NavigationPanel() {
                     border: '1px solid rgba(6,182,212,0.2)',
                     borderRadius: '6px'
                   }}>
-                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>
+                    <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>
                       Benötigte Rate
                     </span>
                     <span style={{
@@ -2715,14 +2796,14 @@ export function NavigationPanel() {
                            : direction === 'sinken' ? '#ef4444'
                            : '#06b6d4'
                     }}>
-                      {direction === 'halten' ? '~ 0 m/s'
-                       : `${requiredRate > 0 ? '+' : ''}${requiredRate.toFixed(1)} m/s`}
+                      {direction === 'halten' ? `~ 0 ${settings.variometerUnit === 'fpm' ? 'fpm' : 'm/s'}`
+                       : `${requiredRate > 0 ? '+' : ''}${settings.variometerUnit === 'fpm' ? Math.round(requiredRate * 196.85) : requiredRate.toFixed(1)} ${settings.variometerUnit === 'fpm' ? 'fpm' : 'm/s'}`}
                     </span>
                   </div>
                 )
               })()}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)' }}>Höhenänderung</span>
+                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Höhenänderung</span>
                 <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
                   {climbResult.altitudeChange > 0 ? '+' : ''}{Math.round(climbResult.altitudeChange * 3.28084)} ft
                   <span style={{ fontSize: '9px', opacity: 0.6, marginLeft: '4px' }}>
@@ -2731,13 +2812,13 @@ export function NavigationPanel() {
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)' }}>{climbDirection === 'up' ? 'Steigzeit' : 'Sinkzeit'}</span>
+                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>{climbDirection === 'up' ? 'Steigzeit' : 'Sinkzeit'}</span>
                 <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
                   {Math.floor(climbResult.climbTime / 60)}:{String(climbResult.climbTime % 60).padStart(2, '0')} min
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)' }}>Zielhöhe</span>
+                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Zielhöhe</span>
                 <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
                   {Math.round(climbResult.bestPoint.altitude * 3.28084)} ft
                 </span>
@@ -2749,7 +2830,7 @@ export function NavigationPanel() {
                 background: 'rgba(34,197,94,0.1)', borderRadius: '6px',
                 border: '1px solid rgba(34,197,94,0.2)'
               }}>
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '9px', marginBottom: '6px' }}>
+                <div style={{ color: `rgba(255,255,255,${o.textMuted})`, fontSize: '9px', marginBottom: '6px' }}>
                   Neue Ziel-Position
                 </div>
                 {/* Höhe prominent */}
@@ -2832,7 +2913,7 @@ export function NavigationPanel() {
                 style={{
                   marginTop: '4px', width: '100%', padding: '6px',
                   borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
-                  background: 'transparent', color: 'rgba(255,255,255,0.5)',
+                  background: 'transparent', color: `rgba(255,255,255,${o.textMuted})`,
                   fontSize: '10px', cursor: 'pointer'
                 }}
               >
@@ -2844,7 +2925,7 @@ export function NavigationPanel() {
           {/* Kein Ergebnis */}
           {climbResult === null && gpsData && selectedGoal && filteredWindLayers.length > 0 && (
             <div style={{
-              fontSize: '10px', color: 'rgba(255,255,255,0.35)',
+              fontSize: '10px', color: `rgba(255,255,255,${o.textDim})`,
               marginTop: '6px', textAlign: 'center', fontStyle: 'italic'
             }}>
               Klicke "Berechnen" um den optimalen Punkt zu finden.
@@ -2878,7 +2959,7 @@ export function NavigationPanel() {
                 setLandRunResult(null)
               }}
               style={{
-                background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)',
+                background: 'none', border: 'none', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                 cursor: 'pointer', fontSize: '16px', padding: '2px 6px'
               }}
             >×</button>
@@ -2886,7 +2967,7 @@ export function NavigationPanel() {
 
           {/* Limit-Modus Auswahl */}
           <div style={{ marginBottom: '8px' }}>
-            <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', marginBottom: '4px' }}>
+            <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase', marginBottom: '4px' }}>
               Limit-Modus
             </div>
             <div style={{ display: 'flex', gap: '3px' }}>
@@ -2902,8 +2983,8 @@ export function NavigationPanel() {
                     flex: 1, padding: '5px 0', borderRadius: '5px',
                     border: 'none', fontSize: '10px', fontWeight: 600,
                     cursor: 'pointer',
-                    background: lrnLimitMode === m.key ? '#22c55e' : 'rgba(255,255,255,0.06)',
-                    color: lrnLimitMode === m.key ? 'white' : 'rgba(255,255,255,0.5)'
+                    background: lrnLimitMode === m.key ? '#22c55e' : `rgba(255,255,255,${o.bgSoft})`,
+                    color: lrnLimitMode === m.key ? 'white' : `rgba(255,255,255,${o.textMuted})`
                   }}
                 >{m.label}</button>
               ))}
@@ -2924,8 +3005,8 @@ export function NavigationPanel() {
                     flex: 1, padding: '5px 0', borderRadius: '5px',
                     border: 'none', fontSize: '10px', fontWeight: 600,
                     cursor: 'pointer',
-                    background: lrnLimitUnit === u.key ? '#22c55e' : 'rgba(255,255,255,0.06)',
-                    color: lrnLimitUnit === u.key ? 'white' : 'rgba(255,255,255,0.5)'
+                    background: lrnLimitUnit === u.key ? '#22c55e' : `rgba(255,255,255,${o.bgSoft})`,
+                    color: lrnLimitUnit === u.key ? 'white' : `rgba(255,255,255,${o.textMuted})`
                   }}
                 >{u.label}</button>
               ))}
@@ -2936,7 +3017,7 @@ export function NavigationPanel() {
           {(lrnLimitMode === 'leg1' || lrnLimitMode === 'leg1+leg2') && (
             <div style={{ marginBottom: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+                <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                   {lrnLimitMode === 'leg1' ? 'Leg-Dauer (A→B = B→C)' : 'Leg 1 (A→B)'}
                 </span>
                 <span style={{ fontSize: '13px', color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -2959,7 +3040,7 @@ export function NavigationPanel() {
           {lrnLimitMode === 'leg1+leg2' && (
             <div style={{ marginBottom: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+                <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                   Leg 2 (B→C)
                 </span>
                 <span style={{ fontSize: '13px', color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -2982,7 +3063,7 @@ export function NavigationPanel() {
           {lrnLimitMode === 'total' && (
             <div style={{ marginBottom: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+                <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                   Gesamt (A→C)
                 </span>
                 <span style={{ fontSize: '13px', color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3010,7 +3091,7 @@ export function NavigationPanel() {
                 onChange={e => setLrnAltLimit(e.target.checked)}
                 style={{ accentColor: '#22c55e', cursor: 'pointer' }}
               />
-              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)' }}>Höhenbegrenzung</span>
+              <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textSec})` }}>Höhenbegrenzung</span>
             </label>
             {lrnAltLimit && (
               <>
@@ -3020,8 +3101,8 @@ export function NavigationPanel() {
                     style={{
                       flex: 1, padding: '4px 0', borderRadius: '5px',
                       border: 'none', fontSize: '10px', fontWeight: 600, cursor: 'pointer',
-                      background: lrnAltLimitMode === 'ceiling' ? '#22c55e' : 'rgba(255,255,255,0.06)',
-                      color: lrnAltLimitMode === 'ceiling' ? 'white' : 'rgba(255,255,255,0.5)'
+                      background: lrnAltLimitMode === 'ceiling' ? '#22c55e' : `rgba(255,255,255,${o.bgSoft})`,
+                      color: lrnAltLimitMode === 'ceiling' ? 'white' : `rgba(255,255,255,${o.textMuted})`
                     }}
                   >Obergrenze</button>
                   <button
@@ -3029,8 +3110,8 @@ export function NavigationPanel() {
                     style={{
                       flex: 1, padding: '4px 0', borderRadius: '5px',
                       border: 'none', fontSize: '10px', fontWeight: 600, cursor: 'pointer',
-                      background: lrnAltLimitMode === 'floor' ? '#22c55e' : 'rgba(255,255,255,0.06)',
-                      color: lrnAltLimitMode === 'floor' ? 'white' : 'rgba(255,255,255,0.5)'
+                      background: lrnAltLimitMode === 'floor' ? '#22c55e' : `rgba(255,255,255,${o.bgSoft})`,
+                      color: lrnAltLimitMode === 'floor' ? 'white' : `rgba(255,255,255,${o.textMuted})`
                     }}
                   >Von Boden bis</button>
                 </div>
@@ -3046,7 +3127,7 @@ export function NavigationPanel() {
                       fontWeight: 700, fontFamily: 'monospace', textAlign: 'center'
                     }}
                   />
-                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>ft</span>
+                  <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textMuted})` }}>ft</span>
                 </div>
               </>
             )}
@@ -3055,7 +3136,7 @@ export function NavigationPanel() {
           {/* Steigrate Slider */}
           <div style={{ marginBottom: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                 Steig-/Sinkrate
               </span>
               <span style={{ fontSize: '13px', color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3133,8 +3214,8 @@ export function NavigationPanel() {
             style={{
               width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
               background: (!gpsData || filteredWindLayers.length < 2 || lrnCalculating)
-                ? 'rgba(255,255,255,0.03)' : '#22c55e',
-              color: (!gpsData || filteredWindLayers.length < 2 || lrnCalculating) ? 'rgba(255,255,255,0.25)' : 'white',
+                ? `rgba(255,255,255,${o.on ? 0.08 : 0.03})` : '#22c55e',
+              color: (!gpsData || filteredWindLayers.length < 2 || lrnCalculating) ? `rgba(255,255,255,${o.on ? 0.4 : 0.25})` : 'white',
               fontSize: '12px', fontWeight: 700,
               cursor: (!gpsData || filteredWindLayers.length < 2 || lrnCalculating) ? 'not-allowed' : 'pointer',
               opacity: (!gpsData || filteredWindLayers.length < 2 || lrnCalculating) ? 0.5 : 1,
@@ -3181,7 +3262,7 @@ export function NavigationPanel() {
                       borderRadius: '8px', padding: '10px', marginBottom: '8px',
                       border: '1px solid rgba(34, 197, 94, 0.2)'
                     }}>
-                      <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '6px' }}>
+                      <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '6px' }}>
                         {lrnSelectedAlt === -1 ? 'Beste Option' : `Alternative ${lrnSelectedAlt + 1}`}
                       </div>
 
@@ -3196,28 +3277,28 @@ export function NavigationPanel() {
                       {/* Legs */}
                       <div style={{
                         display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px',
-                        fontSize: '11px', color: 'rgba(255,255,255,0.7)'
+                        fontSize: '11px', color: `rgba(255,255,255,${o.textSec})`
                       }}>
                         <div>
-                          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>LEG 1 (A→B)</span><br/>
+                          <span style={{ color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, fontSize: '9px' }}>LEG 1 (A→B)</span><br/>
                           {fmtAlt(selected.leg1Altitude)} {altUnit} MSL<br/>
                           {selected.leg1Wind.direction}° / {selected.leg1Wind.speedKmh} km/h<br/>
-                          <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
+                          <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
                             {Math.round(selected.leg1Time / 60)} Min / {(selected.leg1Distance / 1000).toFixed(1)} km
                           </span>
                         </div>
                         <div>
-                          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>LEG 2 (B→C)</span><br/>
+                          <span style={{ color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, fontSize: '9px' }}>LEG 2 (B→C)</span><br/>
                           {fmtAlt(selected.leg2Altitude)} {altUnit} MSL<br/>
                           {selected.leg2Wind.direction}° / {selected.leg2Wind.speedKmh} km/h<br/>
-                          <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
+                          <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
                             {Math.round(selected.leg2Time / 60)} Min / {(selected.leg2Distance / 1000).toFixed(1)} km
                           </span>
                         </div>
                       </div>
 
                       <div style={{
-                        marginTop: '6px', fontSize: '11px', color: 'rgba(255,255,255,0.5)',
+                        marginTop: '6px', fontSize: '11px', color: `rgba(255,255,255,${o.textMuted})`,
                         display: 'flex', justifyContent: 'space-between'
                       }}>
                         <span>Winkel: {selected.angleDifference}°</span>
@@ -3229,7 +3310,7 @@ export function NavigationPanel() {
                         <div style={{
                           marginTop: '6px', padding: '4px 6px', borderRadius: '4px',
                           background: 'rgba(59, 130, 246, 0.1)',
-                          fontSize: '10px', color: 'rgba(255,255,255,0.5)'
+                          fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`
                         }}>
                           Anflug: ~{Math.round(selected.approachTime / 60)} Min zum Startpunkt
                         </div>
@@ -3281,7 +3362,7 @@ export function NavigationPanel() {
                     {/* Alternativen */}
                     {lrnResult.alternatives.length > 0 && (
                       <div>
-                        <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginBottom: '4px' }}>
+                        <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '4px' }}>
                           Alternativen
                         </div>
                         {lrnResult.alternatives.map((alt, idx) => (
@@ -3305,8 +3386,8 @@ export function NavigationPanel() {
                               borderRadius: '6px', border: 'none',
                               background: lrnSelectedAlt === idx
                                 ? 'rgba(34, 197, 94, 0.15)'
-                                : 'rgba(255,255,255,0.03)',
-                              color: lrnSelectedAlt === idx ? '#22c55e' : 'rgba(255,255,255,0.5)',
+                                : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+                              color: lrnSelectedAlt === idx ? '#22c55e' : `rgba(255,255,255,${o.textMuted})`,
                               fontSize: '10px', cursor: 'pointer', textAlign: 'left',
                               display: 'flex', justifyContent: 'space-between'
                             }}
@@ -3369,7 +3450,7 @@ export function NavigationPanel() {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: 'rgba(255,255,255,0.4)',
+                color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                 fontSize: '18px',
                 cursor: 'pointer',
                 padding: '4px 8px'
@@ -3383,7 +3464,7 @@ export function NavigationPanel() {
           {markers.length === 0 ? (
             <div style={{
               textAlign: 'center',
-              color: 'rgba(255,255,255,0.4)',
+              color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
               fontSize: '12px',
               padding: '20px 0'
             }}>
@@ -3463,7 +3544,7 @@ export function NavigationPanel() {
                       </div>
                       <div style={{
                         fontSize: '10px',
-                        color: 'rgba(255,255,255,0.5)',
+                        color: `rgba(255,255,255,${o.textMuted})`,
                         marginTop: '2px'
                       }}>
                         {time} • {altitudeValue}{altitudeUnit} MSL
@@ -3477,9 +3558,9 @@ export function NavigationPanel() {
                         removeMarker(marker.id)
                       }}
                       style={{
-                        background: 'rgba(255,255,255,0.1)',
+                        background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                         border: 'none',
-                        color: 'rgba(255,255,255,0.4)',
+                        color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                         fontSize: '14px',
                         cursor: 'pointer',
                         padding: '4px 8px',
@@ -3554,7 +3635,7 @@ export function NavigationPanel() {
                 setAngleResult(null)
               }}
               style={{
-                background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)',
+                background: 'none', border: 'none', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
                 cursor: 'pointer', fontSize: '16px', padding: '2px 6px'
               }}
             >×</button>
@@ -3563,7 +3644,7 @@ export function NavigationPanel() {
           {/* Punkt A Koordinaten (optional) */}
           <div style={{ marginBottom: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Pkt A</span>
+              <span style={{ fontSize: '8px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Pkt A</span>
               <input
                 type="text"
                 value={angPointAEast}
@@ -3579,12 +3660,12 @@ export function NavigationPanel() {
                 placeholder={settings.coordinateFormat === 'mgrs4' ? '1234' : settings.coordinateFormat === 'mgrs6' ? '123456' : settings.coordinateFormat === 'utm' ? 'East' : '12345'}
                 maxLength={settings.coordinateFormat === 'utm' ? 7 : (settings.coordinateFormat === 'mgrs4' ? 4 : settings.coordinateFormat === 'mgrs6' ? 6 : 5)}
                 style={{
-                  width: '70px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(168,85,247,0.15)',
+                  width: '70px', background: `rgba(255,255,255,${o.bgSoft})`, border: '1px solid rgba(168,85,247,0.15)',
                   borderRadius: '3px', color: angPointALatLon ? '#22c55e' : '#a855f7', padding: '2px 4px', fontSize: '11px',
                   fontFamily: 'monospace', textAlign: 'center', outline: 'none'
                 }}
               />
-              <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '9px' }}>/</span>
+              <span style={{ color: `rgba(255,255,255,${o.on ? 0.35 : 0.2})`, fontSize: '9px' }}>/</span>
               <input
                 type="text"
                 value={angPointANorth}
@@ -3600,7 +3681,7 @@ export function NavigationPanel() {
                 placeholder={settings.coordinateFormat === 'mgrs4' ? '5678' : settings.coordinateFormat === 'mgrs6' ? '567890' : settings.coordinateFormat === 'utm' ? 'North' : '56789'}
                 maxLength={settings.coordinateFormat === 'utm' ? 7 : (settings.coordinateFormat === 'mgrs4' ? 4 : settings.coordinateFormat === 'mgrs6' ? 6 : 5)}
                 style={{
-                  width: '70px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(168,85,247,0.15)',
+                  width: '70px', background: `rgba(255,255,255,${o.bgSoft})`, border: '1px solid rgba(168,85,247,0.15)',
                   borderRadius: '3px', color: angPointALatLon ? '#22c55e' : '#a855f7', padding: '2px 4px', fontSize: '11px',
                   fontFamily: 'monospace', textAlign: 'center', outline: 'none'
                 }}
@@ -3608,7 +3689,7 @@ export function NavigationPanel() {
               {(angPointAEast || angPointANorth) && (
                 <button
                   onClick={() => { setAngPointAEast(''); setAngPointANorth(''); setAngPointALatLon(null) }}
-                  style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: '10px', padding: '0 2px', lineHeight: 1 }}
+                  style={{ background: 'none', border: 'none', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})`, cursor: 'pointer', fontSize: '10px', padding: '0 2px', lineHeight: 1 }}
                 >×</button>
               )}
             </div>
@@ -3622,7 +3703,7 @@ export function NavigationPanel() {
           {/* Richtung (setDirection) = Leg 1 */}
           <div style={{ marginBottom: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                 Leg 1 Richtung (vorgegeben)
               </span>
               <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3643,7 +3724,7 @@ export function NavigationPanel() {
           {/* Steig-/Sinkrate */}
           <div style={{ marginBottom: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                 Steig-/Sinkrate
               </span>
               <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3663,7 +3744,7 @@ export function NavigationPanel() {
 
           {/* Limit-Modus: km oder Minuten */}
           <div style={{ marginBottom: '8px' }}>
-            <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', marginBottom: '4px' }}>
+            <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase', marginBottom: '4px' }}>
               B Limit
             </div>
             <div style={{ display: 'flex', gap: '3px', marginBottom: '6px' }}>
@@ -3678,8 +3759,8 @@ export function NavigationPanel() {
                     flex: 1, padding: '5px 0', borderRadius: '5px',
                     border: 'none', fontSize: '10px', fontWeight: 600,
                     cursor: 'pointer',
-                    background: angLimitMode === u.key ? '#a855f7' : 'rgba(255,255,255,0.06)',
-                    color: angLimitMode === u.key ? 'white' : 'rgba(255,255,255,0.5)'
+                    background: angLimitMode === u.key ? '#a855f7' : `rgba(255,255,255,${o.bgSoft})`,
+                    color: angLimitMode === u.key ? 'white' : `rgba(255,255,255,${o.textMuted})`
                   }}
                 >{u.label}</button>
               ))}
@@ -3691,7 +3772,7 @@ export function NavigationPanel() {
               {/* Min Distanz A→B */}
               <div style={{ marginBottom: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                     Min Distanz (A→B)
                   </span>
                   <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3716,7 +3797,7 @@ export function NavigationPanel() {
               {/* Max Distanz A→B */}
               <div style={{ marginBottom: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                     Max Distanz (A→B)
                   </span>
                   <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3743,7 +3824,7 @@ export function NavigationPanel() {
               {/* Min Zeit A→B */}
               <div style={{ marginBottom: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                     Min Zeit (A→B)
                   </span>
                   <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3767,7 +3848,7 @@ export function NavigationPanel() {
               {/* Max Zeit A→B */}
               <div style={{ marginBottom: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
                     Max Zeit (A→B)
                   </span>
                   <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3836,8 +3917,8 @@ export function NavigationPanel() {
             style={{
               width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
               background: ((!gpsData && !angPointALatLon) || filteredWindLayers.length < 2 || angCalculating)
-                ? 'rgba(255,255,255,0.03)' : '#a855f7',
-              color: ((!gpsData && !angPointALatLon) || filteredWindLayers.length < 2 || angCalculating) ? 'rgba(255,255,255,0.25)' : 'white',
+                ? `rgba(255,255,255,${o.on ? 0.08 : 0.03})` : '#a855f7',
+              color: ((!gpsData && !angPointALatLon) || filteredWindLayers.length < 2 || angCalculating) ? `rgba(255,255,255,${o.on ? 0.4 : 0.25})` : 'white',
               fontSize: '12px', fontWeight: 700,
               cursor: ((!gpsData && !angPointALatLon) || filteredWindLayers.length < 2 || angCalculating) ? 'not-allowed' : 'pointer',
               opacity: ((!gpsData && !angPointALatLon) || filteredWindLayers.length < 2 || angCalculating) ? 0.5 : 1,
@@ -3884,7 +3965,7 @@ export function NavigationPanel() {
                   borderRadius: '8px', padding: '10px', marginBottom: '8px',
                   border: '1px solid rgba(168, 85, 247, 0.2)'
                 }}>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '6px' }}>
                     {angSelectedAlt === -1 ? 'Beste Option' : `Alternative ${angSelectedAlt + 1}`}
                   </div>
 
@@ -3894,14 +3975,14 @@ export function NavigationPanel() {
                   </div>
 
                   {/* Bearing Info */}
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, marginBottom: '8px' }}>
                     Leg 2 Bearing: {selected.bearingAtoB}° | A→B: {(selected.distanceAB / 1000).toFixed(1)} km
                   </div>
 
                   {/* Leg 1 = vorgegebene Richtung (nur Info) */}
                   <div style={{
                     borderLeft: '2px solid rgba(168,85,247,0.5)', paddingLeft: '6px',
-                    fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '6px'
+                    fontSize: '11px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '6px'
                   }}>
                     <span style={{ color: '#a855f7', fontSize: '9px', fontWeight: 700 }}>LEG 1 (vorgegeben) = {angSetDir}°</span>
                   </div>
@@ -3909,14 +3990,14 @@ export function NavigationPanel() {
                   {/* Leg 2 = Empfehlung */}
                   <div style={{
                     borderLeft: '2px solid rgba(34,197,94,0.5)', paddingLeft: '6px',
-                    fontSize: '11px', color: 'rgba(255,255,255,0.7)', marginBottom: '8px'
+                    fontSize: '11px', color: `rgba(255,255,255,${o.textSec})`, marginBottom: '8px'
                   }}>
                     <span style={{ color: '#22c55e', fontSize: '9px', fontWeight: 700 }}>LEG 2 = {selected.bearingAtoB}°</span><br/>
                     {fmtAlt(selected.leg2Altitude)} {altUnit} MSL<br/>
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
+                    <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
                       Wind: {selected.leg2Wind.direction}° / {selected.leg2Wind.speedKmh} km/h
                     </span><br/>
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
+                    <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
                       {Math.round(selected.leg2Time / 60)} Min | {(selected.distanceAB / 1000).toFixed(1)} km
                     </span>
                   </div>
@@ -3936,7 +4017,7 @@ export function NavigationPanel() {
                 {/* Alternativen */}
                 {angResult.alternatives.length > 0 && (
                   <div>
-                    <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '4px' }}>
                       Alternativen
                     </div>
                     {angResult.alternatives.map((alt, idx) => (
@@ -3960,8 +4041,8 @@ export function NavigationPanel() {
                           borderRadius: '6px', border: 'none',
                           background: angSelectedAlt === idx
                             ? 'rgba(168, 85, 247, 0.15)'
-                            : 'rgba(255,255,255,0.03)',
-                          color: angSelectedAlt === idx ? '#a855f7' : 'rgba(255,255,255,0.5)',
+                            : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+                          color: angSelectedAlt === idx ? '#a855f7' : `rgba(255,255,255,${o.textMuted})`,
                           fontSize: '10px', cursor: 'pointer', textAlign: 'left',
                           display: 'flex', justifyContent: 'space-between'
                         }}
@@ -3977,6 +4058,7 @@ export function NavigationPanel() {
           })()}
         </div>
       )}
+
 
     </>
   )

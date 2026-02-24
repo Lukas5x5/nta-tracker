@@ -16,7 +16,7 @@ import type { Task, ProhibitedZone } from '../shared/types'
 import { latLonToUTM } from './utils/coordinatesWGS84'
 
 // Aktuelle App-Version (muss bei jedem Release angepasst werden)
-const APP_VERSION = '1.1.2'
+const APP_VERSION = '1.2.0'
 
 // Haversine-Distanzberechnung (Meter)
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -311,7 +311,10 @@ function App() {
 
     root.style.setProperty('--header-height', `${headerHeight}px`)
     root.style.setProperty('--nav-panel-scale', `${navPanelScale}`)
-  }, [settings.headerHeight, settings.navPanelScale])
+
+    // Outdoor-Modus CSS-Klasse
+    root.classList.toggle('outdoor-mode', !!settings.outdoorMode)
+  }, [settings.headerHeight, settings.navPanelScale, settings.outdoorMode])
 
   // Zeige Benachrichtigung sofort wenn Verbindung verloren geht
   useEffect(() => {
@@ -1256,6 +1259,7 @@ function App() {
           gridSnapping={gridSnapping}
           gridSize={settings.gridSize || 100}
           startPointTrigger={startPointTrigger}
+          onToggleBriefing={() => setBriefingOpen(prev => !prev)}
         />
       </main>
 

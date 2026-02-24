@@ -13,7 +13,7 @@
 
 export interface ParsedTask {
   taskNumber: number
-  taskType: string  // PDG, FIN, HWZ, 3DT, JDG, FON, etc.
+  taskType: string  // PDG, FIN, HWZ, JDG, FON, etc.
   taskName: string  // Regel-Name (z.B. "Selbst Gewähltes Ziel")
   goals: ParsedGoal[]
   mma: number  // 0 wenn nicht angegeben
@@ -26,10 +26,6 @@ export interface ParsedTask {
   endTime: string | null  // z.B. "0830 loc."
   needsUserInput: boolean  // true wenn Koordinaten fehlen
   isCancelled?: boolean  // Task wurde storniert
-  // Spezielle Felder für 3DT
-  is3DT?: boolean
-  innerRadius?: number  // in km
-  outerRadius?: number  // in km
   // Spezielle Felder für APT (Altitude Profile Task)
   aptProfilePoints?: { timeMinutes: number; altitudeFt: number }[]
   aptLayerAFt?: number  // Layer A Toleranz in Feet
@@ -220,12 +216,12 @@ export function parseTasksheetText(text: string): TasksheetParseResult {
 
     // Bekannte Task-Typen
     const validTaskTypes = ['PDG', 'JDG', 'HWZ', 'FIN', 'FON', 'HNH', 'WSD', 'GBM', 'CRT', 'RTA',
-                           'ELB', 'LRN', 'MDT', 'MDD', 'XDI', 'XDT', 'XDD', 'ANG', 'SFL', '3DT', 'LTT', 'MTT', 'APT']
+                           'ELB', 'LRN', 'MDT', 'MDD', 'XDI', 'XDT', 'XDD', 'ANG', 'SFL', 'LTT', 'MTT', 'APT']
 
     // Tasks extrahieren - mehrere Patterns probieren
     // Speichere auch die Start-Position für jeden Task
     const taskPatterns = [
-      // "Aufgabe 4 PDG" oder "Task 4 PDG" oder "Aufgabe 7 3DT"
+      // "Aufgabe 4 PDG" oder "Task 4 PDG"
       // Auch mit Bindestrich: "Task 1 - HWZ" oder "Task 2 - HWZ"
       /(?:Aufgabe|Task)\s*(\d{1,2})\s*[-–]?\s*(\d?[A-Z]{2,3})/gi,
       // "4. PDG" oder "4 PDG" (nur am Zeilenanfang oder nach Leerzeichen)
@@ -347,34 +343,6 @@ function parseIndividualTask(
   } else if (taskType === 'PDG' || taskType === 'FON') {
     // PDG und FON: Pilot deklariert selbst - keine vorgegebenen Koordinaten
     coords = []
-  } else if (taskType === '3DT') {
-    // 3DT: Keine Zielkoordinaten - Pilot deklariert den Mittelpunkt selbst
-    task.is3DT = true
-    coords = []
-
-    // Extrahiere Radien
-    const innerMatch = taskSection.match(/(?:inner\s*(?:circle)?|Innenkreis)[:\s]*(?:radius\s*)?(\d+)\s*km/i)
-    if (innerMatch) {
-      task.innerRadius = parseInt(innerMatch[1])
-      console.log(`[parseIndividualTask] 3DT: Innenradius: ${task.innerRadius}km`)
-    }
-
-    const outerMatch = taskSection.match(/(?:outer\s*(?:circle)?|(?:Aussenkreis|Außenkreis))[:\s]*(?:radius\s*)?(\d+)\s*km/i)
-    if (outerMatch) {
-      task.outerRadius = parseInt(outerMatch[1])
-      console.log(`[parseIndividualTask] 3DT: Außenradius: ${task.outerRadius}km`)
-    }
-
-    // Alternative: "R 1km" und "R 2km" Format
-    if (!task.innerRadius || !task.outerRadius) {
-      const radiiMatches = taskSection.match(/R\s*(\d+)\s*km/gi)
-      if (radiiMatches && radiiMatches.length >= 2) {
-        const radii = radiiMatches.map(m => parseInt(m.replace(/R\s*/i, '')))
-        task.innerRadius = Math.min(...radii)
-        task.outerRadius = Math.max(...radii)
-        console.log(`[parseIndividualTask] 3DT: Radien aus R-Format: ${task.innerRadius}km / ${task.outerRadius}km`)
-      }
-    }
   } else if (taskType === 'APT') {
     // APT: Altitude Profile Task - Höhenprofil-Punkte und Layer-Toleranzen extrahieren
     coords = []  // APT hat keine Zielkoordinaten
@@ -548,7 +516,7 @@ function parseIndividualTask(
   }
 
   // Prüfen ob User-Input benötigt wird
-  // PDG, FON, 3DT und andere ohne Koordinaten brauchen User-Input
+  // PDG, FON und andere ohne Koordinaten brauchen User-Input
   if (task.goals.length === 0 && !task.isCancelled) {
     task.needsUserInput = true
   }
@@ -695,7 +663,6 @@ export const TASK_TYPE_NAMES: Record<string, string> = {
   'HWZ': 'Hesitation Waltz',
   'FIN': 'Fly In',
   'FON': 'Fly On',
-  '3DT': '3D Task',
   'CRT': 'Calculated Rate of Approach',
   'RTA': 'Race to an Area',
   'ELB': 'Elbow',

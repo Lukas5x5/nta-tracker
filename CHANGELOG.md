@@ -1,8 +1,33 @@
 # Changelog
 
 ## [Unveröffentlicht]
-- Update-Popup: Neues professionelles Design mit blauem Header, Bullet-Point Changelog, Hover-Effekten
-- Update-System: testUserIds-Filter für gezieltes Rollout über Supabase
+
+## [1.2.0] - 2026-02-24
+
+### Neue Features
+- Outdoor-Modus (SUN-Button im Header): High-Contrast Modus für bessere Lesbarkeit bei Sonneneinstrahlung. Alle Panels passen sich dynamisch an. Einstellung wird gespeichert
+- Timer & Wecker in Stoppuhr: Drei Tabs – Stoppuhr, Timer (Countdown mit Quick-Buttons) und Wecker (Alarm bei Uhrzeit). Akustischer Alarm mit einstellbarer Lautstärke
+- Gas-Tracker: Schwebendes Panel mit SVG-Ballonkorb und bis zu 4 Gasflaschen. Live-Füllstand, Klick zum Aktivieren, Hover für Restliter/Restzeit. Konfiguration unter Einstellungen → Gas
+- Funktionstasten (F1-F12): Unter Einstellungen → F-Tasten belegbar mit Marker Drop, Stoppuhr, Gas-Tracker, Tool-Panels, Wind-Panel, Briefing u.v.m.
+- Schichtdicke beim Windimport: Filter im Import-Dialog (Alle / 100ft / 200ft / 500ft) – behält nur Schichten im gewählten Höhenraster
+- Kurslinien – "Von aktueller Position": GPS-Position direkt als Startpunkt übernehmen ohne Karten-Klick
+
+### Verbesserungen
+- Update-Popup: Neues Design mit blauem Header, Bullet-Point Changelog, Hover-Effekten
+- Admin-Panel: Crew zeigt Zugangsdaten (Benutzername + Passwort) statt Lizenzschlüssel
+- Karten-Cursor: Standard-Windows-Pfeil statt Leaflet-Hand – präziseres Klicken
+- Windimport: Automatische Einheiten-Erkennung aus Datei-Header (ft/m, MSL/AGL, km/h/m/s/kts, True/Magnetic, Ground Level). Manuelle Einheiten-Buttons entfernt – Vorschau zeigt Werte in App-Anzeigeeinheiten
+
+### Bugfixes
+- Vario-Einheit in Landeprognose und PDG/FON-Tool zeigt jetzt korrekt m/s oder fpm je nach Einstellung
+- Stoppuhr-Label korrigiert (war fälschlicherweise "Timer")
+- Windrichtungs-Anzeige (von/nach) überall korrekt – Windpfeile, Windlinien und Schicht-Visualisierung
+- PDG/FON-Tool zeigt "Sinkrate" statt "Steigrate" wenn Sinken ausgewählt
+- Tasks automatisch nach Task-Nummer sortiert
+- Kurslinie "Position ändern" funktioniert jetzt korrekt (nicht nur Erstpositionierung)
+- Heartbeat-Lizenzprüfung loggt nicht mehr bei kurzer Supabase-Unterbrechung aus
+- Kartenposition wird nach Re-Login wiederhergestellt statt Default-Position
+
 
 ## [1.1.2] - 2026-02-18
 - Fix: Update-Download EBUSY-Fehler – Datei wird jetzt zuverlässig geschlossen bevor der Installer startet

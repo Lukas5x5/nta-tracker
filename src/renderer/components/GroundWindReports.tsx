@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useTeamStore } from '../stores/teamStore'
+import { useFlightStore } from '../stores/flightStore'
 
 interface GroundWindReport {
   id: string
@@ -56,6 +57,7 @@ interface GroundWindReportsProps {
 
 export function GroundWindReports({ scale = 1, onClose }: GroundWindReportsProps) {
   const { session } = useTeamStore()
+  const settings = useFlightStore(s => s.settings)
   const [reports, setReports] = useState<GroundWindReport[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -346,7 +348,7 @@ export function GroundWindReports({ scale = 1, onClose }: GroundWindReportsProps
                       stroke="#3b82f6"
                       strokeWidth="2"
                       style={{
-                        transform: `rotate(${report.wind_direction + 180}deg)`
+                        transform: `rotate(${settings.windDirectionMode === 'from' ? report.wind_direction : (report.wind_direction + 180) % 360}deg)`
                       }}
                     >
                       <path d="M12 19V5M5 12l7-7 7 7" />

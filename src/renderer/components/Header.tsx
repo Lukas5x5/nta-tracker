@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { getOutdoor } from '../utils/outdoorStyles'
 import { useFlightStore } from '../stores/flightStore'
 import { ConnectionModal } from './ConnectionModal'
 import { TaskSettingsPanel } from './TaskSettingsPanel'
@@ -29,7 +30,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
   const [showWindsPanel, setShowWindsPanel] = useState(false)
   const {
     isConnected, deviceName, isRecording, startRecording, stopRecording,
-    tasks, activeTask, setActiveTask, setSelectedGoal, windLayers, settings,
+    tasks, activeTask, setActiveTask, setSelectedGoal, windLayers, settings, updateSettings,
     track, clearFlightData, recordingStartTime, prohibitedZones, clearProhibitedZones,
     markers, hdgCourseLines, windLines, scoringAreas,
     clearAllMarkers, clearWindLayers, clearAllHdgCourseLines, clearAllWindLines, clearAllScoringAreas,
@@ -177,12 +178,15 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
   const iconSize = Math.round(18 * scale)
   const showLabels = scale >= 0.75
 
+  // ─── Outdoor-Modus Opacities ─────────────────────────────
+  const o = getOutdoor(settings.outdoorMode)
+
   // ─── Separator ────────────────────────────────────────────
   const Separator = () => (
     <div style={{
       width: '1px',
       height: `${Math.round(headerHeight * 0.5)}px`,
-      background: 'rgba(255,255,255,0.08)',
+      background: `rgba(255,255,255,${o.border})`,
       flexShrink: 0,
       margin: `0 ${Math.round(4 * scale)}px`
     }} />
@@ -226,7 +230,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
     border: 'none',
     borderRadius: `${Math.round(4 * scale)}px`,
     background: active ? `${accent}18` : 'transparent',
-    color: active ? accent : 'rgba(255,255,255,0.45)',
+    color: active ? accent : `rgba(255,255,255,${o.text})`,
     cursor: 'pointer',
     position: 'relative',
     transition: 'all 0.15s',
@@ -247,7 +251,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
     padding: `${Math.round(10 * scale)}px ${Math.round(14 * scale)}px`,
     border: 'none',
     background: 'transparent',
-    color: 'rgba(255,255,255,0.7)',
+    color: `rgba(255,255,255,${o.textSec})`,
     fontSize: `${Math.round(13 * scale)}px`,
     cursor: 'pointer',
     textAlign: 'left',
@@ -259,8 +263,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
     <header style={{
       height: `${headerHeight}px`,
       minHeight: `${headerHeight}px`,
-      background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
-      borderBottom: '1px solid rgba(255,255,255,0.08)',
+      background: o.on ? 'linear-gradient(180deg, #2d3a4f 0%, #1a2538 100%)' : 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+      borderBottom: `1px solid rgba(255,255,255,${o.border})`,
       display: 'flex',
       alignItems: 'center',
       padding: `0 ${Math.round(8 * scale)}px`,
@@ -343,9 +347,9 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
             gap: `${Math.round(2 * scale)}px`,
             alignItems: 'center',
             padding: `${Math.round(3 * scale)}px ${Math.round(6 * scale)}px`,
-            background: 'rgba(0,0,0,0.3)',
+            background: `rgba(0,0,0,${o.bg})`,
             borderRadius: `${Math.round(6 * scale)}px`,
-            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.3)',
+            boxShadow: `inset 0 1px 3px rgba(0,0,0,${o.bg})`,
             maxWidth: '100%',
             overflowX: 'auto',
             overflowY: 'hidden',
@@ -378,8 +382,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                     borderRadius: `${Math.round(4 * scale)}px`,
                     border: 'none',
                     borderLeft: isActive ? 'none' : `3px solid ${taskColor}`,
-                    background: isActive ? taskColor : 'rgba(255,255,255,0.06)',
-                    color: isActive ? '#fff' : 'rgba(255,255,255,0.75)',
+                    background: isActive ? taskColor : `rgba(255,255,255,${o.on ? 0.12 : 0.06})`,
+                    color: isActive ? '#fff' : `rgba(255,255,255,${o.on ? 0.95 : 0.75})`,
                     fontSize: `${Math.round(12 * scale)}px`,
                     fontWeight: isActive ? 600 : 500,
                     cursor: 'pointer',
@@ -437,7 +441,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
           title="Live Team Tracking"
           style={{
             ...toggleStyle(teamOpen, teamSession ? '#22c55e' : '#3b82f6'),
-            color: teamOpen ? '#3b82f6' : teamSession ? '#22c55e' : 'rgba(255,255,255,0.45)'
+            color: teamOpen ? '#3b82f6' : teamSession ? '#22c55e' : `rgba(255,255,255,${o.text})`
           }}
         >
           <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -498,7 +502,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
           width: Math.round(8 * scale),
           height: Math.round(8 * scale),
           borderRadius: '50%',
-          background: isConnected ? '#22c55e' : 'rgba(255,255,255,0.2)',
+          background: isConnected ? '#22c55e' : `rgba(255,255,255,${o.on ? 0.4 : 0.2})`,
           boxShadow: isConnected ? '0 0 6px #22c55e' : 'none',
           flexShrink: 0
         }} />
@@ -509,6 +513,26 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
 
       {/* ═══ Zone 8: User Menu + Settings ═══ */}
       <div style={{ display: 'flex', gap: `${Math.round(3 * scale)}px`, alignItems: 'center', flexShrink: 0 }}>
+        {/* Outdoor Mode Toggle */}
+        <button
+          onClick={() => updateSettings({ outdoorMode: !settings.outdoorMode })}
+          title={settings.outdoorMode ? 'Outdoor-Modus deaktivieren' : 'Outdoor-Modus (hoher Kontrast)'}
+          style={toggleStyle(!!settings.outdoorMode, '#f59e0b')}
+        >
+          <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+          {showLabels && <span>SUN</span>}
+        </button>
+
         {/* User Dropdown */}
         {authUser && (
           <button
@@ -603,7 +627,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         }} onClick={() => setShowStopRecConfirm(false)}>
           <div
             style={{
-              background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+              background: o.on ? 'linear-gradient(135deg, #2d3a4f 0%, #1a2538 100%)' : 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
               borderRadius: '16px',
               border: '1px solid rgba(239, 68, 68, 0.3)',
               padding: '24px',
@@ -620,7 +644,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
             <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>
               Aufzeichnung beenden?
             </div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px', lineHeight: 1.5 }}>
+            <div style={{ fontSize: '12px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '20px', lineHeight: 1.5 }}>
               Die GPS-Aufzeichnung wird gestoppt. Der bisherige Track bleibt erhalten.
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -629,10 +653,10 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                 style={{
                   flex: 1,
                   padding: '10px',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: `rgba(255,255,255,${o.on ? 0.18 : 0.1})`,
                   border: 'none',
                   borderRadius: '8px',
-                  color: 'rgba(255,255,255,0.7)',
+                  color: `rgba(255,255,255,${o.textSec})`,
                   fontSize: '13px',
                   fontWeight: 600,
                   cursor: 'pointer'
@@ -674,7 +698,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         }} onClick={() => setShowUnsavedTrackWarning(false)}>
           <div
             style={{
-              background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+              background: o.on ? 'linear-gradient(135deg, #2d3a4f 0%, #1a2538 100%)' : 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
               borderRadius: '16px',
               border: '1px solid rgba(245, 158, 11, 0.3)',
               padding: '24px',
@@ -692,7 +716,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
             <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>
               Ungespeicherter Track vorhanden
             </div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px', lineHeight: 1.5 }}>
+            <div style={{ fontSize: '12px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '20px', lineHeight: 1.5 }}>
               Es gibt einen Track mit <strong style={{ color: '#f59e0b' }}>{track.length} Punkten</strong>, der noch nicht gespeichert wurde.
               Wenn du eine neue Aufzeichnung startest, wird der aktuelle Track überschrieben.
             </div>
@@ -702,10 +726,10 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                 style={{
                   flex: 1,
                   padding: '10px',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: `rgba(255,255,255,${o.on ? 0.18 : 0.1})`,
                   border: 'none',
                   borderRadius: '8px',
-                  color: 'rgba(255,255,255,0.7)',
+                  color: `rgba(255,255,255,${o.textSec})`,
                   fontSize: '13px',
                   fontWeight: 600,
                   cursor: 'pointer'
@@ -751,7 +775,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         }} onClick={() => setShowClearConfirm(false)}>
           <div
             style={{
-              background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+              background: o.on ? 'linear-gradient(135deg, #2d3a4f 0%, #1a2538 100%)' : 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
               borderRadius: '16px',
               border: '1px solid rgba(239, 68, 68, 0.3)',
               padding: '24px',
@@ -769,7 +793,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
             <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: '8px', textAlign: 'center' }}>
               Daten loeschen
             </div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '16px', lineHeight: 1.5, textAlign: 'center' }}>
+            <div style={{ fontSize: '12px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '16px', lineHeight: 1.5, textAlign: 'center' }}>
               Waehle aus, welche Daten geloescht werden sollen:
             </div>
 
@@ -781,8 +805,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                 alignItems: 'center',
                 gap: '10px',
                 padding: '8px 12px',
-                background: clearTasks ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${clearTasks ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                background: clearTasks ? 'rgba(239, 68, 68, 0.1)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+                border: `1px solid ${clearTasks ? 'rgba(239, 68, 68, 0.3)' : `rgba(255,255,255,${o.border})`}`,
                 borderRadius: '6px',
                 cursor: 'pointer',
                 transition: 'all 0.15s'
@@ -793,10 +817,10 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                   onChange={e => setClearTasks(e.target.checked)}
                   style={{ width: '16px', height: '16px', accentColor: '#ef4444' }}
                 />
-                <span style={{ flex: 1, fontSize: '12px', color: clearTasks ? '#fff' : 'rgba(255,255,255,0.6)' }}>
+                <span style={{ flex: 1, fontSize: '12px', color: clearTasks ? '#fff' : `rgba(255,255,255,${o.on ? 0.92 : 0.6})` }}>
                   Tasks
                 </span>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+                <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textDim})` }}>
                   {tasks.length}
                 </span>
               </label>
@@ -807,8 +831,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                 alignItems: 'center',
                 gap: '10px',
                 padding: '8px 12px',
-                background: clearTrack ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${clearTrack ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                background: clearTrack ? 'rgba(239, 68, 68, 0.1)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+                border: `1px solid ${clearTrack ? 'rgba(239, 68, 68, 0.3)' : `rgba(255,255,255,${o.border})`}`,
                 borderRadius: '6px',
                 cursor: 'pointer',
                 transition: 'all 0.15s'
@@ -819,10 +843,10 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                   onChange={e => setClearTrack(e.target.checked)}
                   style={{ width: '16px', height: '16px', accentColor: '#ef4444' }}
                 />
-                <span style={{ flex: 1, fontSize: '12px', color: clearTrack ? '#fff' : 'rgba(255,255,255,0.6)' }}>
+                <span style={{ flex: 1, fontSize: '12px', color: clearTrack ? '#fff' : `rgba(255,255,255,${o.on ? 0.92 : 0.6})` }}>
                   Track
                 </span>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+                <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textDim})` }}>
                   {track.length} Punkte
                 </span>
               </label>
@@ -833,8 +857,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                 alignItems: 'center',
                 gap: '10px',
                 padding: '8px 12px',
-                background: clearMarkers ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${clearMarkers ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                background: clearMarkers ? 'rgba(239, 68, 68, 0.1)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+                border: `1px solid ${clearMarkers ? 'rgba(239, 68, 68, 0.3)' : `rgba(255,255,255,${o.border})`}`,
                 borderRadius: '6px',
                 cursor: 'pointer',
                 transition: 'all 0.15s'
@@ -845,10 +869,10 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                   onChange={e => setClearMarkers(e.target.checked)}
                   style={{ width: '16px', height: '16px', accentColor: '#ef4444' }}
                 />
-                <span style={{ flex: 1, fontSize: '12px', color: clearMarkers ? '#fff' : 'rgba(255,255,255,0.6)' }}>
+                <span style={{ flex: 1, fontSize: '12px', color: clearMarkers ? '#fff' : `rgba(255,255,255,${o.on ? 0.92 : 0.6})` }}>
                   Marker
                 </span>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+                <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textDim})` }}>
                   {markers.length}
                 </span>
               </label>
@@ -859,8 +883,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                 alignItems: 'center',
                 gap: '10px',
                 padding: '8px 12px',
-                background: clearWind ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${clearWind ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                background: clearWind ? 'rgba(239, 68, 68, 0.1)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+                border: `1px solid ${clearWind ? 'rgba(239, 68, 68, 0.3)' : `rgba(255,255,255,${o.border})`}`,
                 borderRadius: '6px',
                 cursor: 'pointer',
                 transition: 'all 0.15s'
@@ -871,10 +895,10 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                   onChange={e => setClearWind(e.target.checked)}
                   style={{ width: '16px', height: '16px', accentColor: '#ef4444' }}
                 />
-                <span style={{ flex: 1, fontSize: '12px', color: clearWind ? '#fff' : 'rgba(255,255,255,0.6)' }}>
+                <span style={{ flex: 1, fontSize: '12px', color: clearWind ? '#fff' : `rgba(255,255,255,${o.on ? 0.92 : 0.6})` }}>
                   Windschichten & Windlinien
                 </span>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+                <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textDim})` }}>
                   {windLayers.length} + {windLines.length}
                 </span>
               </label>
@@ -885,8 +909,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                 alignItems: 'center',
                 gap: '10px',
                 padding: '8px 12px',
-                background: clearCourseLines ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${clearCourseLines ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                background: clearCourseLines ? 'rgba(239, 68, 68, 0.1)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+                border: `1px solid ${clearCourseLines ? 'rgba(239, 68, 68, 0.3)' : `rgba(255,255,255,${o.border})`}`,
                 borderRadius: '6px',
                 cursor: 'pointer',
                 transition: 'all 0.15s'
@@ -897,10 +921,10 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                   onChange={e => setClearCourseLines(e.target.checked)}
                   style={{ width: '16px', height: '16px', accentColor: '#ef4444' }}
                 />
-                <span style={{ flex: 1, fontSize: '12px', color: clearCourseLines ? '#fff' : 'rgba(255,255,255,0.6)' }}>
+                <span style={{ flex: 1, fontSize: '12px', color: clearCourseLines ? '#fff' : `rgba(255,255,255,${o.on ? 0.92 : 0.6})` }}>
                   Kurslinien
                 </span>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+                <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textDim})` }}>
                   {hdgCourseLines.length}
                 </span>
               </label>
@@ -911,8 +935,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                 alignItems: 'center',
                 gap: '10px',
                 padding: '8px 12px',
-                background: clearScoringAreas ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${clearScoringAreas ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                background: clearScoringAreas ? 'rgba(239, 68, 68, 0.1)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+                border: `1px solid ${clearScoringAreas ? 'rgba(239, 68, 68, 0.3)' : `rgba(255,255,255,${o.border})`}`,
                 borderRadius: '6px',
                 cursor: 'pointer',
                 transition: 'all 0.15s'
@@ -923,10 +947,10 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                   onChange={e => setClearScoringAreas(e.target.checked)}
                   style={{ width: '16px', height: '16px', accentColor: '#ef4444' }}
                 />
-                <span style={{ flex: 1, fontSize: '12px', color: clearScoringAreas ? '#fff' : 'rgba(255,255,255,0.6)' }}>
+                <span style={{ flex: 1, fontSize: '12px', color: clearScoringAreas ? '#fff' : `rgba(255,255,255,${o.on ? 0.92 : 0.6})` }}>
                   Scoring Areas
                 </span>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+                <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textDim})` }}>
                   {scoringAreas.length}
                 </span>
               </label>
@@ -939,8 +963,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                     alignItems: 'center',
                     gap: '10px',
                     padding: '8px 12px',
-                    background: clearPZAlso ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${clearPZAlso ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.08)'}`,
+                    background: clearPZAlso ? 'rgba(239, 68, 68, 0.1)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+                    border: `1px solid ${clearPZAlso ? 'rgba(239, 68, 68, 0.3)' : `rgba(255,255,255,${o.border})`}`,
                     borderRadius: '6px',
                     cursor: 'pointer',
                     transition: 'all 0.15s'
@@ -951,14 +975,14 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                       onChange={e => setClearPZAlso(e.target.checked)}
                       style={{ width: '16px', height: '16px', accentColor: '#ef4444' }}
                     />
-                    <span style={{ flex: 1, fontSize: '12px', color: clearPZAlso ? '#fff' : 'rgba(255,255,255,0.6)' }}>
+                    <span style={{ flex: 1, fontSize: '12px', color: clearPZAlso ? '#fff' : `rgba(255,255,255,${o.on ? 0.92 : 0.6})` }}>
                       Sperrgebiete (PZ)
                     </span>
-                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+                    <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textDim})` }}>
                       {prohibitedZones.length}
                     </span>
                   </label>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: '4px', marginLeft: '12px' }}>
+                  <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textDim})`, marginTop: '4px', marginLeft: '12px' }}>
                     ℹ️ Nur lokale Anzeige - bleiben in der Meisterschaft gespeichert
                   </div>
                 </div>
@@ -980,10 +1004,10 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                 style={{
                   flex: 1,
                   padding: '6px',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
+                  border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   borderRadius: '4px',
-                  color: 'rgba(255,255,255,0.5)',
+                  color: `rgba(255,255,255,${o.textMuted})`,
                   fontSize: '11px',
                   cursor: 'pointer'
                 }}
@@ -1003,10 +1027,10 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                 style={{
                   flex: 1,
                   padding: '6px',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
+                  border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
                   borderRadius: '4px',
-                  color: 'rgba(255,255,255,0.5)',
+                  color: `rgba(255,255,255,${o.textMuted})`,
                   fontSize: '11px',
                   cursor: 'pointer'
                 }}
@@ -1021,10 +1045,10 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                 style={{
                   flex: 1,
                   padding: '10px',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: `rgba(255,255,255,${o.on ? 0.18 : 0.1})`,
                   border: 'none',
                   borderRadius: '8px',
-                  color: 'rgba(255,255,255,0.7)',
+                  color: `rgba(255,255,255,${o.textSec})`,
                   fontSize: '13px',
                   fontWeight: 600,
                   cursor: 'pointer'
@@ -1088,7 +1112,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         }} onClick={() => setShowHgtWarning(false)}>
           <div
             style={{
-              background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+              background: o.on ? 'linear-gradient(135deg, #2d3a4f 0%, #1a2538 100%)' : 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
               borderRadius: '16px',
               border: '1px solid rgba(245, 158, 11, 0.3)',
               padding: '24px',
@@ -1106,7 +1130,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
             <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>
               Keine HGT-Hoehenmodelldatei
             </div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginBottom: '20px', lineHeight: 1.6 }}>
+            <div style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, marginBottom: '20px', lineHeight: 1.6 }}>
               Fuer den Startpunkt des Tracks ist keine HGT-Datei geladen.
               Die 3D-Darstellung wird ungenau sein - der Track koennte ueber oder unter dem Boden schweben.
               <br /><br />
@@ -1118,10 +1142,10 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
                 style={{
                   flex: 1,
                   padding: '10px',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: `rgba(255,255,255,${o.on ? 0.18 : 0.1})`,
                   border: 'none',
                   borderRadius: '8px',
-                  color: 'rgba(255,255,255,0.7)',
+                  color: `rgba(255,255,255,${o.textSec})`,
                   fontSize: '13px',
                   fontWeight: 600,
                   cursor: 'pointer'
@@ -1174,8 +1198,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
           top: `${menuPos.top}px`,
           right: `${menuPos.right}px`,
           minWidth: `${Math.round(200 * scale)}px`,
-          background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-          border: '1px solid rgba(255,255,255,0.15)',
+          background: o.on ? 'linear-gradient(135deg, #2d3a4f 0%, #1a2538 100%)' : 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+          border: `1px solid rgba(255,255,255,${o.borderStrong})`,
           borderRadius: `${Math.round(8 * scale)}px`,
           boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
           zIndex: 10001,
@@ -1186,9 +1210,9 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         {/* User Name Header */}
         <div style={{
           padding: `${Math.round(10 * scale)}px ${Math.round(14 * scale)}px`,
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          borderBottom: `1px solid rgba(255,255,255,${o.border})`,
           fontSize: `${Math.round(13 * scale)}px`,
-          color: 'rgba(255,255,255,0.4)',
+          color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis'
@@ -1202,7 +1226,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
             <button
               onClick={() => { setShowAdminPanel(true); setShowUserMenu(false) }}
               style={{ ...dropdownItem, color: '#a855f7' }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+              onMouseEnter={e => (e.currentTarget.style.background = `rgba(255,255,255,${o.on ? 0.12 : 0.05})`)}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
               <svg width={Math.round(16 * scale)} height={Math.round(16 * scale)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1216,7 +1240,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
             <button
               onClick={() => { setShowRegionDownload(true); setShowUserMenu(false) }}
               style={{ ...dropdownItem, color: '#22c55e' }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+              onMouseEnter={e => (e.currentTarget.style.background = `rgba(255,255,255,${o.on ? 0.12 : 0.05})`)}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
               <svg width={Math.round(16 * scale)} height={Math.round(16 * scale)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1234,7 +1258,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
           <button
             onClick={() => { onShowUpdate(); setShowUserMenu(false) }}
             style={{ ...dropdownItem, color: '#3b82f6' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+            onMouseEnter={e => (e.currentTarget.style.background = `rgba(255,255,255,${o.on ? 0.12 : 0.05})`)}
             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           >
             <svg width={Math.round(16 * scale)} height={Math.round(16 * scale)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1250,7 +1274,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         <button
           onClick={() => { logout(); setShowUserMenu(false) }}
           style={{ ...dropdownItem, color: '#ef4444' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+          onMouseEnter={e => (e.currentTarget.style.background = `rgba(255,255,255,${o.on ? 0.12 : 0.05})`)}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >
           <svg width={Math.round(16 * scale)} height={Math.round(16 * scale)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1272,8 +1296,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
           top: `${toolsMenuPos.top}px`,
           left: `${toolsMenuPos.left}px`,
           minWidth: `${Math.round(180 * scale)}px`,
-          background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-          border: '1px solid rgba(255,255,255,0.15)',
+          background: o.on ? 'linear-gradient(135deg, #2d3a4f 0%, #1a2538 100%)' : 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+          border: `1px solid rgba(255,255,255,${o.borderStrong})`,
           borderRadius: `${Math.round(8 * scale)}px`,
           boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
           zIndex: 10001,
@@ -1284,8 +1308,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         {/* Marker Drop */}
         <button
           onClick={() => { setActiveToolPanel(activeToolPanel === 'marker' ? null : 'marker'); setShowToolsDropdown(false) }}
-          style={{ ...dropdownItem, color: activeToolPanel === 'marker' ? '#ef4444' : 'rgba(255,255,255,0.7)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+          style={{ ...dropdownItem, color: activeToolPanel === 'marker' ? '#ef4444' : `rgba(255,255,255,${o.textSec})` }}
+          onMouseEnter={e => (e.currentTarget.style.background = `rgba(255,255,255,${o.on ? 0.12 : 0.05})`)}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >
           <svg width={Math.round(16 * scale)} height={Math.round(16 * scale)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1298,8 +1322,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         {/* Steigpunkt (FLY) */}
         <button
           onClick={() => { setActiveToolPanel(activeToolPanel === 'fly' ? null : 'fly'); setShowToolsDropdown(false) }}
-          style={{ ...dropdownItem, color: activeToolPanel === 'fly' ? '#22c55e' : 'rgba(255,255,255,0.7)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+          style={{ ...dropdownItem, color: activeToolPanel === 'fly' ? '#22c55e' : `rgba(255,255,255,${o.textSec})` }}
+          onMouseEnter={e => (e.currentTarget.style.background = `rgba(255,255,255,${o.on ? 0.12 : 0.05})`)}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >
           <svg width={Math.round(16 * scale)} height={Math.round(16 * scale)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1311,8 +1335,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         {/* Landeprognose (LND) */}
         <button
           onClick={() => { setActiveToolPanel(activeToolPanel === 'lnd' ? null : 'lnd'); setShowToolsDropdown(false) }}
-          style={{ ...dropdownItem, color: activeToolPanel === 'lnd' ? '#f59e0b' : 'rgba(255,255,255,0.7)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+          style={{ ...dropdownItem, color: activeToolPanel === 'lnd' ? '#f59e0b' : `rgba(255,255,255,${o.textSec})` }}
+          onMouseEnter={e => (e.currentTarget.style.background = `rgba(255,255,255,${o.on ? 0.12 : 0.05})`)}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >
           <svg width={Math.round(16 * scale)} height={Math.round(16 * scale)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1324,8 +1348,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         {/* Land Run (LRN) */}
         <button
           onClick={() => { setActiveToolPanel(activeToolPanel === 'lrn' ? null : 'lrn'); setShowToolsDropdown(false) }}
-          style={{ ...dropdownItem, color: activeToolPanel === 'lrn' ? '#3b82f6' : 'rgba(255,255,255,0.7)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+          style={{ ...dropdownItem, color: activeToolPanel === 'lrn' ? '#3b82f6' : `rgba(255,255,255,${o.textSec})` }}
+          onMouseEnter={e => (e.currentTarget.style.background = `rgba(255,255,255,${o.on ? 0.12 : 0.05})`)}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >
           <svg width={Math.round(16 * scale)} height={Math.round(16 * scale)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1337,8 +1361,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         {/* APT (Altitude Profile) */}
         <button
           onClick={() => { setActiveToolPanel(activeToolPanel === 'apt' ? null : 'apt'); setShowToolsDropdown(false) }}
-          style={{ ...dropdownItem, color: activeToolPanel === 'apt' ? '#06b6d4' : 'rgba(255,255,255,0.7)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+          style={{ ...dropdownItem, color: activeToolPanel === 'apt' ? '#06b6d4' : `rgba(255,255,255,${o.textSec})` }}
+          onMouseEnter={e => (e.currentTarget.style.background = `rgba(255,255,255,${o.on ? 0.12 : 0.05})`)}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >
           <svg width={Math.round(16 * scale)} height={Math.round(16 * scale)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1349,8 +1373,8 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         {/* ANG (Angle Berechnung) */}
         <button
           onClick={() => { setActiveToolPanel(activeToolPanel === 'ang' ? null : 'ang'); setShowToolsDropdown(false) }}
-          style={{ ...dropdownItem, color: activeToolPanel === 'ang' ? '#a855f7' : 'rgba(255,255,255,0.7)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+          style={{ ...dropdownItem, color: activeToolPanel === 'ang' ? '#a855f7' : `rgba(255,255,255,${o.textSec})` }}
+          onMouseEnter={e => (e.currentTarget.style.background = `rgba(255,255,255,${o.on ? 0.12 : 0.05})`)}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >
           <svg width={Math.round(16 * scale)} height={Math.round(16 * scale)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

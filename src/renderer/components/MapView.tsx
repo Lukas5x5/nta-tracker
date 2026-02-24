@@ -3,14 +3,16 @@ import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle, CircleMarker, 
 import L from 'leaflet'
 import 'leaflet-imageoverlay-rotated'
 import { useFlightStore } from '../stores/flightStore'
-import { Task, Goal, WindLayer, ImportedTrajectory, TrajectoryPoint, Waypoint } from '../../shared/types'
+import { Task, Goal, WindLayer, ImportedTrajectory, TrajectoryPoint, Waypoint, FKeyAction } from '../../shared/types'
 import { formatCoordinate, latLonToUTM, utmToLatLon } from '../utils/coordinatesWGS84'
 import { calculateBearing, calculateDestination } from '../utils/navigation'
+import { getOutdoor } from '../utils/outdoorStyles'
 // MapLayerPanel entfernt - Kartenverwaltung jetzt über Meisterschaften
 import { FlightWindsPanel } from './FlightWindsPanel'
 import { MarkerSettingsPanel } from './MarkerSettingsPanel'
 import { TaskEditPanel } from './TaskEditPanel'
 import { Stopwatch } from './Stopwatch'
+import { GasPanel } from './GasPanel'
 import { MeasureTool, MeasureMode } from './MeasureTool'
 import { PowerLinesLayer, PowerLinesLegend } from './PowerLinesLayer'
 import { CachedTileLayer } from './CachedTileLayer'
@@ -591,7 +593,7 @@ function getGoalIcon(
         position: relative;
         width: ${iconWidth}px;
         height: ${totalHeight}px;
-        cursor: ${isEditing ? 'move' : 'pointer'};
+        cursor: ${isEditing ? 'move' : 'default'};
       ">
         <div style="
           position: absolute;
@@ -665,6 +667,7 @@ interface MapViewProps {
   startPointTrigger?: { lat: number; lon: number } | null
   onOpenMaps?: () => void
   onOpenMarkerSettings?: () => void
+  onToggleBriefing?: () => void
 }
 
 // Grid Overlay Komponente - zeigt UTM Grid mit GERADEN Linien (wie OziExplorer)
@@ -1538,6 +1541,18 @@ function CompetitionMapBoundsController({ bounds }: { bounds: { north: number; s
   return null
 }
 
+// Kartenposition speichern bei Verschiebung/Zoom
+function MapPositionSaver({ onSavePosition }: { onSavePosition: (center: { lat: number; lon: number }, zoom: number) => void }) {
+  useMapEvents({
+    moveend: (e) => {
+      const map = e.target
+      const center = map.getCenter()
+      onSavePosition({ lat: center.lat, lon: center.lng }, map.getZoom())
+    }
+  })
+  return null
+}
+
 function MapClickHandler({ onMapClick, hdgCourseMode, hdgPendingCourse, hdgPendingLineMode, onSetHdgCourseLine, editingHdgCourseLineId, onUpdateHdgCourseLine, tasksForSnap, waypointsForSnap, windLineMode, pendingWindLayer, onSetWindLine, drawingMode, onDrawClick, onMeasureClick, measureMode, onMouseMove, onMouseOut, gpsSimPickingStart, onGpsSimStartPicked, onDragStart, pzDrawMode, onPzDrawClick, windImportPickPosition, onWindImportPositionPicked }: MapClickHandlerProps) {
   useMapEvents({
     dragstart: () => {
@@ -1795,7 +1810,7 @@ function TrajectoryPolyline({ trajectory }: { trajectory: ImportedTrajectory }) 
   )
 }
 
-export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode = 'none', onDrawingModeChange, gridSnapping = false, gridSize = 100, startPointTrigger, onOpenMaps, onOpenMarkerSettings }: MapViewProps) {
+export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode = 'none', onDrawingModeChange, gridSnapping = false, gridSize = 100, startPointTrigger, onOpenMaps, onOpenMarkerSettings, onToggleBriefing }: MapViewProps) {
   const gpsData = useFlightStore(s => s.gpsData)
   const smoothedGpsData = useFlightStore(s => s.smoothedGpsData)
   const track = useFlightStore(s => s.track)
@@ -1806,6 +1821,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
   const waypoints = useFlightStore(s => s.waypoints)
   const tasks = useFlightStore(s => s.tasks)
   const settings = useFlightStore(s => s.settings)
+  const o = getOutdoor(settings.outdoorMode)
   const updateSettings = useFlightStore(s => s.updateSettings)
   const hdgCourseMode = useFlightStore(s => s.hdgCourseMode)
   const hdgPendingCourse = useFlightStore(s => s.hdgPendingCourse)
@@ -1839,8 +1855,13 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
   const windImportPickPosition = useFlightStore(s => s.windImportPickPosition)
   const setWindImportPosition = useFlightStore(s => s.setWindImportPosition)
   const isRecording = useFlightStore(s => s.isRecording)
+  const startRecording = useFlightStore(s => s.startRecording)
+  const stopRecording = useFlightStore(s => s.stopRecording)
   const flyToPosition = useFlightStore(s => s.flyToPosition)
   const setFlyToPosition = useFlightStore(s => s.setFlyToPosition)
+  const lastMapCenter = useFlightStore(s => s.lastMapCenter)
+  const lastMapZoom = useFlightStore(s => s.lastMapZoom)
+  const setLastMapPosition = useFlightStore(s => s.setLastMapPosition)
 
   // Team-Daten
   const teamSession = useTeamStore(s => s.session)
@@ -1878,6 +1899,10 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
   const climbPointResult = useFlightStore(s => s.climbPointResult)
   const landRunResult = useFlightStore(s => s.landRunResult)
   const angleResult = useFlightStore(s => s.angleResult)
+  const activeToolPanel = useFlightStore(s => s.activeToolPanel)
+  const setActiveToolPanel = useFlightStore(s => s.setActiveToolPanel)
+  const dropMarker = useFlightStore(s => s.dropMarker)
+  const switchToNextBottle = useFlightStore(s => s.switchToNextBottle)
 
   // Aktive Competition Map aus dem Store - nur eine kann aktiv sein
   const activeCompetitionMapFromStore = activeMaps.length > 0
@@ -1890,12 +1915,87 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
   const [moveStepSize, setMoveStepSize] = useState<MoveStepSize>(100) // Schrittgröße für Pfeiltasten
   const [selectedWindLayer, setSelectedWindLayer] = useState<number | null>(null) // Ausgewählte Windschicht zum Anzeigen
 
-  // Stoppuhr und Messwerkzeug
+  // Stoppuhr, Gas-Tracker und Messwerkzeug
   const [showStopwatch, setShowStopwatch] = useState(false)
+  const [showGasPanel, setShowGasPanel] = useState(false)
   const [showMeasureTool, setShowMeasureTool] = useState(false)
   const [measureMode, setMeasureMode] = useState<MeasureMode>('distance')
   const [measureAreaCompleted, setMeasureAreaCompleted] = useState(false)
   const [isOutsideCompetitionArea, setIsOutsideCompetitionArea] = useState(false)
+
+  // Funktionstasten (F1-F12) Handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Nur F1-F12 abfangen
+      const match = e.key.match(/^F(\d+)$/)
+      if (!match) return
+      const fNum = parseInt(match[1])
+      if (fNum < 1 || fNum > 12) return
+
+      // Input/Textarea/Select ausschließen
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+
+      const bindings = settings.functionKeyBindings || {}
+      const action = bindings[`F${fNum}`] as FKeyAction | undefined
+      if (!action || action === 'none') return
+
+      e.preventDefault()
+      e.stopPropagation()
+
+      switch (action) {
+        case 'dropMarker':
+          dropMarker()
+          break
+        case 'toggleStopwatch':
+          setShowStopwatch(prev => !prev)
+          break
+        case 'toggleGasPanel':
+          setShowGasPanel(prev => !prev)
+          break
+        case 'switchGasBottle':
+          switchToNextBottle()
+          break
+        case 'toggleMeasureTool':
+          setShowMeasureTool(prev => !prev)
+          break
+        case 'toggleWindRose':
+          setShowWindRose(!showWindRose)
+          break
+        case 'toggleRecording':
+          if (isRecording) stopRecording()
+          else startRecording()
+          break
+        case 'openToolMarker':
+          setActiveToolPanel(activeToolPanel === 'marker' ? null : 'marker')
+          break
+        case 'openToolFly':
+          setActiveToolPanel(activeToolPanel === 'fly' ? null : 'fly')
+          break
+        case 'openToolLnd':
+          setActiveToolPanel(activeToolPanel === 'lnd' ? null : 'lnd')
+          break
+        case 'openToolLrn':
+          setActiveToolPanel(activeToolPanel === 'lrn' ? null : 'lrn')
+          break
+        case 'openToolApt':
+          setActiveToolPanel(activeToolPanel === 'apt' ? null : 'apt')
+          break
+        case 'openToolAng':
+          setActiveToolPanel(activeToolPanel === 'ang' ? null : 'ang')
+          break
+        case 'toggleWindPanel':
+          setShowWindsPanel(prev => !prev)
+          break
+        case 'toggleBriefing':
+          onToggleBriefing?.()
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [settings.functionKeyBindings, activeToolPanel, dropMarker, switchToNextBottle, setActiveToolPanel, onToggleBriefing, showWindRose, setShowWindRose, isRecording, startRecording, stopRecording])
 
   // Hover-Popup für Drop-Marker
   const [hoveredDropMarker, setHoveredDropMarker] = useState<string | null>(null)
@@ -2286,8 +2386,10 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
   // Berechne rechten Margin basierend auf offenen Panels
   const rightMargin = briefingOpen ? 320 : 0
 
-  // Default Position (Österreich Mitte)
-  const defaultPosition: [number, number] = [47.5, 13.5]
+  // Default Position: gespeicherte Position oder Österreich Mitte als Fallback
+  const defaultPosition: [number, number] = lastMapCenter
+    ? [lastMapCenter.lat, lastMapCenter.lon]
+    : [47.5, 13.5]
   const position: [number, number] = gpsData
     ? [gpsData.latitude, gpsData.longitude]
     : defaultPosition
@@ -2385,7 +2487,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
       {/* Standard Leaflet MapContainer - OZI-Karten werden reprojiziert geladen */}
       <MapContainer
           center={position}
-          zoom={14}
+          zoom={lastMapZoom || 14}
           minZoom={3}
           maxZoom={20}
           style={{ width: '100%', height: '100%' }}
@@ -2455,6 +2557,9 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
 
         {/* Competition Map Bounds Controller - begrenzt Karte auf heruntergeladenen Bereich */}
         <CompetitionMapBoundsController bounds={activeCompetitionMapFromStore?.bounds || null} />
+
+        {/* Kartenposition speichern */}
+        <MapPositionSaver onSavePosition={setLastMapPosition} />
 
         {/* Klick Handler */}
         <MapClickHandler
@@ -2715,8 +2820,12 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
           const startLon = windLine.startPosition.lon
 
           // direction = woher der Wind kommt (intern immer "VON")
-          // Linie zeigt immer in Flugrichtung (wohin der Ballon fliegt = direction + 180)
-          const flyDirection = (windLine.windLayer.direction + 180) % 360
+          // Linienrichtung abhängig von windDirectionMode:
+          // "von": Linie zeigt woher der Wind kommt (= direction)
+          // "zu": Linie zeigt wohin der Wind geht (= direction + 180)
+          const flyDirection = settings.windDirectionMode === 'from'
+            ? windLine.windLayer.direction
+            : (windLine.windLayer.direction + 180) % 360
           const flyDirectionRad = (flyDirection * Math.PI) / 180
 
           // Berechnung des Endpunkts
@@ -2854,16 +2963,18 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
           const startLon = displayGpsData.longitude
 
           // Wind Direction: Wind kommt AUS dieser Richtung
-          // Wenn "from" Modus: Pfeil zeigt wohin Wind weht (direction + 180)
-          // Wenn "to" Modus: Pfeil zeigt woher Wind kommt (direction)
+          // Linienrichtung abhängig von windDirectionMode
           const windDirectionRad = (windLayer.direction * Math.PI) / 180
 
           // Berechne Endpunkt der Windlinie (10km in Windrichtung)
           const lineLength = 10000 // 10km in Metern
           const earthRadius = 6371000 // Meter
 
-          // Linie zeigt immer in Flugrichtung (wohin der Ballon fliegt = direction + 180)
-          const flyDirection = (windLayer.direction + 180) % 360
+          // "von": Linie zeigt woher der Wind kommt (= direction)
+          // "zu": Linie zeigt wohin der Wind geht (= direction + 180)
+          const flyDirection = settings.windDirectionMode === 'from'
+            ? windLayer.direction
+            : (windLayer.direction + 180) % 360
           const flyDirectionRad = (flyDirection * Math.PI) / 180
 
           const latDiff = (lineLength * Math.cos(flyDirectionRad)) / earthRadius * (180 / Math.PI)
@@ -3177,10 +3288,10 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                               {index + 1}
                             </div>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>Trackpunkt</div>
+                              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>Trackpunkt</div>
                               <div style={{ fontSize: '16px', fontWeight: 600 }}>{formatTime(point.timestamp)}</div>
                               {point.timeFromStart !== undefined && (
-                                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>+{formatDuration(point.timeFromStart)}</div>
+                                <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>+{formatDuration(point.timeFromStart)}</div>
                               )}
                             </div>
                             <div style={{ fontSize: '20px', fontWeight: 700, color: '#22c55e', flexShrink: 0 }}>
@@ -3190,49 +3301,49 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
 
                           {/* Grid Reference */}
                           <div style={{ marginBottom: '8px' }}>
-                            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '2px' }}>Grid ({precision}/{precision})</div>
+                            <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '2px' }}>Grid ({precision}/{precision})</div>
                             <div style={{ fontSize: '22px', fontWeight: 700, color: '#f59e0b', letterSpacing: '2px' }}>{gridRef}</div>
                           </div>
 
                           {/* UTM */}
                           <div style={{ marginBottom: '4px' }}>
-                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>UTM: </span>
-                            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)' }}>{utm.zone}{utm.hemisphere} {utm.easting.toFixed(0)}E {utm.northing.toFixed(0)}N</span>
+                            <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>UTM: </span>
+                            <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.98 : 0.9})` }}>{utm.zone}{utm.hemisphere} {utm.easting.toFixed(0)}E {utm.northing.toFixed(0)}N</span>
                           </div>
 
                           {/* WGS84 */}
-                          <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>WGS84: </span>
-                            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)' }}>{point.position.latitude.toFixed(6)}° / {point.position.longitude.toFixed(6)}°</span>
+                          <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})` }}>
+                            <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>WGS84: </span>
+                            <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.98 : 0.9})` }}>{point.position.latitude.toFixed(6)}° / {point.position.longitude.toFixed(6)}°</span>
                           </div>
 
                           {/* Flugdaten 2x2 Grid */}
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-                              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Baro</div>
+                            <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Baro</div>
                               <div style={{ fontSize: '16px', fontWeight: 600, color: '#3b82f6' }}>{settings.altitudeUnit === 'feet' ? Math.round(point.baro.pressureAltitude * 3.28084) : Math.round(point.baro.pressureAltitude)}{settings.altitudeUnit === 'feet' ? 'ft' : 'm'}</div>
                             </div>
 
                             {/* Geschwindigkeit */}
                             {point.speed !== undefined && (
-                              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-                                <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Speed</div>
+                              <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Speed</div>
                                 <div style={{ fontSize: '16px', fontWeight: 600 }}>{(point.speed * 3.6).toFixed(1)} km/h</div>
                               </div>
                             )}
 
                             {/* Kurs */}
                             {point.heading !== undefined && (
-                              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-                                <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Kurs</div>
+                              <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Kurs</div>
                                 <div style={{ fontSize: '16px', fontWeight: 600 }}>{Math.round(point.heading)}°</div>
                               </div>
                             )}
 
                             {/* Vario */}
                             {point.verticalSpeed !== undefined && (
-                              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-                                <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Vario</div>
+                              <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Vario</div>
                                 <div style={{ fontSize: '16px', fontWeight: 600, color: point.verticalSpeed > 0.1 ? '#22c55e' : point.verticalSpeed < -0.1 ? '#ef4444' : 'white' }}>
                                   {point.verticalSpeed > 0 ? '+' : ''}{point.verticalSpeed.toFixed(1)} m/s
                                 </div>
@@ -3243,14 +3354,14 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                           {/* Distanz */}
                           {point.distance !== undefined && point.distance > 0 && (
                             <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>Distanz</span>
+                              <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>Distanz</span>
                               <span style={{ fontSize: '12px' }}>{point.distance.toFixed(1)} m</span>
                             </div>
                           )}
 
                           {/* Recording Reason */}
                           {point.recordingReason && (
-                            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
+                            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`, fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
                               Aufgezeichnet: {point.recordingReason === 'time' ? 'Zeitintervall' : point.recordingReason === 'distance' ? 'Distanz' : 'Signifikant'}
                             </div>
                           )}
@@ -3666,6 +3777,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
             </>
           )
         })()}
+
 
         {/* Selected Goal (hervorgehoben) */}
         {selectedGoal && selectedGoal.position && typeof selectedGoal.position.latitude === 'number' && typeof selectedGoal.position.longitude === 'number' && (() => {
@@ -4517,9 +4629,9 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                               {idx + 1}
                             </div>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>Team Trackpunkt</div>
+                              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>Team Trackpunkt</div>
                               <div style={{ fontSize: '15px', fontWeight: 600, color: member.color }}>{member.callsign}</div>
-                              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>{tp.recordedAt.toLocaleTimeString('de-DE')}</div>
+                              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>{tp.recordedAt.toLocaleTimeString('de-DE')}</div>
                             </div>
                             <div style={{ fontSize: '20px', fontWeight: 700, color: '#22c55e', flexShrink: 0 }}>
                               {settings.altitudeUnit === 'feet' ? Math.round(tp.altitude * 3.28084) : Math.round(tp.altitude)}{settings.altitudeUnit === 'feet' ? 'ft' : 'm'}
@@ -4528,43 +4640,43 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
 
                           {/* Grid Reference */}
                           <div style={{ marginBottom: '8px' }}>
-                            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '2px' }}>Grid ({precision}/{precision})</div>
+                            <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '2px' }}>Grid ({precision}/{precision})</div>
                             <div style={{ fontSize: '22px', fontWeight: 700, color: '#f59e0b', letterSpacing: '2px' }}>{gridRef}</div>
                           </div>
 
                           {/* UTM */}
                           <div style={{ marginBottom: '4px' }}>
-                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>UTM: </span>
-                            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)' }}>{utm.zone}{utm.hemisphere} {utm.easting.toFixed(0)}E {utm.northing.toFixed(0)}N</span>
+                            <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>UTM: </span>
+                            <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.98 : 0.9})` }}>{utm.zone}{utm.hemisphere} {utm.easting.toFixed(0)}E {utm.northing.toFixed(0)}N</span>
                           </div>
 
                           {/* WGS84 */}
-                          <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>WGS84: </span>
-                            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)' }}>{tp.latitude.toFixed(6)}° / {tp.longitude.toFixed(6)}°</span>
+                          <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})` }}>
+                            <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>WGS84: </span>
+                            <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.98 : 0.9})` }}>{tp.latitude.toFixed(6)}° / {tp.longitude.toFixed(6)}°</span>
                           </div>
 
                           {/* Flugdaten 2x2 Grid */}
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-                              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Höhe</div>
+                            <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Höhe</div>
                               <div style={{ fontSize: '16px', fontWeight: 600, color: '#3b82f6' }}>
                                 {settings.altitudeUnit === 'feet' ? Math.round(tp.altitude * 3.28084) : Math.round(tp.altitude)} {settings.altitudeUnit === 'feet' ? 'ft' : 'm'}
                               </div>
                             </div>
 
-                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-                              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Speed</div>
+                            <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Speed</div>
                               <div style={{ fontSize: '16px', fontWeight: 600 }}>{tp.speed.toFixed(1)} km/h</div>
                             </div>
 
-                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-                              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Kurs</div>
+                            <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Kurs</div>
                               <div style={{ fontSize: '16px', fontWeight: 600 }}>{Math.round(tp.heading)}°</div>
                             </div>
 
-                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-                              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Vario</div>
+                            <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Vario</div>
                               <div style={{ fontSize: '16px', fontWeight: 600, color: tp.vario > 0.1 ? '#22c55e' : tp.vario < -0.1 ? '#ef4444' : 'white' }}>
                                 {tp.vario > 0 ? '+' : ''}{tp.vario.toFixed(1)} m/s
                               </div>
@@ -4640,7 +4752,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                               </svg>
                             </div>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>Team Position</div>
+                              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>Team Position</div>
                               <div style={{ fontSize: '16px', fontWeight: 700, color: member.color }}>{member.callsign}</div>
                               <div style={{
                                 display: 'inline-flex',
@@ -4662,43 +4774,43 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
 
                           {/* Grid Reference */}
                           <div style={{ marginBottom: '8px' }}>
-                            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '2px' }}>Grid ({precision}/{precision})</div>
+                            <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '2px' }}>Grid ({precision}/{precision})</div>
                             <div style={{ fontSize: '22px', fontWeight: 700, color: '#f59e0b', letterSpacing: '2px' }}>{gridRef}</div>
                           </div>
 
                           {/* UTM */}
                           <div style={{ marginBottom: '4px' }}>
-                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>UTM: </span>
-                            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)' }}>{utm.zone}{utm.hemisphere} {utm.easting.toFixed(0)}E {utm.northing.toFixed(0)}N</span>
+                            <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>UTM: </span>
+                            <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.98 : 0.9})` }}>{utm.zone}{utm.hemisphere} {utm.easting.toFixed(0)}E {utm.northing.toFixed(0)}N</span>
                           </div>
 
                           {/* WGS84 */}
-                          <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>WGS84: </span>
-                            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)' }}>{pos.latitude.toFixed(6)}° / {pos.longitude.toFixed(6)}°</span>
+                          <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})` }}>
+                            <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>WGS84: </span>
+                            <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.98 : 0.9})` }}>{pos.latitude.toFixed(6)}° / {pos.longitude.toFixed(6)}°</span>
                           </div>
 
                           {/* Flugdaten 2x2 Grid */}
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-                              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Höhe</div>
+                            <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Höhe</div>
                               <div style={{ fontSize: '16px', fontWeight: 600, color: '#3b82f6' }}>
                                 {settings.altitudeUnit === 'feet' ? Math.round(pos.altitude * 3.28084) : Math.round(pos.altitude)} {settings.altitudeUnit === 'feet' ? 'ft' : 'm'}
                               </div>
                             </div>
 
-                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-                              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Speed</div>
+                            <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Speed</div>
                               <div style={{ fontSize: '16px', fontWeight: 600 }}>{pos.speed.toFixed(1)} km/h</div>
                             </div>
 
-                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-                              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Kurs</div>
+                            <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Kurs</div>
                               <div style={{ fontSize: '16px', fontWeight: 600 }}>{Math.round(pos.heading)}°</div>
                             </div>
 
-                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-                              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Vario</div>
+                            <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Vario</div>
                               <div style={{ fontSize: '16px', fontWeight: 600, color: pos.vario > 0.1 ? '#22c55e' : pos.vario < -0.1 ? '#ef4444' : 'white' }}>
                                 {pos.vario > 0 ? '+' : ''}{pos.vario.toFixed(1)} m/s
                               </div>
@@ -4968,7 +5080,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
               borderRadius: '12px',
               padding: '16px 20px',
               minWidth: '300px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
               boxShadow: '0 8px 32px rgba(0,0,0,0.6)'
             }}
           >
@@ -4997,9 +5109,9 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                 {marker.number}
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>Marker Drop</div>
+                <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>Marker Drop</div>
                 <div style={{ fontSize: '16px', fontWeight: 600 }}>{new Date(marker.timestamp).toLocaleTimeString('de-DE')}</div>
-                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>{new Date(marker.timestamp).toLocaleDateString('de-DE')}</div>
+                <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>{new Date(marker.timestamp).toLocaleDateString('de-DE')}</div>
               </div>
               <div style={{ fontSize: '20px', fontWeight: 700, color: '#22c55e', flexShrink: 0 }}>
                 {settings.altitudeUnit === 'feet' ? Math.round(marker.altitude * 3.28084) : Math.round(marker.altitude)}{settings.altitudeUnit === 'feet' ? 'ft' : 'm'}
@@ -5008,25 +5120,33 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
 
             {/* Grid Reference */}
             <div style={{ marginBottom: '8px' }}>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '2px' }}>Grid ({precision}/{precision})</div>
+              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '2px' }}>Grid ({precision}/{precision})</div>
               <div style={{ fontSize: '22px', fontWeight: 700, color: '#f59e0b', letterSpacing: '2px' }}>{gridRef}</div>
             </div>
 
             {/* UTM */}
             <div style={{ marginBottom: '4px' }}>
-              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>UTM: </span>
-              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)' }}>{utm.zone}{utm.hemisphere} {Math.round(utm.easting)}E {Math.round(utm.northing)}N</span>
+              <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>UTM: </span>
+              <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.98 : 0.9})` }}>{utm.zone}{utm.hemisphere} {Math.round(utm.easting)}E {Math.round(utm.northing)}N</span>
             </div>
 
             {/* WGS84 */}
             <div>
-              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>WGS84: </span>
-              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)' }}>{marker.position.latitude.toFixed(6)}° / {marker.position.longitude.toFixed(6)}°</span>
+              <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>WGS84: </span>
+              <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.98 : 0.9})` }}>{marker.position.latitude.toFixed(6)}° / {marker.position.longitude.toFixed(6)}°</span>
             </div>
+
+            {/* Klinometerwinkel */}
+            {marker.clinoAngle !== undefined && (
+              <div style={{ marginTop: '4px' }}>
+                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>Clino: </span>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: '#f59e0b' }}>{marker.clinoAngle.toFixed(1)}°</span>
+              </div>
+            )}
 
             {/* Notizen falls vorhanden */}
             {marker.notes && (
-              <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
+              <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`, fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})` }}>
                 {marker.notes}
               </div>
             )}
@@ -5089,7 +5209,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
           padding: '16px 24px',
           borderRadius: '12px',
           boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-          border: '1px solid rgba(255,255,255,0.1)',
+          border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
           zIndex: 1000,
           display: 'flex',
           alignItems: 'center',
@@ -5141,7 +5261,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
           background: active
             ? `linear-gradient(180deg, ${accent}25 0%, ${accent}10 100%)`
             : 'linear-gradient(180deg, rgba(30,41,59,0.95) 0%, rgba(15,23,42,0.95) 100%)',
-          color: active ? accent : 'rgba(255,255,255,0.5)',
+          color: active ? accent : `rgba(255,255,255,${o.textMuted})`,
           cursor: 'pointer',
           position: 'relative',
           transition: 'all 0.15s',
@@ -5177,8 +5297,25 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                 <path d="M9 2h6" />
                 <path d="M12 2v2" />
               </svg>
-              <span>Timer</span>
+              <span>Stoppuhr</span>
             </button>
+
+            {/* Gas-Tracker (nur wenn Flaschen konfiguriert) */}
+            {(settings.gasBottles?.length || 0) > 0 && (
+              <button
+                onClick={() => setShowGasPanel(!showGasPanel)}
+                style={mapBtnStyle(showGasPanel, '#f59e0b')}
+                title="Gas-Tracker"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2C8 2 6 4 6 7v10c0 2.5 2 5 6 5s6-2.5 6-5V7c0-3-2-5-6-5z" />
+                  <path d="M6 12h12" />
+                  <path d="M10 2v3" />
+                  <path d="M14 2v3" />
+                </svg>
+                <span>Gas</span>
+              </button>
+            )}
 
             {/* Messwerkzeug */}
             <button
@@ -5345,6 +5482,12 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
       <Stopwatch
         isOpen={showStopwatch}
         onClose={() => setShowStopwatch(false)}
+      />
+
+      {/* Gas-Tracker */}
+      <GasPanel
+        isOpen={showGasPanel}
+        onClose={() => setShowGasPanel(false)}
       />
 
       {/* Messwerkzeug */}

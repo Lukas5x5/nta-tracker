@@ -6,6 +6,7 @@ import { usePanelDrag } from '../hooks/usePanelDrag'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { startPositionBroadcasting, stopPositionBroadcasting } from '../services/positionBroadcaster'
 import { TeamConnectionStatus } from '../../shared/types'
+import { getOutdoor } from '../utils/outdoorStyles'
 import { GroundWindReports } from './GroundWindReports'
 
 interface LiveTeamPanelProps {
@@ -29,6 +30,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
   } = useTeamStore()
 
   const { settings } = useFlightStore()
+  const o = getOutdoor(settings.outdoorMode)
   const authUser = useAuthStore(s => s.user)
 
   // Callsign ist der Anzeigename des eingeloggten Benutzers (nicht editierbar)
@@ -189,6 +191,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
   return (
     <div
       ref={panelRef}
+      className="live-team-panel"
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
       style={{
@@ -200,7 +203,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
         background: 'rgba(15, 23, 42, 0.95)',
         backdropFilter: 'blur(12px)',
         borderRadius: `${12 * scale}px`,
-        border: '1px solid rgba(255, 255, 255, 0.1)',
+        border: `1px solid rgba(255, 255, 255, ${o.border})`,
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
         color: '#fff',
         fontSize: `${12 * scale}px`,
@@ -214,7 +217,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: `${10 * scale}px ${14 * scale}px`,
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+        borderBottom: `1px solid rgba(255, 255, 255, ${o.border})`,
         cursor: 'grab'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: `${8 * scale}px` }}>
@@ -240,7 +243,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
           style={{
             background: 'none',
             border: 'none',
-            color: 'rgba(255,255,255,0.5)',
+            color: `rgba(255,255,255,${o.textMuted})`,
             cursor: 'pointer',
             fontSize: `${16 * scale}px`,
             padding: `${2 * scale}px`
@@ -260,7 +263,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
             border: '1px solid rgba(239, 68, 68, 0.3)',
             borderRadius: `${8 * scale}px`,
             fontSize: `${11 * scale}px`,
-            color: 'rgba(255,255,255,0.8)',
+            color: `rgba(255,255,255,${o.textSec})`,
             lineHeight: 1.5
           }}>
             <div style={{ fontWeight: 600, marginBottom: `${6 * scale}px`, color: '#ef4444' }}>
@@ -277,7 +280,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: `${8 * scale}px` }}>
                 {/* Callsign Anzeige (nicht editierbar - aus Einstellungen) */}
                 <div>
-                  <label style={{ fontSize: `${10 * scale}px`, color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: `${4 * scale}px` }}>
+                  <label style={{ fontSize: `${10 * scale}px`, color: `rgba(255,255,255,${o.textMuted})`, display: 'block', marginBottom: `${4 * scale}px` }}>
                     Callsign / Pilotenname
                   </label>
                   {callsign.trim() ? (
@@ -312,8 +315,8 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                   style={{
                     width: '100%',
                     padding: `${10 * scale}px`,
-                    background: callsign.trim() ? 'linear-gradient(135deg, #22c55e, #16a34a)' : 'rgba(255,255,255,0.08)',
-                    color: callsign.trim() ? '#fff' : 'rgba(255,255,255,0.3)',
+                    background: callsign.trim() ? 'linear-gradient(135deg, #22c55e, #16a34a)' : `rgba(255,255,255,${o.border})`,
+                    color: callsign.trim() ? '#fff' : `rgba(255,255,255,${o.textDim})`,
                     border: 'none',
                     borderRadius: `${6 * scale}px`,
                     fontSize: `${12 * scale}px`,
@@ -330,8 +333,8 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                   style={{
                     width: '100%',
                     padding: `${10 * scale}px`,
-                    background: callsign.trim() ? 'linear-gradient(135deg, #3b82f6, #2563eb)' : 'rgba(255,255,255,0.08)',
-                    color: callsign.trim() ? '#fff' : 'rgba(255,255,255,0.3)',
+                    background: callsign.trim() ? 'linear-gradient(135deg, #3b82f6, #2563eb)' : `rgba(255,255,255,${o.border})`,
+                    color: callsign.trim() ? '#fff' : `rgba(255,255,255,${o.textDim})`,
                     border: 'none',
                     borderRadius: `${6 * scale}px`,
                     fontSize: `${12 * scale}px`,
@@ -347,7 +350,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
             {mode === 'create' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: `${8 * scale}px` }}>
                 <div>
-                  <label style={{ fontSize: `${10 * scale}px`, color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: `${4 * scale}px` }}>
+                  <label style={{ fontSize: `${10 * scale}px`, color: `rgba(255,255,255,${o.textMuted})`, display: 'block', marginBottom: `${4 * scale}px` }}>
                     Teamname (optional)
                   </label>
                   <input
@@ -359,8 +362,8 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                     style={{
                       width: '100%',
                       padding: `${8 * scale}px ${10 * scale}px`,
-                      background: 'rgba(255,255,255,0.08)',
-                      border: '1px solid rgba(255,255,255,0.15)',
+                      background: `rgba(255,255,255,${o.border})`,
+                      border: `1px solid rgba(255,255,255,${o.borderStrong})`,
                       borderRadius: `${6 * scale}px`,
                       color: '#fff',
                       fontSize: `${12 * scale}px`,
@@ -375,8 +378,8 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                     style={{
                       flex: 1,
                       padding: `${8 * scale}px`,
-                      background: 'rgba(255,255,255,0.08)',
-                      color: 'rgba(255,255,255,0.7)',
+                      background: `rgba(255,255,255,${o.border})`,
+                      color: `rgba(255,255,255,${o.textSec})`,
                       border: 'none',
                       borderRadius: `${6 * scale}px`,
                       fontSize: `${11 * scale}px`,
@@ -391,7 +394,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                     style={{
                       flex: 2,
                       padding: `${8 * scale}px`,
-                      background: isLoading ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, #22c55e, #16a34a)',
+                      background: isLoading ? `rgba(255,255,255,${o.border})` : 'linear-gradient(135deg, #22c55e, #16a34a)',
                       color: '#fff',
                       border: 'none',
                       borderRadius: `${6 * scale}px`,
@@ -409,7 +412,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
             {mode === 'join' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: `${8 * scale}px` }}>
                 <div>
-                  <label style={{ fontSize: `${10 * scale}px`, color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: `${4 * scale}px` }}>
+                  <label style={{ fontSize: `${10 * scale}px`, color: `rgba(255,255,255,${o.textMuted})`, display: 'block', marginBottom: `${4 * scale}px` }}>
                     Team-Code (6 Stellen)
                   </label>
                   <input
@@ -421,8 +424,8 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                     style={{
                       width: '100%',
                       padding: `${10 * scale}px`,
-                      background: 'rgba(255,255,255,0.08)',
-                      border: '1px solid rgba(255,255,255,0.15)',
+                      background: `rgba(255,255,255,${o.border})`,
+                      border: `1px solid rgba(255,255,255,${o.borderStrong})`,
                       borderRadius: `${6 * scale}px`,
                       color: '#fff',
                       fontSize: `${18 * scale}px`,
@@ -440,8 +443,8 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                     style={{
                       flex: 1,
                       padding: `${8 * scale}px`,
-                      background: 'rgba(255,255,255,0.08)',
-                      color: 'rgba(255,255,255,0.7)',
+                      background: `rgba(255,255,255,${o.border})`,
+                      color: `rgba(255,255,255,${o.textSec})`,
                       border: 'none',
                       borderRadius: `${6 * scale}px`,
                       fontSize: `${11 * scale}px`,
@@ -457,9 +460,9 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                       flex: 2,
                       padding: `${8 * scale}px`,
                       background: (isLoading || joinCode.length !== 6)
-                        ? 'rgba(255,255,255,0.08)'
+                        ? `rgba(255,255,255,${o.border})`
                         : 'linear-gradient(135deg, #3b82f6, #2563eb)',
-                      color: (isLoading || joinCode.length !== 6) ? 'rgba(255,255,255,0.3)' : '#fff',
+                      color: (isLoading || joinCode.length !== 6) ? `rgba(255,255,255,${o.textDim})` : '#fff',
                       border: 'none',
                       borderRadius: `${6 * scale}px`,
                       fontSize: `${11 * scale}px`,
@@ -521,7 +524,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                   onClick={() => setShowJoinCode(!showJoinCode)}
                   title={showJoinCode ? 'Code ausblenden' : 'Code einblenden'}
                   style={{
-                    background: 'rgba(255,255,255,0.1)',
+                    background: `rgba(255,255,255,${o.border})`,
                     border: 'none',
                     borderRadius: `${4 * scale}px`,
                     padding: `${4 * scale}px`,
@@ -531,7 +534,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                     justifyContent: 'center'
                   }}
                 >
-                  <svg width={12 * scale} height={12 * scale} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
+                  <svg width={12 * scale} height={12 * scale} viewBox="0 0 24 24" fill="none" stroke={`rgba(255,255,255,${o.textMuted})`} strokeWidth="2">
                     {showJoinCode ? (
                       <>
                         <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
@@ -567,7 +570,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                       alignItems: 'center',
                       gap: `${8 * scale}px`,
                       padding: `${6 * scale}px ${8 * scale}px`,
-                      background: isMe ? 'rgba(59, 130, 246, 0.1)' : isHidden ? 'rgba(255,255,255,0.01)' : 'rgba(255,255,255,0.03)',
+                      background: isMe ? 'rgba(59, 130, 246, 0.1)' : isHidden ? `rgba(255,255,255,${o.bgSoft})` : `rgba(255,255,255,${o.bgSoft})`,
                       borderRadius: `${6 * scale}px`,
                       marginBottom: `${4 * scale}px`,
                       border: isMe ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid transparent',
@@ -625,7 +628,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                         opacity: member.isOnline ? 1 : 0.5
                       }}>
                         {member.callsign}
-                        {isMe && <span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 400 }}> (du)</span>}
+                        {isMe && <span style={{ color: `rgba(255,255,255,${o.textDim})`, fontWeight: 400 }}> (du)</span>}
                       </div>
                     </div>
 
@@ -653,10 +656,10 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                       style={{
                         flex: 1,
                         padding: `${6 * scale}px`,
-                        background: activeTab === 'pilots' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
-                        border: activeTab === 'pilots' ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+                        background: activeTab === 'pilots' ? 'rgba(59, 130, 246, 0.2)' : `rgba(255,255,255,${o.bgSoft})`,
+                        border: activeTab === 'pilots' ? '1px solid rgba(59, 130, 246, 0.4)' : `1px solid rgba(255,255,255,${o.border})`,
                         borderRadius: `${6 * scale}px`,
-                        color: activeTab === 'pilots' ? '#3b82f6' : 'rgba(255,255,255,0.5)',
+                        color: activeTab === 'pilots' ? '#3b82f6' : `rgba(255,255,255,${o.textMuted})`,
                         fontSize: `${10 * scale}px`,
                         fontWeight: 600,
                         cursor: 'pointer'
@@ -669,10 +672,10 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                       style={{
                         flex: 1,
                         padding: `${6 * scale}px`,
-                        background: activeTab === 'crew' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.05)',
-                        border: activeTab === 'crew' ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+                        background: activeTab === 'crew' ? 'rgba(34, 197, 94, 0.2)' : `rgba(255,255,255,${o.bgSoft})`,
+                        border: activeTab === 'crew' ? '1px solid rgba(34, 197, 94, 0.4)' : `1px solid rgba(255,255,255,${o.border})`,
                         borderRadius: `${6 * scale}px`,
-                        color: activeTab === 'crew' ? '#22c55e' : 'rgba(255,255,255,0.5)',
+                        color: activeTab === 'crew' ? '#22c55e' : `rgba(255,255,255,${o.textMuted})`,
                         fontSize: `${10 * scale}px`,
                         fontWeight: 600,
                         cursor: 'pointer'
@@ -686,7 +689,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                   {activeTab === 'pilots' && (
                     <>
                       {pilotMembers.length === 0 ? (
-                        <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: `${10 * scale}px`, padding: `${8 * scale}px` }}>
+                        <div style={{ textAlign: 'center', color: `rgba(255,255,255,${o.textDim})`, fontSize: `${10 * scale}px`, padding: `${8 * scale}px` }}>
                           Keine Piloten im Team
                         </div>
                       ) : pilotMembers.map(renderMember)}
@@ -696,7 +699,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                   {activeTab === 'crew' && (
                     <>
                       {crewMembers.length === 0 ? (
-                        <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: `${10 * scale}px`, padding: `${8 * scale}px` }}>
+                        <div style={{ textAlign: 'center', color: `rgba(255,255,255,${o.textDim})`, fontSize: `${10 * scale}px`, padding: `${8 * scale}px` }}>
                           Keine Crew im Team
                         </div>
                       ) : crewMembers.map(renderMember)}
@@ -798,7 +801,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                 marginBottom: `${8 * scale}px`,
                 background: 'rgba(0,0,0,0.2)',
                 borderRadius: `${8 * scale}px`,
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: `1px solid rgba(255,255,255,${o.border})`,
                 overflow: 'hidden'
               }}>
                 {/* Chat Target Selector */}
@@ -806,17 +809,17 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                   display: 'flex',
                   gap: `${4 * scale}px`,
                   padding: `${6 * scale}px`,
-                  borderBottom: '1px solid rgba(255,255,255,0.1)',
+                  borderBottom: `1px solid rgba(255,255,255,${o.border})`,
                   flexWrap: 'wrap'
                 }}>
                   <button
                     onClick={() => setChatTarget(null)}
                     style={{
                       padding: `${4 * scale}px ${8 * scale}px`,
-                      background: chatTarget === null ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.05)',
-                      border: chatTarget === null ? '1px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(255,255,255,0.1)',
+                      background: chatTarget === null ? 'rgba(34, 197, 94, 0.3)' : `rgba(255,255,255,${o.bgSoft})`,
+                      border: chatTarget === null ? '1px solid rgba(34, 197, 94, 0.5)' : `1px solid rgba(255,255,255,${o.border})`,
                       borderRadius: `${4 * scale}px`,
-                      color: chatTarget === null ? '#22c55e' : 'rgba(255,255,255,0.6)',
+                      color: chatTarget === null ? '#22c55e' : `rgba(255,255,255,${o.textMuted})`,
                       fontSize: `${9 * scale}px`,
                       cursor: 'pointer',
                       fontWeight: chatTarget === null ? 600 : 400
@@ -830,10 +833,10 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                       onClick={() => setChatTarget(m.id)}
                       style={{
                         padding: `${4 * scale}px ${8 * scale}px`,
-                        background: chatTarget === m.id ? `${m.color}33` : 'rgba(255,255,255,0.05)',
-                        border: chatTarget === m.id ? `1px solid ${m.color}80` : '1px solid rgba(255,255,255,0.1)',
+                        background: chatTarget === m.id ? `${m.color}33` : `rgba(255,255,255,${o.bgSoft})`,
+                        border: chatTarget === m.id ? `1px solid ${m.color}80` : `1px solid rgba(255,255,255,${o.border})`,
                         borderRadius: `${4 * scale}px`,
-                        color: chatTarget === m.id ? m.color : 'rgba(255,255,255,0.6)',
+                        color: chatTarget === m.id ? m.color : `rgba(255,255,255,${o.textMuted})`,
                         fontSize: `${9 * scale}px`,
                         cursor: 'pointer',
                         fontWeight: chatTarget === m.id ? 600 : 400,
@@ -880,7 +883,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                   {filteredMessages.length === 0 ? (
                     <div style={{
                       textAlign: 'center',
-                      color: 'rgba(255,255,255,0.3)',
+                      color: `rgba(255,255,255,${o.textDim})`,
                       fontSize: `${10 * scale}px`,
                       padding: `${12 * scale}px`
                     }}>
@@ -893,7 +896,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                         style={{
                           marginBottom: `${6 * scale}px`,
                           padding: `${6 * scale}px ${8 * scale}px`,
-                          background: msg.isMine ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.05)',
+                          background: msg.isMine ? 'rgba(59, 130, 246, 0.15)' : `rgba(255,255,255,${o.bgSoft})`,
                           borderRadius: `${6 * scale}px`,
                           borderLeft: `3px solid ${msg.color}`
                         }}
@@ -914,14 +917,14 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                           {msg.targetMemberId && (
                             <span style={{
                               fontSize: `${8 * scale}px`,
-                              color: 'rgba(255,255,255,0.4)'
+                              color: `rgba(255,255,255,${o.text})`
                             }}>
                               → {msg.targetCallsign || 'Privat'}
                             </span>
                           )}
                           <span style={{
                             fontSize: `${8 * scale}px`,
-                            color: 'rgba(255,255,255,0.3)',
+                            color: `rgba(255,255,255,${o.textDim})`,
                             marginLeft: 'auto'
                           }}>
                             {msg.createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
@@ -929,7 +932,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                         </div>
                         <div style={{
                           fontSize: `${10 * scale}px`,
-                          color: 'rgba(255,255,255,0.9)'
+                          color: `rgba(255,255,255,${o.on ? 0.95 : 0.9})`
                         }}>
                           {msg.message}
                         </div>
@@ -945,7 +948,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                   display: 'flex',
                   gap: `${4 * scale}px`,
                   padding: `${6 * scale}px`,
-                  borderTop: '1px solid rgba(255,255,255,0.1)'
+                  borderTop: `1px solid rgba(255,255,255,${o.border})`
                 }}>
                   <input
                     type="text"
@@ -961,8 +964,8 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                     style={{
                       flex: 1,
                       padding: `${6 * scale}px ${8 * scale}px`,
-                      background: 'rgba(255,255,255,0.08)',
-                      border: '1px solid rgba(255,255,255,0.15)',
+                      background: `rgba(255,255,255,${o.border})`,
+                      border: `1px solid rgba(255,255,255,${o.borderStrong})`,
                       borderRadius: `${4 * scale}px`,
                       color: '#fff',
                       fontSize: `${10 * scale}px`,
@@ -979,10 +982,10 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                     disabled={sendingMsg || !chatMessage.trim()}
                     style={{
                       padding: `${6 * scale}px ${10 * scale}px`,
-                      background: chatMessage.trim() ? 'linear-gradient(135deg, #3b82f6, #2563eb)' : 'rgba(255,255,255,0.05)',
+                      background: chatMessage.trim() ? 'linear-gradient(135deg, #3b82f6, #2563eb)' : `rgba(255,255,255,${o.bgSoft})`,
                       border: 'none',
                       borderRadius: `${4 * scale}px`,
-                      color: chatMessage.trim() ? '#fff' : 'rgba(255,255,255,0.3)',
+                      color: chatMessage.trim() ? '#fff' : `rgba(255,255,255,${o.textDim})`,
                       fontSize: `${10 * scale}px`,
                       cursor: chatMessage.trim() ? 'pointer' : 'not-allowed'
                     }}
@@ -994,10 +997,10 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                     onClick={() => setShowQuickMessages(!showQuickMessages)}
                     style={{
                       padding: `${6 * scale}px`,
-                      background: showQuickMessages ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.1)',
+                      background: showQuickMessages ? 'rgba(245, 158, 11, 0.2)' : `rgba(255,255,255,${o.bgSoft})`,
+                      border: `1px solid rgba(255,255,255,${o.border})`,
                       borderRadius: `${4 * scale}px`,
-                      color: showQuickMessages ? '#f59e0b' : 'rgba(255,255,255,0.4)',
+                      color: showQuickMessages ? '#f59e0b' : `rgba(255,255,255,${o.text})`,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center'
@@ -1017,7 +1020,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                     display: 'flex',
                     gap: `${4 * scale}px`,
                     padding: `${6 * scale}px`,
-                    borderTop: '1px solid rgba(255,255,255,0.05)',
+                    borderTop: `1px solid rgba(255,255,255,${o.bgSoft})`,
                     flexWrap: 'wrap',
                     background: 'rgba(0,0,0,0.15)'
                   }}>
@@ -1051,7 +1054,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
               justifyContent: 'center',
               gap: `${6 * scale}px`,
               padding: `${6 * scale}px`,
-              background: 'rgba(255,255,255,0.03)',
+              background: `rgba(255,255,255,${o.bgSoft})`,
               borderRadius: `${6 * scale}px`,
               marginBottom: `${10 * scale}px`
             }}>
@@ -1061,7 +1064,7 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                 borderRadius: '50%',
                 background: statusColor
               }} />
-              <span style={{ fontSize: `${10 * scale}px`, color: 'rgba(255,255,255,0.6)' }}>
+              <span style={{ fontSize: `${10 * scale}px`, color: `rgba(255,255,255,${o.textMuted})` }}>
                 {statusText}
               </span>
             </div>

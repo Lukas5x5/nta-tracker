@@ -6,7 +6,8 @@
 
 ## Changelog
 - Bei jeder Code-Änderung den Eintrag in `CHANGELOG.md` unter `## [Unveröffentlicht]` ergänzen
-- Kurz und verständlich beschreiben was geändert wurde
+- Ausführlich beschreiben was geändert wurde – nicht nur "Feature X hinzugefügt", sondern auch was es tut und wie der User es benutzen kann
+- Beispiel: statt "3DT-Tool hinzugefügt" → "Tools: 3DT-Rechner hinzugefügt – berechnet optimale Flugstrategie für 3D Tasks basierend auf Windschichten. Donut-Modus (max. Distanz in Ring-Zone) und Torte-Modus (gewichteter Score mit Multiplikatoren). Task-Auswahl übernimmt Ringe automatisch."
 
 ## Versionen
 - Beim Release müssen 3 Stellen aktualisiert werden:

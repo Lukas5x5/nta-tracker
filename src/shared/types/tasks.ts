@@ -24,7 +24,6 @@ export enum TaskType {
   XDD = 'XDD',   // Maximum Distance Double Drop
   ANG = 'ANG',   // Angle Task
   SFL = 'SFL',   // Shortest Flight
-  ThreeD = '3DT', // 3D Shape Task
   LTT = 'LTT',   // Least Time Task
   MTT = 'MTT',   // Most Time Task
   APT = 'APT',   // Altitude Profile Task
@@ -269,18 +268,6 @@ export const TASK_INFO: Record<TaskType, {
     requires3D: false,
     requiresScoringArea: true,
     requiresReferencePoint: true,
-    requiresTimeLimit: false,
-  },
-  [TaskType.ThreeD]: {
-    name: '3D Shape Task',
-    description: 'Maximale Distanz im definierten Luftraum',
-    scoringMethod: 'distance_max',
-    requiresGoals: false,
-    multipleGoals: false,
-    requiresDeclaration: false,
-    requires3D: true,
-    requiresScoringArea: false,
-    requiresReferencePoint: false,
     requiresTimeLimit: false,
   },
   [TaskType.LTT]: {

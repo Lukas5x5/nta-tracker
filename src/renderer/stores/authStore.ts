@@ -148,13 +148,19 @@ function startLicenseHeartbeat(licenseKey: string, userId: string, installId: st
     if (!navigator.onLine) return
 
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('app_users')
         .select('bound_installation_id, is_active')
         .eq('license_key', licenseKey)
         .single()
 
-      if (!data || !data.is_active || data.bound_installation_id !== installId) {
+      // Bei DB-Fehler oder keiner Antwort: ignorieren, nächster Versuch
+      if (error || !data) {
+        console.log('[Auth] Heartbeat: DB-Fehler, überspringe:', error?.message)
+        return
+      }
+
+      if (!data.is_active || data.bound_installation_id !== installId) {
         // Lizenz wurde deaktiviert oder auf anderem PC aktiviert
         console.log('[Auth] Heartbeat: Lizenz nicht mehr gültig für diesen PC')
         clearLicenseCache()
@@ -669,18 +675,21 @@ export const useAuthStore = create<AuthState>()(
           const password_hash = await hashPassword(password, salt)
           const licenseKey = generateLicenseKey()
 
+          // User anlegen (ohne crew_password — Spalte existiert evtl. nicht)
+          const insertData: Record<string, any> = {
+            username,
+            password_hash,
+            salt,
+            display_name: displayName || null,
+            is_admin: false,
+            is_active: true,
+            role,
+            license_key: licenseKey,
+          }
+
           const { error } = await supabase
             .from('app_users')
-            .insert({
-              username,
-              password_hash,
-              salt,
-              display_name: displayName || null,
-              is_admin: false,
-              is_active: true,
-              role,
-              license_key: licenseKey
-            })
+            .insert(insertData)
 
           if (error) {
             if (error.code === '23505') {
@@ -689,6 +698,22 @@ export const useAuthStore = create<AuthState>()(
               set({ error: `Fehler: ${error.message}` })
             }
             return { success: false }
+          }
+
+          // Bei Crew: crew_password separat updaten (Klartext für Lite-App)
+          if (role === 'crew') {
+            // User-ID holen für das Update
+            const { data: newUser } = await supabase
+              .from('app_users')
+              .select('id')
+              .eq('username', username)
+              .single()
+            if (newUser) {
+              await supabase
+                .from('app_users')
+                .update({ crew_password: password })
+                .eq('id', newUser.id)
+            }
           }
 
           return { success: true, licenseKey }
@@ -783,6 +808,14 @@ export const useAuthStore = create<AuthState>()(
           const salt = generateSalt()
           const password_hash = await hashPassword(newPassword, salt)
 
+          // Rolle prüfen um crew_password mitzuupdaten
+          const { data: targetUser } = await supabase
+            .from('app_users')
+            .select('role')
+            .eq('id', userId)
+            .single()
+
+          // Erst password_hash + salt updaten (Pflichtfelder)
           const { error } = await supabase
             .from('app_users')
             .update({ password_hash, salt })
@@ -792,6 +825,16 @@ export const useAuthStore = create<AuthState>()(
             set({ error: `Fehler: ${error.message}` })
             return false
           }
+
+          // Bei Crew: crew_password separat updaten (Klartext für Lite-App)
+          if (targetUser?.role === 'crew') {
+            await supabase
+              .from('app_users')
+              .update({ crew_password: newPassword })
+              .eq('id', userId)
+            // Fehler hier ignorieren — Hauptpasswort wurde bereits gesetzt
+          }
+
           return true
         } catch {
           set({ error: 'Verbindungsfehler' })

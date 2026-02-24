@@ -73,7 +73,7 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
       setNewPassword('')
       setNewRole('pilot')
       setShowNewForm(false)
-      setCreatedLicenseKey(result.licenseKey)
+      setCreatedLicenseKey(newRole === 'crew' ? 'crew' : result.licenseKey)
       setCreatedUsername(savedUsername)
       setCreatedPassword(savedPassword)
       setCopiedKey(false)
@@ -349,8 +349,8 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
                         {u.display_name}
                       </div>
                     )}
-                    {/* License key preview for non-admin users */}
-                    {!u.is_admin && u.license_key && (
+                    {/* License key preview nur für Piloten (Crew braucht keinen Lizenzschlüssel) */}
+                    {!u.is_admin && u.role !== 'crew' && u.license_key && (
                       <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', marginTop: '2px' }}>
                         {u.license_key}
                         {u.bound_installation_id && (
@@ -382,12 +382,41 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
                     flexDirection: 'column',
                     gap: '8px'
                   }}>
-                    {/* License actions for non-admin users */}
-                    {!u.is_admin && (
+                    {/* Crew: Zugangsdaten anzeigen */}
+                    {u.role === 'crew' && (
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setCreatedLicenseKey('crew'); setCreatedUsername(u.username); setCreatedPassword(u.crew_password || null); setCopiedKey(false) }}
+                          title="Zugangsdaten anzeigen"
+                          style={{
+                            background: 'rgba(34, 197, 94, 0.1)',
+                            border: '1px solid rgba(34, 197, 94, 0.2)',
+                            color: '#22c55e',
+                            cursor: 'pointer',
+                            padding: '5px 10px',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            fontWeight: 500,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                          Zugangsdaten
+                        </button>
+                      </div>
+                    )}
+
+                    {/* License actions nur für Piloten (Crew braucht keinen Lizenzschlüssel) */}
+                    {!u.is_admin && u.role !== 'crew' && (
                       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                         {u.license_key && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); setCreatedLicenseKey(u.license_key!); setCreatedUsername(u.username); setCopiedKey(false) }}
+                            onClick={(e) => { e.stopPropagation(); setCreatedLicenseKey(u.license_key!); setCreatedUsername(u.username); setCreatedPassword(null); setCopiedKey(false) }}
                             title="Lizenzschlüssel anzeigen"
                             style={{
                               background: 'rgba(34, 197, 94, 0.1)',
@@ -758,7 +787,7 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
                 </svg>
               </div>
 
-              {createdPassword ? (
+              {createdLicenseKey === 'crew' ? (
                 <>
                   {/* Crew: Zugangsdaten anzeigen */}
                   <div style={{ fontSize: '14px', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>
@@ -784,13 +813,14 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
                     </div>
                     <div>
                       <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>Passwort</div>
-                      <div style={{ fontFamily: 'monospace', fontSize: '16px', fontWeight: 700, color: '#fff', userSelect: 'all' }}>
-                        {createdPassword}
+                      <div style={{ fontFamily: 'monospace', fontSize: '16px', fontWeight: 700, color: createdPassword ? '#fff' : 'rgba(255,255,255,0.3)', userSelect: 'all' }}>
+                        {createdPassword || '(Passwort über "Passwort ändern" neu setzen)'}
                       </div>
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                    {createdPassword && (
                     <button
                       onClick={() => handleCopyKey(`Benutzername: ${createdUsername}\nPasswort: ${createdPassword}`)}
                       style={{
@@ -819,6 +849,7 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
                         </>
                       )}
                     </button>
+                    )}
                     <button
                       onClick={() => { setCreatedLicenseKey(null); setCreatedPassword(null) }}
                       style={{

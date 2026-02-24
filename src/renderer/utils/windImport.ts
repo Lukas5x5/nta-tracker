@@ -9,6 +9,7 @@ export interface WindImportSettings {
   altitudeReference: 'msl' | 'agl'
   launchElevation: number
   magneticDeclination: number
+  layerThicknessFt?: number // Schichtdicke-Filter in Feet (z.B. 100, 200, 500). undefined = alle Schichten behalten
 }
 
 // Geparste Zeile vor Normalisierung
@@ -207,18 +208,76 @@ function parseOziTargetXmlDoc(doc: Document, result: WindImportResult): WindImpo
   return result
 }
 
+// Einheiten aus Text-Header erkennen
+function detectSettingsFromText(content: string): Partial<WindImportSettings> {
+  const detected: Partial<WindImportSettings> = {}
+  const lower = content.toLowerCase()
+
+  // Höheneinheit erkennen
+  if (/\balt(?:itude)?\s*\(?(?:ft|feet)\b/i.test(content) || /\bagl\s*\[ft\]/i.test(content) || /\[ft\]/i.test(content)) {
+    detected.altitudeUnit = 'feet'
+  } else if (/\balt(?:itude)?\s*\(?(?:m|meter|metres)\b/i.test(content) || /\bagl\s*\[m\]/i.test(content) || /\[m\]/i.test(content)) {
+    detected.altitudeUnit = 'meters'
+  }
+
+  // Höhenbezug erkennen
+  if (/\bagl\b/i.test(content)) {
+    detected.altitudeReference = 'agl'
+  } else if (/\b(?:amsl|msl)\b/i.test(content)) {
+    detected.altitudeReference = 'msl'
+  }
+
+  // Ground Level / Launch Elevation erkennen
+  const groundMatch = content.match(/ground\s*level[:\s]*([0-9.]+)\s*(ft|m)/i)
+  if (groundMatch) {
+    let elev = parseFloat(groundMatch[1])
+    if (groundMatch[2].toLowerCase() === 'ft') elev = elev * 0.3048
+    detected.launchElevation = Math.round(elev)
+  }
+
+  // Geschwindigkeitseinheit erkennen
+  if (/\bspeed\s*\(?(?:km\/h|kmh|kph)\b/i.test(content) || /\[km\/h\]/i.test(content)) {
+    detected.speedUnit = 'kmh'
+  } else if (/\bspeed\s*\(?(?:m\/s|ms)\b/i.test(content) || /\[m\/s\]/i.test(content)) {
+    detected.speedUnit = 'ms'
+  } else if (/\bspeed\s*\(?(?:kts|knots|kt)\b/i.test(content) || /\[kts?\]/i.test(content)) {
+    detected.speedUnit = 'knots'
+  }
+
+  // Richtungsreferenz erkennen
+  if (/\b(?:true|true deg)\b/i.test(content)) {
+    detected.directionReference = 'true'
+  } else if (/\b(?:magnetic|mag)\b/i.test(content)) {
+    detected.directionReference = 'magnetic'
+  }
+
+  // Richtungsmodus (heading = zu/to, wind direction = von/from)
+  if (/\bheading\b/i.test(content)) {
+    detected.directionMode = 'to'
+  } else if (/\bwind\s*(?:dir|direction)\b/i.test(content)) {
+    detected.directionMode = 'from'
+  }
+
+  return detected
+}
+
 // Text/DAT/CSV parsen
 export function parseTextWindFile(content: string): WindImportResult {
   const result: WindImportResult = {
     success: false,
     format: 'windsondDat',
     rows: [],
+    detectedSettings: {},
     errors: [],
     warnings: []
   }
 
   const lines = content.split(/\r?\n/)
   let hasCommas = false
+
+  // Einheiten aus Header/Kommentaren erkennen (erste 10 Zeilen)
+  const headerText = lines.slice(0, 10).join('\n')
+  result.detectedSettings = detectSettingsFromText(headerText)
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
@@ -357,4 +416,48 @@ export function formatName(format: DetectedFormat): string {
     case 'csv': return 'CSV'
     default: return 'Unbekannt'
   }
+}
+
+/**
+ * Filtert Windschichten auf ein Höhenraster mit bestimmter Schichtdicke.
+ * Für jeden Rasterpunkt wird die nächste Schicht innerhalb einer Toleranz behalten.
+ * @param layers - Normalisierte Windschichten (Höhe in Metern MSL)
+ * @param thicknessFt - Raster-Intervall in Feet (z.B. 100)
+ * @returns Gefilterte Windschichten
+ */
+export function filterByLayerThickness(layers: WindLayer[], thicknessFt: number): WindLayer[] {
+  if (!thicknessFt || thicknessFt <= 0 || layers.length === 0) return layers
+
+  const thicknessM = thicknessFt * 0.3048
+  const toleranceM = thicknessM * 0.4 // 40% Toleranz für Snap
+
+  const minAlt = Math.min(...layers.map(l => l.altitude))
+  const maxAlt = Math.max(...layers.map(l => l.altitude))
+
+  // Raster-Startpunkt: niedrigster Vielfacher von thicknessM
+  const gridStart = Math.floor(minAlt / thicknessM) * thicknessM
+
+  const result: WindLayer[] = []
+  const usedIndices = new Set<number>()
+
+  for (let gridAlt = gridStart; gridAlt <= maxAlt + thicknessM; gridAlt += thicknessM) {
+    let closestIdx = -1
+    let closestDist = Infinity
+
+    for (let i = 0; i < layers.length; i++) {
+      if (usedIndices.has(i)) continue
+      const dist = Math.abs(layers[i].altitude - gridAlt)
+      if (dist < closestDist && dist <= toleranceM) {
+        closestDist = dist
+        closestIdx = i
+      }
+    }
+
+    if (closestIdx >= 0) {
+      result.push(layers[closestIdx])
+      usedIndices.add(closestIdx)
+    }
+  }
+
+  return result.sort((a, b) => a.altitude - b.altitude)
 }

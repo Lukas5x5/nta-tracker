@@ -2,6 +2,9 @@
 
 ## [Unveröffentlicht]
 
+## [1.2.2] - 2026-03-02
+- Alle Fixes aus v1.2.1 enthalten (siehe unten)
+
 ## [1.2.1] - 2026-03-02
 
 ### Verbesserungen

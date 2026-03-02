@@ -337,8 +337,9 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
     }
 
     try {
+      // Nur Metadaten laden – NICHT flight_data (kann mehrere MB pro Flug sein)
       const { data, error: err } = await supabase
-        .from('championship_flights').select('id, championship_id, name, created_at, flight_data')
+        .from('championship_flights').select('id, championship_id, name, created_at')
         .eq('championship_id', championshipId).order('created_at', { ascending: true })
       if (err) {
         if (cached.length === 0) {
@@ -352,11 +353,10 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
         championship_id: row.championship_id,
         name: row.name,
         created_at: row.created_at,
-        hasTrack: !!(row.flight_data as FlightDataSnapshot)?.track?.length,
-        isAptProfile: (row.flight_data as any)?.type === 'apt_profile'
+        hasTrack: cached.find(c => c.id === row.id)?.hasTrack ?? false,
+        isAptProfile: cached.find(c => c.id === row.id)?.isAptProfile ?? false
       }))
       setFlights(flightsWithTrackInfo)
-      // Cache aktualisieren (nur Metadaten, nicht flight_data)
       saveFlightsToCache(championshipId, flightsWithTrackInfo)
     } catch {
       if (cached.length > 0) {
@@ -459,11 +459,18 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
     setCreating(true)
     try {
       const snapshot = getFlightSnapshot()
-      const { error: err } = await supabase.from('championship_flights')
+
+      // Supabase mit 15 Sekunden Timeout
+      const timeoutPromise = new Promise<{ error: { message: string } }>((resolve) =>
+        setTimeout(() => resolve({ error: { message: 'Timeout – Verbindung zu langsam' } }), 15000)
+      )
+      const insertPromise = supabase.from('championship_flights')
         .insert({ championship_id: selectedChampionship.id, name: newFlightName.trim(), flight_data: snapshot })
+
+      const { error: err } = await Promise.race([insertPromise, timeoutPromise])
+
       if (err) {
-        console.warn('[Championship] Supabase-Fehler, biete lokales Speichern an:', err.message)
-        // Fallback: Lokal speichern
+        console.warn('[Championship] Supabase-Fehler, speichere lokal:', err.message)
         const saved = await saveFlightLocally(newFlightName.trim(), snapshot)
         if (saved) {
           clearFlightData()
@@ -477,16 +484,20 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
       setSuccessMsg('Fahrt gespeichert')
       await loadFlights(selectedChampionship.id)
     } catch (err: any) {
-      console.warn('[Championship] Verbindungsfehler, biete lokales Speichern an:', err)
-      // Fallback: Lokal speichern
-      const snapshot = getFlightSnapshot()
-      const saved = await saveFlightLocally(newFlightName.trim(), snapshot)
-      if (saved) {
-        clearFlightData()
-        setNewFlightName('')
+      console.warn('[Championship] Verbindungsfehler, speichere lokal:', err)
+      try {
+        const snapshot = getFlightSnapshot()
+        const saved = await saveFlightLocally(newFlightName.trim(), snapshot)
+        if (saved) {
+          clearFlightData()
+          setNewFlightName('')
+        }
+      } catch (localErr) {
+        setError('Speichern fehlgeschlagen – kein Netzwerk und lokales Speichern nicht verfügbar')
       }
+    } finally {
+      setCreating(false)
     }
-    setCreating(false)
   }
 
   const handleSaveBackup = async () => {

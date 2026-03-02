@@ -2589,3 +2589,8 @@ useFlightStore.subscribe((state) => {
     }, 2000) // Alle 2 Sekunden maximal speichern
   }
 })
+
+// Dev-Zugriff für Console-Tests
+if (typeof window !== 'undefined') {
+  (window as any).__flightStore = useFlightStore
+}

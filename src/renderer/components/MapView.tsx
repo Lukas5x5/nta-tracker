@@ -701,8 +701,9 @@ function GridOverlay({
 }: GridOverlayProps) {
   const map = useMap()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const [labelMarkers, setLabelMarkers] = useState<Array<{ position: [number, number]; label: string; type: 'easting' | 'northing' }>>([])
-  const [showingLabels, setShowingLabels] = useState(false)
+  const labelMarkersRef = useRef<Array<{ position: [number, number]; label: string; type: 'easting' | 'northing' }>>([])
+  const showingLabelsRef = useRef(false)
+  const [, forceUpdate] = useState(0)
 
   useEffect(() => {
     // Canvas-Element erstellen und zum Map-Container hinzufügen
@@ -740,8 +741,9 @@ function GridOverlay({
       const effectiveMinZoom = gridSize >= 1000 ? 6 : gridSize >= 500 ? 8 : 10
 
       if (zoom < effectiveMinZoom) {
-        setLabelMarkers([])
-        setShowingLabels(false)
+        labelMarkersRef.current = []
+        showingLabelsRef.current = false
+        forceUpdate(n => n + 1)
         return
       }
 
@@ -770,8 +772,9 @@ function GridOverlay({
       }
 
       if (effectiveBounds.south >= effectiveBounds.north || effectiveBounds.west >= effectiveBounds.east) {
-        setLabelMarkers([])
-        setShowingLabels(false)
+        labelMarkersRef.current = []
+        showingLabelsRef.current = false
+        forceUpdate(n => n + 1)
         return
       }
 
@@ -820,8 +823,9 @@ function GridOverlay({
       const northingLines = Math.ceil((maxNorthing - minNorthing) / effectiveGridSize)
 
       if (eastingLines > maxLines || northingLines > maxLines) {
-        setLabelMarkers([])
-        setShowingLabels(false)
+        labelMarkersRef.current = []
+        showingLabelsRef.current = false
+        forceUpdate(n => n + 1)
         return
       }
 
@@ -914,19 +918,19 @@ function GridOverlay({
         }
       }
 
-      setLabelMarkers(labels)
-      setShowingLabels(shouldShowLabels)
+      // Refs aktualisieren statt setState (verhindert Re-Render-Loop)
+      const changed = labels.length !== labelMarkersRef.current.length || shouldShowLabels !== showingLabelsRef.current
+      labelMarkersRef.current = labels
+      showingLabelsRef.current = shouldShowLabels
+      if (changed) forceUpdate(n => n + 1)
     }
 
     updateGrid()
-    map.on('move', updateGrid)
-    map.on('zoom', updateGrid)
+    // Nur moveend/zoomend – 'move' und 'zoom' feuern bei jedem Frame und verursachen Endlosschleifen
     map.on('moveend', updateGrid)
     map.on('zoomend', updateGrid)
 
     return () => {
-      map.off('move', updateGrid)
-      map.off('zoom', updateGrid)
       map.off('moveend', updateGrid)
       map.off('zoomend', updateGrid)
       if (canvas && canvas.parentNode) {
@@ -939,7 +943,7 @@ function GridOverlay({
   return (
     <>
       {/* Easting Labels - VERTIKAL */}
-      {showingLabels && labelMarkers.filter(l => l.type === 'easting').map((label, index) => (
+      {showingLabelsRef.current && labelMarkersRef.current.filter(l => l.type === 'easting').map((label, index) => (
         <Marker
           key={`grid-east-${index}`}
           position={label.position}
@@ -965,7 +969,7 @@ function GridOverlay({
         />
       ))}
       {/* Northing Labels - HORIZONTAL */}
-      {showingLabels && labelMarkers.filter(l => l.type === 'northing').map((label, index) => (
+      {showingLabelsRef.current && labelMarkersRef.current.filter(l => l.type === 'northing').map((label, index) => (
         <Marker
           key={`grid-north-${index}`}
           position={label.position}
@@ -1807,6 +1811,217 @@ function TrajectoryPolyline({ trajectory }: { trajectory: ImportedTrajectory }) 
         </div>
       </Tooltip>
     </Polyline>
+  )
+}
+
+// Zoom-abhängige Track-Punkt-Anzeige (wie OziExplorer)
+function TrackPointMarkers({ track, settings, o }: { track: any[]; settings: any; o: any }) {
+  const map = useMap()
+  const [zoom, setZoom] = useState(map.getZoom())
+  const [bounds, setBounds] = useState(map.getBounds())
+
+  useMapEvents({
+    zoomend: () => {
+      setZoom(map.getZoom())
+      setBounds(map.getBounds())
+    },
+    moveend: () => {
+      setBounds(map.getBounds())
+    }
+  })
+
+  if (track.length === 0) return null
+
+  // Min/Max Höhe einmal berechnen
+  let minAlt = Infinity, maxAlt = -Infinity
+  for (const t of track) {
+    if (t.position.altitude < minAlt) minAlt = t.position.altitude
+    if (t.position.altitude > maxAlt) maxAlt = t.position.altitude
+  }
+  const altRange = maxAlt - minAlt
+
+  const getColor = (alt: number) => {
+    const pct = altRange > 0 ? (alt - minAlt) / altRange : 0
+    if (pct > 0.66) return '#ef4444'
+    if (pct > 0.33) return '#f59e0b'
+    return '#22c55e'
+  }
+
+  const formatTime = (date: Date) => {
+    const h = date.getHours().toString().padStart(2, '0')
+    const m = date.getMinutes().toString().padStart(2, '0')
+    const s = date.getSeconds().toString().padStart(2, '0')
+    return `${h}:${m}:${s}`
+  }
+
+  const formatDuration = (seconds: number) => {
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = Math.floor(seconds % 60)
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
+  // Zoom-abhängige Ausdünnung: nur bei maximalem Zoom alle Punkte
+  const maxZoom = map.getMaxZoom() || 19
+  const maxPoints = zoom >= maxZoom ? Infinity
+    : zoom >= maxZoom - 1 ? 1500
+    : zoom >= maxZoom - 3 ? 500
+    : zoom >= maxZoom - 5 ? 200
+    : 80
+
+  // Nur Punkte im sichtbaren Bereich + Ausdünnung
+  const paddedBounds = bounds.pad(0.1) // 10% Padding
+  const inView = track.map((p, i) => ({ point: p, index: i }))
+    .filter(({ point }) => paddedBounds.contains([point.position.latitude, point.position.longitude]))
+
+  const step = inView.length > maxPoints ? Math.ceil(inView.length / maxPoints) : 1
+  const visible = step > 1
+    ? inView.filter((_, i) => i % step === 0 || i === inView.length - 1)
+    : inView
+
+  return (
+    <>
+      {visible.map(({ point, index }) => (
+        <CircleMarker
+          key={`track-${index}`}
+          center={[point.position.latitude, point.position.longitude]}
+          radius={zoom >= 16 ? 5 : 4}
+          pathOptions={{
+            fillColor: getColor(point.position.altitude),
+            fillOpacity: 1,
+            color: 'white',
+            weight: 2,
+            opacity: 0.9
+          }}
+        >
+          <Popup
+            className="dark-trackpoint-popup"
+            autoPan={true}
+            autoPanPadding={[80, 80]}
+            keepInView={true}
+            maxWidth={400}
+          >
+            {(() => {
+              const utm = latLonToUTM(point.position.latitude, point.position.longitude)
+              const precision = settings.coordinateFormat === 'mgrs4' ? 4
+                : settings.coordinateFormat === 'mgrs5' ? 5
+                : settings.coordinateFormat === 'mgrs6' ? 6
+                : 5
+              const gridSquareEastBase = Math.floor(settings.utmBaseEasting / 100000) * 100000
+              const gridSquareNorthBase = Math.floor(settings.utmBaseNorthing / 100000) * 100000
+              const eastMeters = Math.round(utm.easting - gridSquareEastBase)
+              const northMeters = Math.round(utm.northing - gridSquareNorthBase)
+              const eastStr = eastMeters.toString().padStart(5, '0').substring(0, precision)
+              const northStr = northMeters.toString().padStart(5, '0').substring(0, precision)
+              const gridRef = `${eastStr} ${northStr}`
+
+              return (
+                <div style={{
+                  fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+                  fontSize: '12px',
+                  background: 'rgba(10, 15, 30, 0.98)',
+                  color: 'white',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  margin: '-13px -20px -13px -20px',
+                  padding: '20px 24px',
+                  minWidth: '340px'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    marginBottom: '12px',
+                    paddingBottom: '12px',
+                    borderBottom: '1px solid rgba(59, 130, 246, 0.3)'
+                  }}>
+                    <div style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      background: '#3b82f6',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      flexShrink: 0
+                    }}>
+                      {index + 1}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>Trackpunkt</div>
+                      <div style={{ fontSize: '16px', fontWeight: 600 }}>{formatTime(point.timestamp)}</div>
+                      {point.timeFromStart !== undefined && (
+                        <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>+{formatDuration(point.timeFromStart)}</div>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '20px', fontWeight: 700, color: '#22c55e', flexShrink: 0 }}>
+                      {settings.altitudeUnit === 'feet' ? Math.round(point.position.altitude * 3.28084) : Math.round(point.position.altitude)}{settings.altitudeUnit === 'feet' ? 'ft' : 'm'}
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '8px' }}>
+                    <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '2px' }}>Grid ({precision}/{precision})</div>
+                    <div style={{ fontSize: '22px', fontWeight: 700, color: '#f59e0b', letterSpacing: '2px' }}>{gridRef}</div>
+                  </div>
+
+                  <div style={{ marginBottom: '4px' }}>
+                    <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>UTM: </span>
+                    <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.98 : 0.9})` }}>{utm.zone}{utm.hemisphere} {utm.easting.toFixed(0)}E {utm.northing.toFixed(0)}N</span>
+                  </div>
+
+                  <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})` }}>
+                    <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>WGS84: </span>
+                    <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.98 : 0.9})` }}>{point.position.latitude.toFixed(6)}° / {point.position.longitude.toFixed(6)}°</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                      <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Baro</div>
+                      <div style={{ fontSize: '16px', fontWeight: 600, color: '#3b82f6' }}>{settings.altitudeUnit === 'feet' ? Math.round(point.baro.pressureAltitude * 3.28084) : Math.round(point.baro.pressureAltitude)}{settings.altitudeUnit === 'feet' ? 'ft' : 'm'}</div>
+                    </div>
+                    {point.speed !== undefined && (
+                      <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Speed</div>
+                        <div style={{ fontSize: '16px', fontWeight: 600 }}>{(point.speed * 3.6).toFixed(1)} km/h</div>
+                      </div>
+                    )}
+                    {point.heading !== undefined && (
+                      <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Kurs</div>
+                        <div style={{ fontSize: '16px', fontWeight: 600 }}>{Math.round(point.heading)}°</div>
+                      </div>
+                    )}
+                    {point.verticalSpeed !== undefined && (
+                      <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Vario</div>
+                        <div style={{ fontSize: '16px', fontWeight: 600, color: point.verticalSpeed > 0.1 ? '#22c55e' : point.verticalSpeed < -0.1 ? '#ef4444' : 'white' }}>
+                          {point.verticalSpeed > 0 ? '+' : ''}{point.verticalSpeed.toFixed(1)} m/s
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {point.distance !== undefined && point.distance > 0 && (
+                    <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>Distanz</span>
+                      <span style={{ fontSize: '12px' }}>{point.distance.toFixed(1)} m</span>
+                    </div>
+                  )}
+                  {point.recordingReason && (
+                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`, fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
+                      Aufgezeichnet: {point.recordingReason === 'time' ? 'Zeitintervall' : point.recordingReason === 'distance' ? 'Distanz' : 'Signifikant'}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+          </Popup>
+        </CircleMarker>
+      ))}
+    </>
   )
 }
 
@@ -3167,211 +3382,10 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
               interactive={false}
             />
 
-            {/* Track Point Markers mit Popup-Infos - nur anzeigen wenn nicht aufgezeichnet wird */}
-            {settings.trackPointMarkers && !isRecording && track.map((point, index) => {
-              // Farbe basierend auf Höhe
-              const minAlt = Math.min(...track.map(t => t.position.altitude))
-              const maxAlt = Math.max(...track.map(t => t.position.altitude))
-              const altRange = maxAlt - minAlt
-              const altPercent = altRange > 0 ? (point.position.altitude - minAlt) / altRange : 0
-
-              // Grün (niedrig) → Gelb → Rot (hoch)
-              let markerColor = '#22c55e' // Grün
-              if (altPercent > 0.66) {
-                markerColor = '#ef4444' // Rot
-              } else if (altPercent > 0.33) {
-                markerColor = '#f59e0b' // Orange/Gelb
-              }
-
-              // Format Zeit
-              const formatTime = (date: Date) => {
-                const h = date.getHours().toString().padStart(2, '0')
-                const m = date.getMinutes().toString().padStart(2, '0')
-                const s = date.getSeconds().toString().padStart(2, '0')
-                return `${h}:${m}:${s}`
-              }
-
-              // Format Dauer
-              const formatDuration = (seconds: number) => {
-                const h = Math.floor(seconds / 3600)
-                const m = Math.floor((seconds % 3600) / 60)
-                const s = Math.floor(seconds % 60)
-                if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-                return `${m}:${s.toString().padStart(2, '0')}`
-              }
-
-              const icon = L.divIcon({
-                html: `<div style="
-                  width: 8px;
-                  height: 8px;
-                  background: ${markerColor};
-                  border: 2px solid white;
-                  border-radius: 50%;
-                  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-                "></div>`,
-                className: '',
-                iconSize: [12, 12],
-                iconAnchor: [6, 6]
-              })
-
-              return (
-                <Marker
-                  key={`track-${index}`}
-                  position={[point.position.latitude, point.position.longitude]}
-                  icon={icon}
-                  zIndexOffset={900}
-                >
-                  <Popup
-                    className="dark-trackpoint-popup"
-                    autoPan={true}
-                    autoPanPadding={[80, 80]}
-                    keepInView={true}
-                    maxWidth={400}
-                  >
-                    {(() => {
-                      // Berechne UTM Koordinaten
-                      const utm = latLonToUTM(point.position.latitude, point.position.longitude)
-
-                      // Berechne Grid Reference im eingestellten Format
-                      const precision = settings.coordinateFormat === 'mgrs4' ? 4
-                        : settings.coordinateFormat === 'mgrs5' ? 5
-                        : settings.coordinateFormat === 'mgrs6' ? 6
-                        : 5
-
-                      // Grid Square Base aus Settings
-                      const gridSquareEastBase = Math.floor(settings.utmBaseEasting / 100000) * 100000
-                      const gridSquareNorthBase = Math.floor(settings.utmBaseNorthing / 100000) * 100000
-
-                      // Meter innerhalb des 100km Squares berechnen
-                      const eastMeters = Math.round(utm.easting - gridSquareEastBase)
-                      const northMeters = Math.round(utm.northing - gridSquareNorthBase)
-
-                      // Formatiere basierend auf Precision
-                      const eastStr = eastMeters.toString().padStart(5, '0').substring(0, precision)
-                      const northStr = northMeters.toString().padStart(5, '0').substring(0, precision)
-                      const gridRef = `${eastStr} ${northStr}`
-
-                      return (
-                        <div style={{
-                          fontFamily: "'JetBrains Mono', 'Consolas', monospace",
-                          fontSize: '12px',
-                          background: 'rgba(10, 15, 30, 0.98)',
-                          color: 'white',
-                          borderRadius: '12px',
-                          overflow: 'hidden',
-                          margin: '-13px -20px -13px -20px',
-                          padding: '20px 24px',
-                          minWidth: '340px'
-                        }}>
-                          {/* Header Zeile */}
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '12px',
-                            marginBottom: '12px',
-                            paddingBottom: '12px',
-                            borderBottom: '1px solid rgba(59, 130, 246, 0.3)'
-                          }}>
-                            <div style={{
-                              width: '36px',
-                              height: '36px',
-                              borderRadius: '50%',
-                              background: '#3b82f6',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'white',
-                              fontSize: '16px',
-                              fontWeight: 700,
-                              flexShrink: 0
-                            }}>
-                              {index + 1}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>Trackpunkt</div>
-                              <div style={{ fontSize: '16px', fontWeight: 600 }}>{formatTime(point.timestamp)}</div>
-                              {point.timeFromStart !== undefined && (
-                                <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>+{formatDuration(point.timeFromStart)}</div>
-                              )}
-                            </div>
-                            <div style={{ fontSize: '20px', fontWeight: 700, color: '#22c55e', flexShrink: 0 }}>
-                              {settings.altitudeUnit === 'feet' ? Math.round(point.position.altitude * 3.28084) : Math.round(point.position.altitude)}{settings.altitudeUnit === 'feet' ? 'ft' : 'm'}
-                            </div>
-                          </div>
-
-                          {/* Grid Reference */}
-                          <div style={{ marginBottom: '8px' }}>
-                            <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '2px' }}>Grid ({precision}/{precision})</div>
-                            <div style={{ fontSize: '22px', fontWeight: 700, color: '#f59e0b', letterSpacing: '2px' }}>{gridRef}</div>
-                          </div>
-
-                          {/* UTM */}
-                          <div style={{ marginBottom: '4px' }}>
-                            <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>UTM: </span>
-                            <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.98 : 0.9})` }}>{utm.zone}{utm.hemisphere} {utm.easting.toFixed(0)}E {utm.northing.toFixed(0)}N</span>
-                          </div>
-
-                          {/* WGS84 */}
-                          <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})` }}>
-                            <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>WGS84: </span>
-                            <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.98 : 0.9})` }}>{point.position.latitude.toFixed(6)}° / {point.position.longitude.toFixed(6)}°</span>
-                          </div>
-
-                          {/* Flugdaten 2x2 Grid */}
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
-                              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Baro</div>
-                              <div style={{ fontSize: '16px', fontWeight: 600, color: '#3b82f6' }}>{settings.altitudeUnit === 'feet' ? Math.round(point.baro.pressureAltitude * 3.28084) : Math.round(point.baro.pressureAltitude)}{settings.altitudeUnit === 'feet' ? 'ft' : 'm'}</div>
-                            </div>
-
-                            {/* Geschwindigkeit */}
-                            {point.speed !== undefined && (
-                              <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
-                                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Speed</div>
-                                <div style={{ fontSize: '16px', fontWeight: 600 }}>{(point.speed * 3.6).toFixed(1)} km/h</div>
-                              </div>
-                            )}
-
-                            {/* Kurs */}
-                            {point.heading !== undefined && (
-                              <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
-                                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Kurs</div>
-                                <div style={{ fontSize: '16px', fontWeight: 600 }}>{Math.round(point.heading)}°</div>
-                              </div>
-                            )}
-
-                            {/* Vario */}
-                            {point.verticalSpeed !== undefined && (
-                              <div style={{ background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, padding: '8px', borderRadius: '6px' }}>
-                                <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>Vario</div>
-                                <div style={{ fontSize: '16px', fontWeight: 600, color: point.verticalSpeed > 0.1 ? '#22c55e' : point.verticalSpeed < -0.1 ? '#ef4444' : 'white' }}>
-                                  {point.verticalSpeed > 0 ? '+' : ''}{point.verticalSpeed.toFixed(1)} m/s
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Distanz */}
-                          {point.distance !== undefined && point.distance > 0 && (
-                            <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})` }}>Distanz</span>
-                              <span style={{ fontSize: '12px' }}>{point.distance.toFixed(1)} m</span>
-                            </div>
-                          )}
-
-                          {/* Recording Reason */}
-                          {point.recordingReason && (
-                            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`, fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
-                              Aufgezeichnet: {point.recordingReason === 'time' ? 'Zeitintervall' : point.recordingReason === 'distance' ? 'Distanz' : 'Signifikant'}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })()}
-                  </Popup>
-                </Marker>
-              )
-            })}
+            {/* Track Point Markers – zoom-abhängig wie OziExplorer */}
+            {settings.trackPointMarkers && !isRecording && track.length > 0 && (
+              <TrackPointMarkers track={track} settings={settings} o={o} />
+            )}
           </>
         )}
 

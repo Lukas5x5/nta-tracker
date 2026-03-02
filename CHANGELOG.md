@@ -2,6 +2,18 @@
 
 ## [Unveröffentlicht]
 
+## [1.2.1] - 2026-03-02
+
+### Verbesserungen
+- Performance: Trackpunkt-Anzeige nach Recording-Stopp massiv optimiert – App friert nicht mehr ein bei langen Flügen (2h+). Zoom-abhängige Anzeige: rausgezoomt wenige Punkte, reingezoomt alle Details. Nur sichtbare Punkte werden gerendert, CircleMarker statt DOM-Marker
+- Meisterschaften (MS): Fahrt speichern hängt nicht mehr bei langsamer Verbindung – 15 Sekunden Timeout mit automatischem lokalem Fallback. Flight-Liste lädt nur Metadaten statt komplette Flugdaten
+- Gas-Tracker Panel: Verschieben per Drag (Mouse und Touch) funktioniert jetzt korrekt
+- Update-Download: Bei Fehler wird der Installer als Fallback im Browser geöffnet
+
+### Bugfixes
+- IndexedDB "database connection is closing" Fehler behoben – DB-Verbindung wird wiederverwendet
+- UTM-Grid Endlosschleife bei Kartenverschiebung behoben (Maximum update depth exceeded)
+
 ## [1.2.0] - 2026-02-24
 
 ### Neue Features

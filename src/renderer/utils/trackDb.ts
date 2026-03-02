@@ -67,7 +67,7 @@ export async function saveTrackData(track: any[], trackLine: [number, number][])
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
     })
-    db.close()
+    // DB offen lassen – wird über dbInstance wiederverwendet
   } catch (e) {
     console.warn('[TrackDB] Save failed:', e)
   }
@@ -84,7 +84,6 @@ export async function loadTrackData(): Promise<{ track: any[]; trackLine: [numbe
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
     })
-    db.close()
     return {
       track: trackReq.result || [],
       trackLine: lineReq.result || []
@@ -105,7 +104,6 @@ export async function clearTrackData(): Promise<void> {
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
     })
-    db.close()
   } catch (e) {
     console.warn('[TrackDB] Clear failed:', e)
   }

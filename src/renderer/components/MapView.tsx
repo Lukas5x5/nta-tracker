@@ -1546,12 +1546,17 @@ function CompetitionMapBoundsController({ bounds }: { bounds: { north: number; s
 }
 
 // Kartenposition speichern bei Verschiebung/Zoom
+// setTimeout verhindert Endlosschleife: Popup _adjustPan → moveend → setState → Re-Render → adjustPan
 function MapPositionSaver({ onSavePosition }: { onSavePosition: (center: { lat: number; lon: number }, zoom: number) => void }) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useMapEvents({
     moveend: (e) => {
-      const map = e.target
-      const center = map.getCenter()
-      onSavePosition({ lat: center.lat, lon: center.lng }, map.getZoom())
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => {
+        const map = e.target
+        const center = map.getCenter()
+        onSavePosition({ lat: center.lat, lon: center.lng }, map.getZoom())
+      }, 100)
     }
   })
   return null
@@ -1819,6 +1824,7 @@ function TrackPointMarkers({ track, settings, o }: { track: any[]; settings: any
   const map = useMap()
   const [zoom, setZoom] = useState(map.getZoom())
   const [bounds, setBounds] = useState(map.getBounds())
+  const moveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useMapEvents({
     zoomend: () => {
@@ -1826,7 +1832,11 @@ function TrackPointMarkers({ track, settings, o }: { track: any[]; settings: any
       setBounds(map.getBounds())
     },
     moveend: () => {
-      setBounds(map.getBounds())
+      // Debounce: Popup _adjustPan löst moveend aus → setBounds → Re-Render → adjustPan → Endlosschleife
+      if (moveTimerRef.current) clearTimeout(moveTimerRef.current)
+      moveTimerRef.current = setTimeout(() => {
+        setBounds(map.getBounds())
+      }, 100)
     }
   })
 

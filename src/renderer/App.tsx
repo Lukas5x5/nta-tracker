@@ -16,7 +16,7 @@ import type { Task, ProhibitedZone } from '../shared/types'
 import { latLonToUTM } from './utils/coordinatesWGS84'
 
 // Aktuelle App-Version (muss bei jedem Release angepasst werden)
-const APP_VERSION = '1.2.2'
+const APP_VERSION = '1.2.3'
 
 // Haversine-Distanzberechnung (Meter)
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -128,6 +128,20 @@ function App() {
   // Session beim Start pruefen
   useEffect(() => {
     checkSession()
+  }, [])
+
+  // Cache-Invalidierung bei Versionswechsel (z.B. nach Update)
+  useEffect(() => {
+    const CACHE_VERSION_KEY = 'nta-cache-version'
+    const storedVersion = localStorage.getItem(CACHE_VERSION_KEY)
+    if (storedVersion !== APP_VERSION) {
+      // Flights-Cache löschen (enthält evtl. veraltete hasTrack-Werte)
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('nta-flights-cache-'))
+        .forEach(k => localStorage.removeItem(k))
+      localStorage.setItem(CACHE_VERSION_KEY, APP_VERSION)
+      console.log('[App] Cache invalidiert nach Versionswechsel:', storedVersion, '→', APP_VERSION)
+    }
   }, [])
 
   // Update-Check nach Login

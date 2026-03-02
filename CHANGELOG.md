@@ -2,8 +2,9 @@
 
 ## [Unveröffentlicht]
 
-## [1.2.2] - 2026-03-02
+## [1.2.3] - 2026-03-02
 - Alle Fixes aus v1.2.1 enthalten (siehe unten)
+- Automatische Cache-Invalidierung bei App-Updates – Flights-Cache wird bei Versionswechsel automatisch zurückgesetzt, damit 3D-Button und andere Daten sofort korrekt angezeigt werden
 
 ## [1.2.1] - 2026-03-02
 

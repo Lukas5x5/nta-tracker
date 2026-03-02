@@ -337,7 +337,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
     }
 
     try {
-      // Nur Metadaten laden – NICHT flight_data (kann mehrere MB pro Flug sein)
+      // Erstmal nur Metadaten laden (schnell)
       const { data, error: err } = await supabase
         .from('championship_flights').select('id, championship_id, name, created_at')
         .eq('championship_id', championshipId).order('created_at', { ascending: true })
@@ -348,13 +348,34 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
         console.log('[Championship] Flights-Fehler, verwende Cache:', err.message)
         return
       }
+
+      // Neue Flüge die noch nicht im Cache sind → hasTrack einzeln abfragen
+      const cachedMap = new Map(cached.map(c => [c.id, c]))
+      const newIds = (data || []).filter(row => !cachedMap.has(row.id)).map(row => row.id)
+
+      let newTrackInfo = new Map<string, { hasTrack: boolean; isAptProfile: boolean }>()
+      if (newIds.length > 0) {
+        // Nur für neue Flüge flight_data laden (nicht für alle)
+        const { data: newData } = await supabase
+          .from('championship_flights').select('id, flight_data')
+          .in('id', newIds)
+        if (newData) {
+          for (const row of newData) {
+            newTrackInfo.set(row.id, {
+              hasTrack: !!(row.flight_data as FlightDataSnapshot)?.track?.length,
+              isAptProfile: (row.flight_data as any)?.type === 'apt_profile'
+            })
+          }
+        }
+      }
+
       const flightsWithTrackInfo = (data || []).map(row => ({
         id: row.id,
         championship_id: row.championship_id,
         name: row.name,
         created_at: row.created_at,
-        hasTrack: cached.find(c => c.id === row.id)?.hasTrack ?? false,
-        isAptProfile: cached.find(c => c.id === row.id)?.isAptProfile ?? false
+        hasTrack: cachedMap.get(row.id)?.hasTrack ?? newTrackInfo.get(row.id)?.hasTrack ?? false,
+        isAptProfile: cachedMap.get(row.id)?.isAptProfile ?? newTrackInfo.get(row.id)?.isAptProfile ?? false
       }))
       setFlights(flightsWithTrackInfo)
       saveFlightsToCache(championshipId, flightsWithTrackInfo)

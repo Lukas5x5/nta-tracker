@@ -990,15 +990,23 @@ export const useAuthStore = create<AuthState>()(
           const storedInstallId = state._installationId
 
           if (storedInstallId && storedInstallId !== currentInstallId) {
-            console.log('[Auth] Session stammt von anderem PC, Login erforderlich')
-            state.user = null
-            state.isAuthenticated = false
-            state._installationId = currentInstallId
-            state._licenseKey = null
-            state._isLicenseUser = false
-            localStorage.removeItem('nta-flight-storage')
-            localStorage.removeItem('nta-last-user-id')
-            localStorage.removeItem('nta-profile-dirty')
+            // Installation-ID geändert – prüfe ob es ein Update ist (License-Cache vorhanden)
+            const licenseCache = getLicenseCache()
+            if (licenseCache && state._isLicenseUser && state._licenseKey) {
+              // Update auf gleichem PC – Session beibehalten, nur Installation-ID aktualisieren
+              console.log('[Auth] Update erkannt – Session wird beibehalten, Installation-ID aktualisiert')
+              state._installationId = currentInstallId
+            } else {
+              console.log('[Auth] Session stammt von anderem PC, Login erforderlich')
+              state.user = null
+              state.isAuthenticated = false
+              state._installationId = currentInstallId
+              state._licenseKey = null
+              state._isLicenseUser = false
+              localStorage.removeItem('nta-flight-storage')
+              localStorage.removeItem('nta-last-user-id')
+              localStorage.removeItem('nta-profile-dirty')
+            }
           } else if (!storedInstallId && state.isAuthenticated) {
             console.log('[Auth] Upgrade: Installation ID hinzugefügt')
             state._installationId = currentInstallId

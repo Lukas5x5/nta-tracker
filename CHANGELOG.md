@@ -11,8 +11,10 @@
 - Update-Download: Bei Fehler wird der Installer als Fallback im Browser geöffnet
 
 ### Bugfixes
+- Lizenzschlüssel muss nach Update nicht mehr neu eingegeben werden – Session bleibt bei App-Updates erhalten
 - IndexedDB "database connection is closing" Fehler behoben – DB-Verbindung wird wiederverwendet
 - UTM-Grid Endlosschleife bei Kartenverschiebung behoben (Maximum update depth exceeded)
+- 3D-Button bei gespeicherten Flügen wird wieder korrekt angezeigt
 
 ## [1.2.0] - 2026-02-24
 

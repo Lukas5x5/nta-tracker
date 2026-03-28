@@ -71,6 +71,8 @@ declare global {
         saveFlightReport: (report: any) => Promise<string>
         saveToFolder: (options: { folderPath: string; fileName: string; content: string }) => Promise<{ success: boolean; path?: string; error?: string }>
         saveBackup: (options: { fileName: string; content: string }) => Promise<{ success: boolean; path?: string; error?: string }>
+        listBackups: () => Promise<Array<{ name: string; fileName: string; path: string; date: string; size: number }>>
+        loadBackup: (fileName: string) => Promise<{ success: boolean; data?: any; error?: string }>
       }
       maps: {
         import: () => Promise<MapInfo | null>

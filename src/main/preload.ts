@@ -104,7 +104,11 @@ contextBridge.exposeInMainWorld('ntaAPI', {
     saveToFolder: (options: { folderPath: string; fileName: string; content: string }): Promise<{ success: boolean; path?: string; error?: string }> =>
       ipcRenderer.invoke('files:saveToFolder', options),
     saveBackup: (options: { fileName: string; content: string }): Promise<{ success: boolean; path?: string; error?: string }> =>
-      ipcRenderer.invoke('files:saveBackup', options)
+      ipcRenderer.invoke('files:saveBackup', options),
+    listBackups: (): Promise<Array<{ name: string; fileName: string; path: string; date: string; size: number }>> =>
+      ipcRenderer.invoke('files:listBackups'),
+    loadBackup: (fileName: string): Promise<{ success: boolean; data?: any; error?: string }> =>
+      ipcRenderer.invoke('files:loadBackup', fileName)
   },
 
   // Karten Management (OZF Format)

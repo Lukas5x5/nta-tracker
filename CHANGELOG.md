@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unveröffentlicht]
+- Meisterschaften: Lokale Backups laden – neuer Button "Lokale Backups laden" unterhalb der Fahrten-Liste. Zeigt alle lokal gespeicherten Backup-Dateien aus %APPDATA%\nta-balloon-navigator\backups\ mit Name, Datum und Größe an. Per Klick auf "Laden" wird das Backup direkt in die App geladen. Nützlich wenn Supabase-Verbindung nicht verfügbar ist oder Fahrten nicht angezeigt werden
 
 ## [1.2.3] - 2026-03-02
 - Alle Fixes aus v1.2.1 enthalten (siehe unten)

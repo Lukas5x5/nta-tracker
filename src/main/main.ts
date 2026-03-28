@@ -1000,6 +1000,33 @@ function setupIpcHandlers() {
       return { success: false, error: error.message }
     }
   })
+
+  // Lokale Backups auflisten
+  ipcMain.handle('files:listBackups', async () => {
+    try {
+      const fs = require('fs')
+      const backupDir = path.join(app.getPath('userData'), 'backups')
+      if (!fs.existsSync(backupDir)) return []
+      const files = fs.readdirSync(backupDir).filter((f: string) => f.endsWith('.json'))
+      return files.map((f: string) => {
+        const filePath = path.join(backupDir, f)
+        const stats = fs.statSync(filePath)
+        return { name: f.replace('.json', ''), fileName: f, path: filePath, date: stats.mtime.toISOString(), size: stats.size }
+      }).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    } catch { return [] }
+  })
+
+  // Lokales Backup laden
+  ipcMain.handle('files:loadBackup', async (_: any, fileName: string) => {
+    try {
+      const fs = require('fs')
+      const filePath = path.join(app.getPath('userData'), 'backups', fileName)
+      const content = fs.readFileSync(filePath, 'utf-8')
+      return { success: true, data: JSON.parse(content) }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
 }
 
 app.whenReady().then(createWindow)

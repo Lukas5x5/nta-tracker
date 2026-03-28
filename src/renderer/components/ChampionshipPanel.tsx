@@ -120,6 +120,10 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // Lokale Backups
+  const [localBackups, setLocalBackups] = useState<Array<{ name: string; fileName: string; date: string; size: number }>>([])
+  const [showLocalBackups, setShowLocalBackups] = useState(false)
+
   // PZ
   const [editingPZ, setEditingPZ] = useState<EditingPZ | null>(null)
 
@@ -901,6 +905,71 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                     </div>
                   </div>
                 ))}
+
+                {/* Lokale Backups laden */}
+                <div style={{ marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px' }}>
+                  <button
+                    onClick={async () => {
+                      if (showLocalBackups) {
+                        setShowLocalBackups(false)
+                        return
+                      }
+                      if (window.ntaAPI?.files?.listBackups) {
+                        const backups = await window.ntaAPI.files.listBackups()
+                        setLocalBackups(backups)
+                      }
+                      setShowLocalBackups(true)
+                    }}
+                    style={{
+                      width: '100%', padding: '8px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)',
+                      borderRadius: '6px', color: '#f59e0b', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    {showLocalBackups ? 'Lokale Backups ausblenden' : 'Lokale Backups laden'}
+                  </button>
+
+                  {showLocalBackups && (
+                    <div style={{ marginTop: '8px' }}>
+                      {localBackups.length === 0 ? (
+                        <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>Keine lokalen Backups vorhanden</div>
+                      ) : localBackups.map(backup => (
+                        <div key={backup.fileName} style={{
+                          padding: '10px 12px', marginBottom: '4px', background: 'rgba(245,158,11,0.05)', borderRadius: '6px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid rgba(245,158,11,0.1)'
+                        }}>
+                          <div>
+                            <div style={{ fontSize: '12px', fontWeight: 500, color: '#f59e0b' }}>{backup.name}</div>
+                            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
+                              {new Date(backup.date).toLocaleString('de-DE')} &middot; {Math.round(backup.size / 1024)} KB
+                            </div>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              if (!window.ntaAPI?.files?.loadBackup) return
+                              const result = await window.ntaAPI.files.loadBackup(backup.fileName)
+                              if (result.success && result.data) {
+                                loadFlightData(result.data)
+                                setSuccessMsg(`Backup "${backup.name}" geladen`)
+                                onClose()
+                              } else {
+                                setError(`Fehler: ${result.error || 'Unbekannt'}`)
+                              }
+                            }}
+                            style={{
+                              padding: '6px 12px', background: '#f59e0b', border: 'none', borderRadius: '4px',
+                              color: '#fff', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                            }}
+                          >Laden</button>
+                        </div>
+                      ))}
+                      <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.25)', marginTop: '6px', textAlign: 'center' }}>
+                        Gespeichert in: %APPDATA%\nta-balloon-navigator\backups\
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : activeTab === 'pz' ? (
               /* ─── PZ TAB ─── */

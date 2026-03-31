@@ -391,6 +391,8 @@ export interface AppSettings {
   // Navigations-Panel Position & Felder
   navPanelPosition: { x: number; y: number }  // Position auf dem Bildschirm
   navPanelFields: NavPanelField[]  // Konfigurierbare Felder
+  navCustomTextColors: string[]  // Gespeicherte Custom-Textfarben
+  navCustomBgColors: string[]    // Gespeicherte Custom-Hintergrundfarben
 
   // Wind Einstellungen
   windLayerInterval: number  // Höhenintervall für Windschichten in Metern (25, 50, 100, 200 oder entsprechend in ft: 30, 61, 152, 305)

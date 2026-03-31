@@ -775,7 +775,7 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
         }} onClick={() => setShowClearConfirm(false)}>
           <div
             style={{
-              background: o.panelGradient, color: o.textColor, color: o.textColor,
+              background: o.panelGradient, color: o.textColor,
               borderRadius: '16px',
               border: '1px solid rgba(239, 68, 68, 0.3)',
               padding: '24px',

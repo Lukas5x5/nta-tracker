@@ -687,7 +687,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                       onClick={() => {
                         onSelectWindLayer(isSelected ? null : layer.altitude)
                         // Windlinie direkt aktivieren beim Klick
-                        setWindLineMode(!isSelected, isSelected ? null : layer)
+                        setWindLineMode(!isSelected, isSelected ? undefined : layer)
                       }}
                       style={{
                         display: 'flex',

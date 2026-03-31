@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useFlightStore } from '../stores/flightStore'
+import { getOutdoor } from '../utils/outdoorStyles'
 import { useAuthStore } from '../stores/authStore'
 import type { FlightDataSnapshot } from '../stores/flightStore'
 import { parsePZFile, exportPZtoPLT, exportPZtoWPT, exportAllPZtoWPT, exportAllPZtoPLT, downloadFile } from '../utils/pzParser'
@@ -101,6 +102,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
     tasksheetCoordPicker
   } = useFlightStore()
 
+  const o = getOutdoor(settings.outdoorMode)
   const pzFileInputRef = useRef<HTMLInputElement>(null)
 
   // ─── State ───
@@ -119,10 +121,6 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
   // Feedback
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  // Lokale Backups
-  const [localBackups, setLocalBackups] = useState<Array<{ name: string; fileName: string; date: string; size: number }>>([])
-  const [showLocalBackups, setShowLocalBackups] = useState(false)
 
   // PZ
   const [editingPZ, setEditingPZ] = useState<EditingPZ | null>(null)
@@ -334,61 +332,29 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
   const FLIGHTS_CACHE_PREFIX = 'nta-flights-cache-'
 
   const loadFlights = async (championshipId: string) => {
-    // Sofort Cache anzeigen
-    const cached = loadFlightsFromCache(championshipId)
-    if (cached.length > 0) {
-      setFlights(cached)
-    }
-
+    // Lokal gespeicherte Fahrten laden
     try {
-      // Erstmal nur Metadaten laden (schnell)
-      const { data, error: err } = await supabase
-        .from('championship_flights').select('id, championship_id, name, created_at')
-        .eq('championship_id', championshipId).order('created_at', { ascending: true })
-      if (err) {
-        if (cached.length === 0) {
-          setError(`Fehler: ${err.message}`)
-        }
-        console.log('[Championship] Flights-Fehler, verwende Cache:', err.message)
-        return
-      }
-
-      // Neue Flüge die noch nicht im Cache sind → hasTrack einzeln abfragen
-      const cachedMap = new Map(cached.map(c => [c.id, c]))
-      const newIds = (data || []).filter(row => !cachedMap.has(row.id)).map(row => row.id)
-
-      let newTrackInfo = new Map<string, { hasTrack: boolean; isAptProfile: boolean }>()
-      if (newIds.length > 0) {
-        // Nur für neue Flüge flight_data laden (nicht für alle)
-        const { data: newData } = await supabase
-          .from('championship_flights').select('id, flight_data')
-          .in('id', newIds)
-        if (newData) {
-          for (const row of newData) {
-            newTrackInfo.set(row.id, {
-              hasTrack: !!(row.flight_data as FlightDataSnapshot)?.track?.length,
-              isAptProfile: (row.flight_data as any)?.type === 'apt_profile'
-            })
-          }
-        }
-      }
-
-      const flightsWithTrackInfo = (data || []).map(row => ({
-        id: row.id,
-        championship_id: row.championship_id,
-        name: row.name,
-        created_at: row.created_at,
-        hasTrack: cachedMap.get(row.id)?.hasTrack ?? newTrackInfo.get(row.id)?.hasTrack ?? false,
-        isAptProfile: cachedMap.get(row.id)?.isAptProfile ?? newTrackInfo.get(row.id)?.isAptProfile ?? false
-      }))
-      setFlights(flightsWithTrackInfo)
-      saveFlightsToCache(championshipId, flightsWithTrackInfo)
-    } catch {
-      if (cached.length > 0) {
-        console.log('[Championship] Offline - verwende Flights-Cache:', cached.length, 'Flüge')
+      if (window.ntaAPI?.flights?.list) {
+        const localFlights = await window.ntaAPI.flights.list(championshipId)
+        const flightRows: ChampionshipFlightRow[] = localFlights.map(f => ({
+          id: f.id,
+          championship_id: championshipId,
+          name: f.name,
+          created_at: f.created_at,
+          hasTrack: f.hasTrack,
+          isAptProfile: f.isAptProfile
+        }))
+        setFlights(flightRows)
+        saveFlightsToCache(championshipId, flightRows)
       } else {
-        setError('Verbindungsfehler')
+        // Fallback: Cache aus localStorage
+        const cached = loadFlightsFromCache(championshipId)
+        setFlights(cached)
       }
+    } catch (err) {
+      console.error('[Championship] Fehler beim Laden lokaler Fahrten:', err)
+      const cached = loadFlightsFromCache(championshipId)
+      setFlights(cached)
     }
   }
 
@@ -484,42 +450,32 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
     setCreating(true)
     try {
       const snapshot = getFlightSnapshot()
+      const flightId = crypto.randomUUID()
+      const flightData = { ...snapshot, _meta: { name: newFlightName.trim(), created_at: new Date().toISOString() } }
 
-      // Supabase mit 15 Sekunden Timeout
-      const timeoutPromise = new Promise<{ error: { message: string } }>((resolve) =>
-        setTimeout(() => resolve({ error: { message: 'Timeout – Verbindung zu langsam' } }), 15000)
-      )
-      const insertPromise = supabase.from('championship_flights')
-        .insert({ championship_id: selectedChampionship.id, name: newFlightName.trim(), flight_data: snapshot })
-
-      const { error: err } = await Promise.race([insertPromise, timeoutPromise])
-
-      if (err) {
-        console.warn('[Championship] Supabase-Fehler, speichere lokal:', err.message)
-        const saved = await saveFlightLocally(newFlightName.trim(), snapshot)
-        if (saved) {
-          clearFlightData()
-          setNewFlightName('')
+      if (window.ntaAPI?.flights?.save) {
+        const result = await window.ntaAPI.flights.save({
+          championshipId: selectedChampionship.id,
+          flightId,
+          fileName: newFlightName.trim(),
+          content: JSON.stringify(flightData)
+        })
+        if (!result.success) {
+          setError(`Speichern fehlgeschlagen: ${result.error}`)
+          setCreating(false)
+          return
         }
-        setCreating(false)
-        return
+      } else {
+        // Fallback: Altes Backup-System
+        await saveFlightLocally(newFlightName.trim(), snapshot)
       }
+
       clearFlightData()
       setNewFlightName('')
-      setSuccessMsg('Fahrt gespeichert')
+      setSuccessMsg('Fahrt lokal gespeichert')
       await loadFlights(selectedChampionship.id)
     } catch (err: any) {
-      console.warn('[Championship] Verbindungsfehler, speichere lokal:', err)
-      try {
-        const snapshot = getFlightSnapshot()
-        const saved = await saveFlightLocally(newFlightName.trim(), snapshot)
-        if (saved) {
-          clearFlightData()
-          setNewFlightName('')
-        }
-      } catch (localErr) {
-        setError('Speichern fehlgeschlagen – kein Netzwerk und lokales Speichern nicht verfügbar')
-      }
+      setError(`Speichern fehlgeschlagen: ${err.message}`)
     } finally {
       setCreating(false)
     }
@@ -532,59 +488,70 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
       const snapshot = getFlightSnapshot()
       const now = new Date()
       const backupName = `Backup ${now.toLocaleDateString('de-DE')} ${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
-      const { error: err } = await supabase.from('championship_flights')
-        .insert({ championship_id: selectedChampionship.id, name: backupName, flight_data: snapshot })
-      if (err) {
-        console.warn('[Championship] Supabase-Fehler bei Backup:', err.message)
+      const flightId = crypto.randomUUID()
+      const flightData = { ...snapshot, _meta: { name: backupName, created_at: now.toISOString() } }
+
+      if (window.ntaAPI?.flights?.save) {
+        await window.ntaAPI.flights.save({
+          championshipId: selectedChampionship.id,
+          flightId,
+          fileName: backupName,
+          content: JSON.stringify(flightData)
+        })
+      } else {
         await saveFlightLocally(backupName, snapshot)
-        setCreating(false)
-        return
       }
-      setSuccessMsg('Backup gespeichert')
+
+      setSuccessMsg('Backup lokal gespeichert')
       await loadFlights(selectedChampionship.id)
     } catch (err: any) {
-      console.warn('[Championship] Verbindungsfehler bei Backup:', err)
+      console.warn('[Championship] Backup-Fehler:', err)
       const snapshot = getFlightSnapshot()
-      const now = new Date()
-      const backupName = `Backup ${now.toLocaleDateString('de-DE')} ${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
-      await saveFlightLocally(backupName, snapshot)
+      await saveFlightLocally(`Backup ${new Date().toISOString()}`, snapshot)
     }
     setCreating(false)
   }
 
   const handleLoadFlight = async (flightId: string, flightName?: string) => {
     try {
-      const { data, error: err } = await supabase.from('championship_flights').select('flight_data').eq('id', flightId).single()
-      if (err || !data) { setError(`Fehler: ${err?.message || 'Keine Daten'}`); return }
+      if (!selectedChampionship) return
 
-      // APT Profile → Viewer öffnen statt als Flugdaten laden
-      const flightData = data.flight_data as any
-      if (flightData?.type === 'apt_profile') {
-        setAptProfileView({ data: flightData as AptProfileData, name: flightName || 'APT Profil' })
-        return
+      if (window.ntaAPI?.flights?.load) {
+        const result = await window.ntaAPI.flights.load({ championshipId: selectedChampionship.id, flightId })
+        if (!result.success || !result.data) { setError(`Fehler: ${result.error || 'Keine Daten'}`); return }
+
+        const flightData = result.data
+        if (flightData?.type === 'apt_profile') {
+          setAptProfileView({ data: flightData as AptProfileData, name: flightName || 'APT Profil' })
+          return
+        }
+
+        loadFlightData(flightData as FlightDataSnapshot)
+        setSuccessMsg('Fahrt geladen')
+        onClose()
+      } else {
+        setError('Laden nicht verfügbar – App neu starten')
       }
-
-      loadFlightData(data.flight_data as FlightDataSnapshot)
-      setSuccessMsg('Fahrt geladen')
-      onClose()
-    } catch { setError('Verbindungsfehler') }
+    } catch { setError('Fehler beim Laden') }
   }
 
   const handleDeleteFlight = async (id: string) => {
     try {
-      const { error: err } = await supabase.from('championship_flights').delete().eq('id', id)
-      if (err) { setError(`Fehler: ${err.message}`); return }
-      // Cache sofort aktualisieren (gelöschtes Item entfernen)
-      if (selectedChampionship) {
-        setFlights(prev => {
-          const updated = prev.filter(f => f.id !== id)
-          saveFlightsToCache(selectedChampionship.id, updated)
-          return updated
-        })
+      if (!selectedChampionship) return
+
+      if (window.ntaAPI?.flights?.delete) {
+        const result = await window.ntaAPI.flights.delete({ championshipId: selectedChampionship.id, flightId: id })
+        if (!result.success) { setError(`Fehler: ${result.error}`); return }
       }
+
+      setFlights(prev => {
+        const updated = prev.filter(f => f.id !== id)
+        saveFlightsToCache(selectedChampionship.id, updated)
+        return updated
+      })
       setSuccessMsg('Fahrt gelöscht')
-      if (selectedChampionship) await loadFlights(selectedChampionship.id)
-    } catch { setError('Verbindungsfehler') }
+      await loadFlights(selectedChampionship.id)
+    } catch { setError('Fehler beim Löschen') }
     setShowDeleteConfirm(null)
   }
 
@@ -664,9 +631,9 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000
     }} onClick={onClose}>
       <div style={{
-        background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.97) 0%, rgba(15, 23, 42, 0.97) 100%)',
+        background: o.panelGradient, color: o.textColor,
         borderRadius: '16px', width: '800px', maxWidth: '95vw', height: '600px', maxHeight: '85vh',
-        boxShadow: '0 25px 80px rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)',
+        boxShadow: o.panelShadow, border: o.panelBorder,
         display: 'flex', overflow: 'hidden'
       }} onClick={e => e.stopPropagation()}>
 
@@ -674,16 +641,16 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
         {/* SIDEBAR - Meisterschafts-Liste */}
         {/* ═══════════════════════════════════════════ */}
         <div style={{
-          width: '260px', borderRight: '1px solid rgba(255,255,255,0.1)',
+          width: '260px', borderRight: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
           display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.2)'
         }}>
           {/* Sidebar Header */}
-          <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          <div style={{ padding: '16px', borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
               <div style={{ fontSize: '14px', fontWeight: 700, color: '#f59e0b' }}>Meisterschaften</div>
               <button onClick={() => setShowArchived(!showArchived)} style={{
                 background: showArchived ? 'rgba(100,116,139,0.3)' : 'transparent', border: 'none',
-                color: showArchived ? '#94a3b8' : 'rgba(255,255,255,0.4)', padding: '4px 8px',
+                color: showArchived ? '#94a3b8' : `rgba(${o.c},${o.c},${o.c},0.4)`, padding: '4px 8px',
                 borderRadius: '4px', fontSize: '10px', cursor: 'pointer'
               }}>
                 {showArchived ? 'Archiv' : 'Aktiv'} ({showArchived ? archivedChampionships.length : activeChampionships.length})
@@ -697,9 +664,9 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                 onChange={e => setNewChampName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleCreateChampionship()}
                 style={{
-                  flex: 1, padding: '8px 10px', background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px',
-                  color: '#fff', fontSize: '12px', outline: 'none'
+                  flex: 1, padding: '8px 10px', background: o.inputBg,
+                  border: `1px solid rgba(${o.c},${o.c},${o.c},0.1)`, borderRadius: '6px',
+                  color: o.textColor, fontSize: '12px', outline: 'none'
                 }}
               />
               <button onClick={handleCreateChampionship} disabled={!newChampName.trim() || creating} style={{
@@ -713,9 +680,9 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
           {/* MS Liste */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
             {loading ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>Laden...</div>
+              <div style={{ padding: '20px', textAlign: 'center', color: `rgba(${o.c},${o.c},${o.c},0.4)`, fontSize: '12px' }}>Laden...</div>
             ) : displayedChampionships.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>
+              <div style={{ padding: '20px', textAlign: 'center', color: `rgba(${o.c},${o.c},${o.c},0.4)`, fontSize: '12px' }}>
                 {showArchived ? 'Kein Archiv' : 'Keine Meisterschaften'}
               </div>
             ) : displayedChampionships.map(champ => (
@@ -724,7 +691,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                 onClick={() => setSelectedChampionship(champ)}
                 style={{
                   padding: '12px', marginBottom: '4px', borderRadius: '8px', cursor: 'pointer',
-                  background: selectedChampionship?.id === champ.id ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.03)',
+                  background: selectedChampionship?.id === champ.id ? 'rgba(245,158,11,0.15)' : `rgba(${o.c},${o.c},${o.c},0.03)`,
                   border: selectedChampionship?.id === champ.id ? '1px solid rgba(245,158,11,0.3)' : '1px solid transparent',
                   transition: 'all 0.15s'
                 }}
@@ -737,7 +704,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                     <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }} title="Hat Karte" />
                   )}
                 </div>
-                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
+                <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.4)`, marginTop: '4px' }}>
                   {new Date(champ.created_at).toLocaleDateString('de-DE')}
                   {champ.prohibited_zones && champ.prohibited_zones.length > 0 && (
                     <span style={{ marginLeft: '8px', color: '#ef4444' }}>{champ.prohibited_zones.length} PZ</span>
@@ -754,21 +721,21 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {/* Header */}
           <div style={{
-            padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)',
+            padding: '16px 20px', borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             background: 'rgba(245, 158, 11, 0.05)'
           }}>
             <div>
               {selectedChampionship ? (
                 <>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff' }}>{selectedChampionship.name}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: o.textColor }}>{selectedChampionship.name}</div>
+                  <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginTop: '2px' }}>
                     {flights.length} Fahrten
                     {selectedChampionship.prohibited_zones && ` · ${selectedChampionship.prohibited_zones.length} PZ`}
                   </div>
                 </>
               ) : (
-                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>Wähle eine Meisterschaft</div>
+                <div style={{ fontSize: '14px', color: `rgba(${o.c},${o.c},${o.c},0.5)` }}>Wähle eine Meisterschaft</div>
               )}
             </div>
 
@@ -777,7 +744,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                 <>
                   <button onClick={() => handleArchiveChampionship(selectedChampionship.id, !selectedChampionship.archived)}
                     title={selectedChampionship.archived ? 'Wiederherstellen' : 'Archivieren'}
-                    style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '6px 8px', color: 'rgba(255,255,255,0.6)', cursor: 'pointer' }}>
+                    style={{ background: `rgba(${o.c},${o.c},${o.c},0.1)`, border: 'none', borderRadius: '6px', padding: '6px 8px', color: `rgba(${o.c},${o.c},${o.c},0.6)`, cursor: 'pointer' }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       {selectedChampionship.archived ? <><path d="M3 12h18"/><path d="M12 3v18"/></> : <><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></>}
                     </svg>
@@ -790,7 +757,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                   </button>
                 </>
               )}
-              <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px' }}>
+              <button onClick={onClose} style={{ background: 'none', border: 'none', color: `rgba(${o.c},${o.c},${o.c},0.5)`, cursor: 'pointer', padding: '4px' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
@@ -800,7 +767,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
 
           {/* Tabs */}
           {selectedChampionship && (
-            <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ display: 'flex', borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)' }}>
               {[
                 { key: 'flights', label: 'Fahrten', icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
                 { key: 'pz', label: 'Sperrgebiete', icon: 'M12 2L22 8.5V15.5L12 22L2 15.5V8.5L12 2Z' },
@@ -809,7 +776,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                 <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} style={{
                   flex: 1, padding: '12px', background: activeTab === tab.key ? 'rgba(245,158,11,0.1)' : 'transparent',
                   border: 'none', borderBottom: activeTab === tab.key ? '2px solid #f59e0b' : '2px solid transparent',
-                  color: activeTab === tab.key ? '#f59e0b' : 'rgba(255,255,255,0.5)',
+                  color: activeTab === tab.key ? '#f59e0b' : `rgba(${o.c},${o.c},${o.c},0.5)`,
                   fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={tab.icon}/></svg>
@@ -823,10 +790,10 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
             {!selectedChampionship ? (
               <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(${o.c},${o.c},${o.c},0.2)" strokeWidth="1">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                 </svg>
-                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>Wähle links eine Meisterschaft aus</div>
+                <div style={{ fontSize: '13px', color: `rgba(${o.c},${o.c},${o.c},0.4)` }}>Wähle links eine Meisterschaft aus</div>
               </div>
             ) : activeTab === 'flights' ? (
               /* ─── FAHRTEN TAB ─── */
@@ -853,28 +820,28 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                   <div style={{ fontSize: '11px', color: '#22c55e', fontWeight: 600, marginBottom: '8px' }}>Fahrt abschließen & speichern</div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input type="text" placeholder="Name der Fahrt..." value={newFlightName} onChange={e => setNewFlightName(e.target.value)}
-                      style={{ flex: 1, padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', fontSize: '12px', outline: 'none' }} />
+                      style={{ flex: 1, padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)', borderRadius: '6px', color: o.textColor, fontSize: '12px', outline: 'none' }} />
                     <button onClick={handleSaveFlight} disabled={!newFlightName.trim() || creating} style={{
                       padding: '10px 16px', background: '#22c55e', border: 'none', borderRadius: '6px', color: '#fff', fontWeight: 600, fontSize: '12px', cursor: 'pointer',
                       opacity: !newFlightName.trim() || creating ? 0.5 : 1
                     }}>Speichern</button>
                   </div>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '6px' }}>
+                  <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.3)`, marginTop: '6px' }}>
                     Speichert und löscht die aktuellen Daten
                   </div>
                 </div>
 
                 {/* Fahrten Liste */}
-                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px' }}>Gespeicherte Fahrten ({flights.length})</div>
+                <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.4)`, marginBottom: '8px' }}>Gespeicherte Fahrten ({flights.length})</div>
                 {flights.length === 0 ? (
-                  <div style={{ padding: '24px', textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>Noch keine Fahrten</div>
+                  <div style={{ padding: '24px', textAlign: 'center', color: `rgba(${o.c},${o.c},${o.c},0.3)`, fontSize: '12px' }}>Noch keine Fahrten</div>
                 ) : flights.map(flight => (
                   <div key={flight.id} style={{
-                    padding: '12px', marginBottom: '6px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${flight.isAptProfile ? 'rgba(6,182,212,0.15)' : 'rgba(255,255,255,0.05)'}`
+                    padding: '12px', marginBottom: '6px', background: `rgba(${o.c},${o.c},${o.c},0.03)`, borderRadius: '8px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${flight.isAptProfile ? 'rgba(6,182,212,0.15)' : `rgba(${o.c},${o.c},${o.c},0.05)`}`
                   }}>
                     <div>
-                      <div style={{ fontSize: '13px', fontWeight: 500, color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 500, color: o.textColor, display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {flight.isAptProfile && (
                           <span style={{
                             fontSize: '9px', fontWeight: 700, color: '#06b6d4',
@@ -884,7 +851,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                         )}
                         {flight.name}
                       </div>
-                      <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>{new Date(flight.created_at).toLocaleString('de-DE')}</div>
+                      <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.4)` }}>{new Date(flight.created_at).toLocaleString('de-DE')}</div>
                     </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button onClick={() => handleLoadFlight(flight.id, flight.name)} title={flight.isAptProfile ? 'Profil anzeigen' : 'Laden'} style={{
@@ -906,70 +873,6 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                   </div>
                 ))}
 
-                {/* Lokale Backups laden */}
-                <div style={{ marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px' }}>
-                  <button
-                    onClick={async () => {
-                      if (showLocalBackups) {
-                        setShowLocalBackups(false)
-                        return
-                      }
-                      if (window.ntaAPI?.files?.listBackups) {
-                        const backups = await window.ntaAPI.files.listBackups()
-                        setLocalBackups(backups)
-                      }
-                      setShowLocalBackups(true)
-                    }}
-                    style={{
-                      width: '100%', padding: '8px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)',
-                      borderRadius: '6px', color: '#f59e0b', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    {showLocalBackups ? 'Lokale Backups ausblenden' : 'Lokale Backups laden'}
-                  </button>
-
-                  {showLocalBackups && (
-                    <div style={{ marginTop: '8px' }}>
-                      {localBackups.length === 0 ? (
-                        <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>Keine lokalen Backups vorhanden</div>
-                      ) : localBackups.map(backup => (
-                        <div key={backup.fileName} style={{
-                          padding: '10px 12px', marginBottom: '4px', background: 'rgba(245,158,11,0.05)', borderRadius: '6px',
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid rgba(245,158,11,0.1)'
-                        }}>
-                          <div>
-                            <div style={{ fontSize: '12px', fontWeight: 500, color: '#f59e0b' }}>{backup.name}</div>
-                            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
-                              {new Date(backup.date).toLocaleString('de-DE')} &middot; {Math.round(backup.size / 1024)} KB
-                            </div>
-                          </div>
-                          <button
-                            onClick={async () => {
-                              if (!window.ntaAPI?.files?.loadBackup) return
-                              const result = await window.ntaAPI.files.loadBackup(backup.fileName)
-                              if (result.success && result.data) {
-                                loadFlightData(result.data)
-                                setSuccessMsg(`Backup "${backup.name}" geladen`)
-                                onClose()
-                              } else {
-                                setError(`Fehler: ${result.error || 'Unbekannt'}`)
-                              }
-                            }}
-                            style={{
-                              padding: '6px 12px', background: '#f59e0b', border: 'none', borderRadius: '4px',
-                              color: '#fff', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
-                            }}
-                          >Laden</button>
-                        </div>
-                      ))}
-                      <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.25)', marginTop: '6px', textAlign: 'center' }}>
-                        Gespeichert in: %APPDATA%\nta-balloon-navigator\backups\
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
             ) : activeTab === 'pz' ? (
               /* ─── PZ TAB ─── */
@@ -1029,15 +932,15 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                     }}
                   />
                   <button onClick={() => pzFileInputRef.current?.click()} style={{
-                    flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '8px', color: 'rgba(255,255,255,0.7)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                    flex: 1, padding: '10px', background: `rgba(${o.c},${o.c},${o.c},0.05)`, border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                    borderRadius: '8px', color: `rgba(${o.c},${o.c},${o.c},0.7)`, fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                   }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     Import
                   </button>
                   <button onClick={() => { startPzDrawMode(); onClose() }} style={{
-                    flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '8px', color: 'rgba(255,255,255,0.7)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                    flex: 1, padding: '10px', background: `rgba(${o.c},${o.c},${o.c},0.05)`, border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                    borderRadius: '8px', color: `rgba(${o.c},${o.c},${o.c},0.7)`, fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                   }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
                     Zeichnen
@@ -1045,26 +948,26 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                 </div>
 
                 {/* Gespeicherte PZ der Meisterschaft */}
-                <div style={{ marginBottom: '16px', padding: '12px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ marginBottom: '16px', padding: '12px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid rgba(${o.c},${o.c},${o.c},0.08)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                     <div>
-                      <div style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>Gespeicherte PZ</div>
-                      <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: `rgba(${o.c},${o.c},${o.c},0.7)` }}>Gespeicherte PZ</div>
+                      <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.4)` }}>
                         {selectedChampionship.prohibited_zones?.length || 0} PZ in dieser Meisterschaft
                       </div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={loadPZFromChampionship} style={{
-                      flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '8px', color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                      flex: 1, padding: '10px', background: `rgba(${o.c},${o.c},${o.c},0.05)`, border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                      borderRadius: '8px', color: `rgba(${o.c},${o.c},${o.c},0.7)`, fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                     }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                       Laden
                     </button>
                     <button onClick={savePZToChampionship} style={{
-                      flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '8px', color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                      flex: 1, padding: '10px', background: `rgba(${o.c},${o.c},${o.c},0.05)`, border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                      borderRadius: '8px', color: `rgba(${o.c},${o.c},${o.c},0.7)`, fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                     }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
                       Speichern
@@ -1074,7 +977,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
 
                 {/* Aktuelle PZ (auf der Karte) */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
+                  <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.4)` }}>
                     Aktive PZ auf der Karte ({prohibitedZones.length})
                   </div>
                   {/* Alle herunterladen / Alle löschen Buttons */}
@@ -1122,7 +1025,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                 </div>
 
                 {prohibitedZones.length === 0 ? (
-                  <div style={{ padding: '24px', textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>Keine PZ geladen</div>
+                  <div style={{ padding: '24px', textAlign: 'center', color: `rgba(${o.c},${o.c},${o.c},0.3)`, fontSize: '12px' }}>Keine PZ geladen</div>
                 ) : (
                   <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
                     {[...prohibitedZones].sort((a, b) => a.name.localeCompare(b.name)).map((pz, idx) => {
@@ -1153,8 +1056,8 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                               )}
                             </div>
                             <div>
-                              <div style={{ fontSize: '12px', fontWeight: 500, color: '#fff' }}>{pz.name}</div>
-                              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>
+                              <div style={{ fontSize: '12px', fontWeight: 500, color: o.textColor }}>{pz.name}</div>
+                              <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.4)` }}>
                                 {isPolygon
                                   ? `${pz.polygon?.length || 0} Punkte · ${isOpen ? 'Linie' : 'Polygon'}`
                                   : pz.radius ? `${pz.radius}m` : 'Punkt'}
@@ -1212,7 +1115,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                             </button>
                             <button onClick={() => setProhibitedZones(prohibitedZones.filter(p => p.id !== pz.id))} style={{
-                              background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', padding: '4px'
+                              background: 'none', border: 'none', color: `rgba(${o.c},${o.c},${o.c},0.3)`, cursor: 'pointer', padding: '4px'
                             }} title="Löschen">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>
@@ -1234,8 +1137,8 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/></svg>
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#fff' }}>{mapInfo.name}</div>
-                        <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>Wettkampfkarte verknüpft</div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: o.textColor }}>{mapInfo.name}</div>
+                        <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)` }}>Wettkampfkarte verknüpft</div>
                       </div>
                     </div>
                     <button onClick={handleToggleMap} style={{
@@ -1248,11 +1151,11 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                   </div>
                 ) : (
                   <div style={{ padding: '32px', textAlign: 'center' }}>
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" style={{ marginBottom: '12px' }}>
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(${o.c},${o.c},${o.c},0.2)" strokeWidth="1" style={{ marginBottom: '12px' }}>
                       <path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/>
                     </svg>
-                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px' }}>Keine Karte verknüpft</div>
-                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>Erstelle eine Wettkampfkarte im Competition Area Panel</div>
+                    <div style={{ fontSize: '13px', color: `rgba(${o.c},${o.c},${o.c},0.4)`, marginBottom: '8px' }}>Keine Karte verknüpft</div>
+                    <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.3)` }}>Erstelle eine Wettkampfkarte im Competition Area Panel</div>
                   </div>
                 )}
               </div>
@@ -1280,22 +1183,22 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
       {/* PZ Edit Dialog */}
       {editingPZ && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', border: '1px solid rgba(168,85,247,0.3)', padding: '24px', width: '380px' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: o.panelGradient, color: o.textColor, borderRadius: '16px', border: '1px solid rgba(168,85,247,0.3)', padding: '24px', width: '380px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(168,85,247,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/></svg>
               </div>
               <div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{editingPZ.isNew ? 'Neuer PZ Punkt' : 'PZ bearbeiten'}</div>
-                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>Sperrgebiet {editingPZ.isNew ? 'erstellen' : 'ändern'}</div>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: o.textColor }}>{editingPZ.isNew ? 'Neuer PZ Punkt' : 'PZ bearbeiten'}</div>
+                <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)` }}>Sperrgebiet {editingPZ.isNew ? 'erstellen' : 'ändern'}</div>
               </div>
             </div>
 
             {/* Name */}
             <div style={{ marginBottom: '12px' }}>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Name</div>
+              <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '4px' }}>Name</div>
               <input type="text" value={editingPZ.name} onChange={e => setEditingPZ({ ...editingPZ, name: e.target.value })}
-                placeholder="z.B. PZ Alpha" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                placeholder="z.B. PZ Alpha" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)', borderRadius: '6px', color: o.textColor, fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
 
             {/* Polygon Info (bei importierten Polygonen) */}
@@ -1304,10 +1207,10 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
               return (
                 <div style={{ marginBottom: '12px', padding: '10px', background: 'rgba(59,130,246,0.1)', borderRadius: '6px', border: '1px solid rgba(59,130,246,0.2)' }}>
                   <div style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 600, marginBottom: '4px' }}>Polygon mit {editingPZ.polygon.length} Punkten</div>
-                  <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace' }}>
+                  <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, fontFamily: 'monospace' }}>
                     Zentrum: E {Math.round(utm.easting)} / N {Math.round(utm.northing)} (Zone {utmZone})
                   </div>
-                  <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>
+                  <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},0.3)`, marginTop: '2px' }}>
                     {editingPZ.lat.toFixed(6)}°, {editingPZ.lon.toFixed(6)}°
                   </div>
                 </div>
@@ -1317,14 +1220,14 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
             {/* Koordinaten Modus */}
             <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
               <button onClick={() => setEditingPZ({ ...editingPZ, coordMode: 'utm' })} style={{
-                flex: 1, padding: '8px', background: editingPZ.coordMode === 'utm' ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.05)',
-                border: editingPZ.coordMode === 'utm' ? '1px solid rgba(168,85,247,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '6px', color: editingPZ.coordMode === 'utm' ? '#a855f7' : 'rgba(255,255,255,0.5)', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                flex: 1, padding: '8px', background: editingPZ.coordMode === 'utm' ? 'rgba(168,85,247,0.2)' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                border: editingPZ.coordMode === 'utm' ? '1px solid rgba(168,85,247,0.4)' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                borderRadius: '6px', color: editingPZ.coordMode === 'utm' ? '#a855f7' : `rgba(${o.c},${o.c},${o.c},0.5)`, fontSize: '11px', fontWeight: 600, cursor: 'pointer'
               }}>UTM Grid</button>
               <button onClick={() => setEditingPZ({ ...editingPZ, coordMode: 'latlon' })} style={{
-                flex: 1, padding: '8px', background: editingPZ.coordMode === 'latlon' ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.05)',
-                border: editingPZ.coordMode === 'latlon' ? '1px solid rgba(168,85,247,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '6px', color: editingPZ.coordMode === 'latlon' ? '#a855f7' : 'rgba(255,255,255,0.5)', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                flex: 1, padding: '8px', background: editingPZ.coordMode === 'latlon' ? 'rgba(168,85,247,0.2)' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                border: editingPZ.coordMode === 'latlon' ? '1px solid rgba(168,85,247,0.4)' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                borderRadius: '6px', color: editingPZ.coordMode === 'latlon' ? '#a855f7' : `rgba(${o.c},${o.c},${o.c},0.5)`, fontSize: '11px', fontWeight: 600, cursor: 'pointer'
               }}>Lat/Lon</button>
             </div>
 
@@ -1332,14 +1235,14 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
             {editingPZ.coordMode === 'utm' && (
               <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Easting (E)</div>
+                  <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '4px' }}>Easting (E)</div>
                   <input type="text" value={editingPZ.utmEasting || ''} onChange={e => setEditingPZ({ ...editingPZ, utmEasting: e.target.value })}
-                    placeholder="z.B. 12345" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }} />
+                    placeholder="z.B. 12345" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)', borderRadius: '6px', color: o.textColor, fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Northing (N)</div>
+                  <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '4px' }}>Northing (N)</div>
                   <input type="text" value={editingPZ.utmNorthing || ''} onChange={e => setEditingPZ({ ...editingPZ, utmNorthing: e.target.value })}
-                    placeholder="z.B. 67890" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }} />
+                    placeholder="z.B. 67890" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)', borderRadius: '6px', color: o.textColor, fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }} />
                 </div>
               </div>
             )}
@@ -1348,14 +1251,14 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
             {editingPZ.coordMode === 'latlon' && (
               <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Latitude</div>
+                  <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '4px' }}>Latitude</div>
                   <input type="text" value={editingPZ.lat || ''} onChange={e => setEditingPZ({ ...editingPZ, lat: parseFloat(e.target.value) || 0 })}
-                    placeholder="z.B. 48.2082" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }} />
+                    placeholder="z.B. 48.2082" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)', borderRadius: '6px', color: o.textColor, fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Longitude</div>
+                  <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '4px' }}>Longitude</div>
                   <input type="text" value={editingPZ.lon || ''} onChange={e => setEditingPZ({ ...editingPZ, lon: parseFloat(e.target.value) || 0 })}
-                    placeholder="z.B. 16.3738" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }} />
+                    placeholder="z.B. 16.3738" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)', borderRadius: '6px', color: o.textColor, fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }} />
                 </div>
               </div>
             )}
@@ -1363,24 +1266,24 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
             {/* Radius & Höhe */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Radius (m)</div>
+                <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '4px' }}>Radius (m)</div>
                 <input type="number" value={editingPZ.radius || ''} onChange={e => setEditingPZ({ ...editingPZ, radius: parseInt(e.target.value) || undefined })}
-                  placeholder="Optional" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                  placeholder="Optional" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)', borderRadius: '6px', color: o.textColor, fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Höhe (ft)</div>
+                <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '4px' }}>Höhe (ft)</div>
                 <input type="number" value={editingPZ.elevation || ''} onChange={e => setEditingPZ({ ...editingPZ, elevation: parseInt(e.target.value) || undefined })}
-                  placeholder="Optional" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                  placeholder="Optional" style={{ width: '100%', padding: '10px 12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)', borderRadius: '6px', color: o.textColor, fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>
 
             {/* Farbe und Deckkraft - nur wenn Radius oder Polygon vorhanden */}
             {((editingPZ.radius && editingPZ.radius > 0) || (editingPZ.type === 'polygon' && editingPZ.polygon && editingPZ.polygon.length > 0)) && (
-              <div style={{ marginBottom: '12px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '8px' }}>Darstellung</div>
+              <div style={{ marginBottom: '12px', padding: '12px', background: `rgba(${o.c},${o.c},${o.c},0.03)`, borderRadius: '8px', border: '1px solid rgba(${o.c},${o.c},${o.c},0.05)' }}>
+                <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '8px' }}>Darstellung</div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '4px' }}>Farbe</div>
+                    <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},0.4)`, marginBottom: '4px' }}>Farbe</div>
                     <input
                       type="color"
                       value={editingPZ.color || settings.pzCircleColor || '#ef4444'}
@@ -1389,7 +1292,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '4px' }}>Deckkraft ({Math.round((editingPZ.fillOpacity ?? 0.15) * 100)}%)</div>
+                    <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},0.4)`, marginBottom: '4px' }}>Deckkraft ({Math.round((editingPZ.fillOpacity ?? 0.15) * 100)}%)</div>
                     <input
                       type="range"
                       min="0"
@@ -1427,21 +1330,21 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                     <input type="checkbox" checked={editingPZ.altitudeWarning || false}
                       onChange={e => setEditingPZ({ ...editingPZ, altitudeWarning: e.target.checked })}
                       style={{ width: '14px', height: '14px', cursor: 'pointer' }} />
-                    <span style={{ fontSize: '11px', color: 'white' }}>Höhen-Warnung aktivieren ({editingPZ.elevation} ft)</span>
+                    <span style={{ fontSize: '11px', color: o.textColor }}>Höhen-Warnung aktivieren ({editingPZ.elevation} ft)</span>
                   </label>
               {editingPZ.altitudeWarning && (
                 <div style={{ marginLeft: '22px' }}>
                   {/* Modus-Auswahl */}
                   <div style={{ marginBottom: '10px' }}>
-                    <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginBottom: '6px' }}>Modus:</div>
+                    <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.4)`, marginBottom: '6px' }}>Modus:</div>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button
                         onClick={() => setEditingPZ({ ...editingPZ, altitudeWarningMode: 'floor' })}
                         style={{
                           flex: 1, padding: '8px 6px', fontSize: '10px', fontWeight: 600,
                           background: (editingPZ.altitudeWarningMode || 'ceiling') === 'floor' ? 'rgba(139,92,246,0.4)' : 'rgba(0,0,0,0.3)',
-                          border: (editingPZ.altitudeWarningMode || 'ceiling') === 'floor' ? '1px solid rgba(139,92,246,0.6)' : '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: '6px', color: '#fff', cursor: 'pointer'
+                          border: (editingPZ.altitudeWarningMode || 'ceiling') === 'floor' ? '1px solid rgba(139,92,246,0.6)' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                          borderRadius: '6px', color: o.textColor, cursor: 'pointer'
                         }}
                       >
                         Von Boden bis
@@ -1451,8 +1354,8 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                         style={{
                           flex: 1, padding: '8px 6px', fontSize: '10px', fontWeight: 600,
                           background: (editingPZ.altitudeWarningMode || 'ceiling') === 'ceiling' ? 'rgba(139,92,246,0.4)' : 'rgba(0,0,0,0.3)',
-                          border: (editingPZ.altitudeWarningMode || 'ceiling') === 'ceiling' ? '1px solid rgba(139,92,246,0.6)' : '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: '6px', color: '#fff', cursor: 'pointer'
+                          border: (editingPZ.altitudeWarningMode || 'ceiling') === 'ceiling' ? '1px solid rgba(139,92,246,0.6)' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                          borderRadius: '6px', color: o.textColor, cursor: 'pointer'
                         }}
                       >
                         Höhenbegrenzung
@@ -1460,7 +1363,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                     </div>
                   </div>
 
-                  <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', lineHeight: '1.4' }}>
+                  <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},0.3)`, lineHeight: '1.4' }}>
                     {(editingPZ.altitudeWarningMode || 'ceiling') === 'floor'
                       ? `Sperrbereich von Boden bis ${editingPZ.elevation} ft. Vorlauf-Warnung (Margin) wird in den Einstellungen festgelegt.`
                       : `Maximale Flughöhe: ${editingPZ.elevation} ft. Vorlauf-Warnung (Margin) wird in den Einstellungen festgelegt.`
@@ -1477,28 +1380,28 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
               <>
                 {/* Offen/Geschlossen Toggle */}
                 <div style={{ marginBottom: '12px' }}>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '6px' }}>Polygon-Typ</div>
+                  <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '6px' }}>Polygon-Typ</div>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button onClick={() => setEditingPZ({ ...editingPZ, closed: true })} style={{
-                      flex: 1, padding: '10px', background: editingPZ.closed !== false ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)',
-                      border: editingPZ.closed !== false ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '6px', color: editingPZ.closed !== false ? '#ef4444' : 'rgba(255,255,255,0.5)', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                      flex: 1, padding: '10px', background: editingPZ.closed !== false ? 'rgba(239,68,68,0.2)' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                      border: editingPZ.closed !== false ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                      borderRadius: '6px', color: editingPZ.closed !== false ? '#ef4444' : `rgba(${o.c},${o.c},${o.c},0.5)`, fontSize: '11px', fontWeight: 600, cursor: 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                     }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/></svg>
                       Geschlossen
                     </button>
                     <button onClick={() => setEditingPZ({ ...editingPZ, closed: false, fillOpacity: 0 })} style={{
-                      flex: 1, padding: '10px', background: editingPZ.closed === false ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.05)',
-                      border: editingPZ.closed === false ? '1px solid rgba(245,158,11,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '6px', color: editingPZ.closed === false ? '#f59e0b' : 'rgba(255,255,255,0.5)', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                      flex: 1, padding: '10px', background: editingPZ.closed === false ? 'rgba(245,158,11,0.2)' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                      border: editingPZ.closed === false ? '1px solid rgba(245,158,11,0.4)' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                      borderRadius: '6px', color: editingPZ.closed === false ? '#f59e0b' : `rgba(${o.c},${o.c},${o.c},0.5)`, fontSize: '11px', fontWeight: 600, cursor: 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                     }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
                       Offen (Linie)
                     </button>
                   </div>
-                  <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>
+                  <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},0.3)`, marginTop: '4px' }}>
                     {editingPZ.closed !== false ? 'Geschlossenes Polygon mit Füllung' : 'Offene Linie ohne Füllung (Track)'}
                   </div>
                 </div>
@@ -1508,7 +1411,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
 
             {/* Buttons */}
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setEditingPZ(null)} style={{ flex: 1, padding: '12px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', color: 'rgba(255,255,255,0.7)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Abbrechen</button>
+              <button onClick={() => setEditingPZ(null)} style={{ flex: 1, padding: '12px', background: `rgba(${o.c},${o.c},${o.c},0.1)`, border: 'none', borderRadius: '8px', color: `rgba(${o.c},${o.c},${o.c},0.7)`, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Abbrechen</button>
               <button onClick={() => {
                 if (!editingPZ.name.trim()) return
                 let finalLat = editingPZ.lat
@@ -1557,17 +1460,17 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
       {/* Delete Confirm Dialog */}
       {showDeleteConfirm && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', border: '1px solid rgba(239,68,68,0.3)', padding: '24px', width: '340px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: o.panelGradient, color: o.textColor, borderRadius: '16px', border: '1px solid rgba(239,68,68,0.3)', padding: '24px', width: '340px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(239,68,68,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </div>
-            <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>Löschen?</div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px' }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: o.textColor, marginBottom: '8px' }}>Löschen?</div>
+            <div style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '20px' }}>
               "{showDeleteConfirm.name}" wirklich löschen?
               {showDeleteConfirm.type === 'championship' && showDeleteConfirm.id !== 'all-pz' && ' Alle Fahrten werden gelöscht.'}
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setShowDeleteConfirm(null)} style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', color: 'rgba(255,255,255,0.7)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Abbrechen</button>
+              <button onClick={() => setShowDeleteConfirm(null)} style={{ flex: 1, padding: '10px', background: `rgba(${o.c},${o.c},${o.c},0.1)`, border: 'none', borderRadius: '8px', color: `rgba(${o.c},${o.c},${o.c},0.7)`, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Abbrechen</button>
               <button onClick={() => {
                 if (showDeleteConfirm.id === 'all-pz') {
                   setProhibitedZones([])
@@ -1588,14 +1491,14 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
       {/* Export Dialog - Einzeln oder zusammen exportieren */}
       {showExportDialog && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', border: '1px solid rgba(59,130,246,0.3)', padding: '24px', width: '360px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: o.panelGradient, color: o.textColor, borderRadius: '16px', border: '1px solid rgba(59,130,246,0.3)', padding: '24px', width: '360px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: showExportDialog.type === 'pz' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={showExportDialog.type === 'pz' ? '#ef4444' : '#f59e0b'} strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </div>
-            <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: o.textColor, marginBottom: '8px' }}>
               {showExportDialog.items.length} {showExportDialog.type === 'pz' ? 'PZ-Punkte' : 'Tracks'} exportieren
             </div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px' }}>
+            <div style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '20px' }}>
               Wie möchtest du exportieren?
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1655,14 +1558,14 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                 }
                 setShowExportDialog(null)
               }} style={{
-                padding: '12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                padding: '12px', background: `rgba(${o.c},${o.c},${o.c},0.1)`, border: '1px solid rgba(${o.c},${o.c},${o.c},0.2)', borderRadius: '8px', color: o.textColor, fontSize: '12px', fontWeight: 600, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
               }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 Jede einzeln in Ordner ({showExportDialog.items.length} Dateien)
               </button>
               <button onClick={() => setShowExportDialog(null)} style={{
-                padding: '10px', background: 'transparent', border: 'none', borderRadius: '8px', color: 'rgba(255,255,255,0.5)', fontSize: '11px', cursor: 'pointer'
+                padding: '10px', background: 'transparent', border: 'none', borderRadius: '8px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, fontSize: '11px', cursor: 'pointer'
               }}>Abbrechen</button>
             </div>
           </div>
@@ -1672,15 +1575,15 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
       {/* PZ Import Settings Dialog - Liste aller Dateien mit individuellen Einstellungen */}
       {showPZImportSettingsDialog && pzImportFilesList.length > 0 && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', border: '1px solid rgba(59,130,246,0.3)', padding: '24px', width: '480px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: o.panelGradient, color: o.textColor, borderRadius: '16px', border: '1px solid rgba(59,130,246,0.3)', padding: '24px', width: '480px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(59,130,246,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
               </div>
               <div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>Import-Einstellungen</div>
-                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: o.textColor }}>Import-Einstellungen</div>
+                <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)` }}>
                   {pzImportFilesList.length} {pzImportFilesList.length === 1 ? 'Datei' : 'Dateien'} · {pzImportFilesList.reduce((sum, f) => sum + f.zones.length, 0)} PZ
                 </div>
               </div>
@@ -1691,9 +1594,9 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
               {pzImportFilesList.map((file, index) => (
                 <div key={index} style={{
                   padding: '12px',
-                  background: 'rgba(255,255,255,0.03)',
+                  background: `rgba(${o.c},${o.c},${o.c},0.03)`,
                   borderRadius: '10px',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(${o.c},${o.c},${o.c},0.08)',
                   marginBottom: index < pzImportFilesList.length - 1 ? '10px' : 0
                 }}>
                   {/* Dateiname */}
@@ -1701,15 +1604,15 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={file.isPltFile ? '#f59e0b' : '#3b82f6'} strokeWidth="2">
                       <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
                     </svg>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#fff', flex: 1 }}>{file.fileName}</span>
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>{file.zones.length} PZ</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: o.textColor, flex: 1 }}>{file.fileName}</span>
+                    <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.4)` }}>{file.zones.length} PZ</span>
                   </div>
 
                   {/* Farbe, Deckkraft und Vorschau - nur wenn Radius oder Polygon vorhanden */}
                   {(file.hasPolygons || file.hasRadius) && (
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: file.hasPolygons ? '10px' : 0 }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>Farbe</div>
+                        <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},0.4)`, marginBottom: '2px' }}>Farbe</div>
                         <input
                           type="color"
                           value={file.color}
@@ -1722,7 +1625,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                         />
                       </div>
                       <div style={{ flex: 1.5 }}>
-                        <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>Deckkraft ({Math.round(file.opacity * 100)}%)</div>
+                        <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},0.4)`, marginBottom: '2px' }}>Deckkraft ({Math.round(file.opacity * 100)}%)</div>
                         <input
                           type="range"
                           min="0"
@@ -1755,9 +1658,9 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                         }}
                         style={{
                           flex: 1, padding: '6px', borderRadius: '6px', cursor: 'pointer',
-                          background: file.closed ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)',
-                          border: file.closed ? '1px solid #ef4444' : '1px solid rgba(255,255,255,0.1)',
-                          color: file.closed ? '#ef4444' : 'rgba(255,255,255,0.4)',
+                          background: file.closed ? 'rgba(239,68,68,0.2)' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                          border: file.closed ? '1px solid #ef4444' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                          color: file.closed ? '#ef4444' : `rgba(${o.c},${o.c},${o.c},0.4)`,
                           fontSize: '10px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
                         }}
                       >
@@ -1772,9 +1675,9 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                         }}
                         style={{
                           flex: 1, padding: '6px', borderRadius: '6px', cursor: 'pointer',
-                          background: !file.closed ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.05)',
-                          border: !file.closed ? '1px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
-                          color: !file.closed ? '#f59e0b' : 'rgba(255,255,255,0.4)',
+                          background: !file.closed ? 'rgba(245,158,11,0.2)' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                          border: !file.closed ? '1px solid #f59e0b' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                          color: !file.closed ? '#f59e0b' : `rgba(${o.c},${o.c},${o.c},0.4)`,
                           fontSize: '10px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
                         }}
                       >
@@ -1794,7 +1697,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                   setShowPZImportSettingsDialog(false)
                   setPZImportFilesList([])
                 }}
-                style={{ flex: 1, padding: '12px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', color: 'rgba(255,255,255,0.5)', fontSize: '12px', cursor: 'pointer' }}
+                style={{ flex: 1, padding: '12px', background: `rgba(${o.c},${o.c},${o.c},0.1)`, border: 'none', borderRadius: '8px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, fontSize: '12px', cursor: 'pointer' }}
               >
                 Abbrechen
               </button>
@@ -1853,12 +1756,12 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
       {/* PZ Duplicate Dialog */}
       {showPZDuplicateDialog && pzDuplicateInfo && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', border: '1px solid rgba(245,158,11,0.3)', padding: '24px', width: '380px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: o.panelGradient, color: o.textColor, borderRadius: '16px', border: '1px solid rgba(245,158,11,0.3)', padding: '24px', width: '380px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             </div>
-            <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>Duplikate gefunden</div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '16px' }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: o.textColor, marginBottom: '8px' }}>Duplikate gefunden</div>
+            <div style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '16px' }}>
               <span style={{ color: '#f59e0b', fontWeight: 600 }}>{pzDuplicateInfo.duplicates.length}</span> von {pzDuplicateInfo.totalImported} PZ existieren bereits
             </div>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
@@ -1868,7 +1771,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
                 style={{ flex: 1, padding: '10px', background: '#3b82f6', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Nur neue ({pzDuplicateInfo.uniqueNewZones.length})</button>
             </div>
             <button onClick={() => { setShowPZDuplicateDialog(false); setPZDuplicateInfo(null) }}
-              style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', color: 'rgba(255,255,255,0.5)', fontSize: '11px', cursor: 'pointer' }}>Abbrechen</button>
+              style={{ width: '100%', padding: '10px', background: `rgba(${o.c},${o.c},${o.c},0.1)`, border: 'none', borderRadius: '8px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, fontSize: '11px', cursor: 'pointer' }}>Abbrechen</button>
           </div>
         </div>
       )}
@@ -1876,17 +1779,17 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
       {/* Load PZ Dialog */}
       {showLoadPZDialog && pendingMapToggle && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', border: '1px solid rgba(239,68,68,0.3)', padding: '24px', width: '340px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: o.panelGradient, color: o.textColor, borderRadius: '16px', border: '1px solid rgba(239,68,68,0.3)', padding: '24px', width: '340px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(239,68,68,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/></svg>
             </div>
-            <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>Sperrgebiete laden?</div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '16px' }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: o.textColor, marginBottom: '8px' }}>Sperrgebiete laden?</div>
+            <div style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '16px' }}>
               Diese Meisterschaft hat <span style={{ color: '#ef4444', fontWeight: 600 }}>{pendingMapToggle.pzCount}</span> gespeicherte PZ. Laden?
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => { toggleActiveMap(pendingMapToggle.mapId, true); setShowLoadPZDialog(false); setPendingMapToggle(null) }}
-                style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', color: 'rgba(255,255,255,0.7)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Nein</button>
+                style={{ flex: 1, padding: '10px', background: `rgba(${o.c},${o.c},${o.c},0.1)`, border: 'none', borderRadius: '8px', color: `rgba(${o.c},${o.c},${o.c},0.7)`, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Nein</button>
               <button onClick={() => { setProhibitedZones(pendingMapToggle.zones); toggleActiveMap(pendingMapToggle.mapId, true); setShowLoadPZDialog(false); setPendingMapToggle(null) }}
                 style={{ flex: 1, padding: '10px', background: '#ef4444', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Ja, laden</button>
             </div>

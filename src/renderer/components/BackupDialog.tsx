@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useFlightStore } from '../stores/flightStore'
-import { supabase } from '../lib/supabase'
 
 export function BackupDialog() {
   const { showBackupDialog, backupDialogChampionship, closeBackupDialog, getFlightSnapshot } = useFlightStore()
@@ -9,48 +8,36 @@ export function BackupDialog() {
 
   if (!showBackupDialog || !backupDialogChampionship) return null
 
-  // Lokales Speichern im App-Backup-Ordner (automatisch, kein Dialog)
-  const saveLocally = async (name: string, snapshot: any): Promise<boolean> => {
-    try {
-      if (!window.ntaAPI?.files?.saveBackup) return false
-      const safeName = name.replace(/[<>:"/\\|?*]/g, '_')
-      const result = await window.ntaAPI.files.saveBackup({
-        fileName: `${safeName}.json`,
-        content: JSON.stringify(snapshot, null, 2)
-      })
-      if (result.success) {
-        console.log('[BackupDialog] Lokal gespeichert:', result.path)
-        return true
-      }
-      return false
-    } catch { return false }
-  }
-
   const handleSave = async () => {
     setSaving(true)
     try {
       const snapshot = getFlightSnapshot()
       const now = new Date()
       const backupName = `Backup ${now.toLocaleDateString('de-DE')} ${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
+      const flightId = crypto.randomUUID()
+      const flightData = { ...snapshot, _meta: { name: backupName, created_at: now.toISOString() } }
 
-      // Online speichern
-      const { error } = await supabase.from('championship_flights')
-        .insert({ championship_id: backupDialogChampionship.id, name: backupName, flight_data: snapshot })
-
-      if (error) {
-        console.warn('[BackupDialog] Supabase-Fehler:', error)
-      } else {
-        console.log('[BackupDialog] Online gespeichert:', backupName)
+      // Lokal speichern (in Meisterschafts-Ordner)
+      if (window.ntaAPI?.flights?.save) {
+        const result = await window.ntaAPI.flights.save({
+          championshipId: backupDialogChampionship.id,
+          flightId,
+          fileName: backupName,
+          content: JSON.stringify(flightData)
+        })
+        if (result.success) {
+          console.log('[BackupDialog] Lokal gespeichert:', result.path)
+        }
+      } else if (window.ntaAPI?.files?.saveBackup) {
+        // Fallback: Altes Backup-System
+        const safeName = backupName.replace(/[<>:"/\\|?*]/g, '_')
+        await window.ntaAPI.files.saveBackup({
+          fileName: `${safeName}.json`,
+          content: JSON.stringify(flightData, null, 2)
+        })
       }
-
-      // Lokal speichern (immer zusätzlich)
-      await saveLocally(backupName, snapshot)
     } catch (err: any) {
       console.warn('[BackupDialog] Fehler:', err)
-      const snapshot = getFlightSnapshot()
-      const now = new Date()
-      const backupName = `Backup ${now.toLocaleDateString('de-DE')} ${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
-      await saveLocally(backupName, snapshot)
     }
     setSaving(false)
     closeBackupDialog()

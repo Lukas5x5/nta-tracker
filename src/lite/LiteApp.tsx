@@ -10,9 +10,28 @@ import { useTrackerStore } from './stores/trackerStore'
 
 export function LiteApp() {
   const { isAuthenticated, isLoading, checkSession } = useAuthStore()
-  const { team, leaveTeam, joinTeam } = useTrackerStore()
+  const { team, leaveTeam, joinTeam, messages, unreadCount } = useTrackerStore()
   const [showList, setShowList] = useState(false)
   const [showChat, setShowChat] = useState(false)
+  const [toast, setToast] = useState<{ callsign: string; message: string; color: string } | null>(null)
+  const prevMsgCount = React.useRef(0)
+
+  // Chat-Popup bei neuen Nachrichten (nur wenn Chat geschlossen)
+  useEffect(() => {
+    if (messages.length > prevMsgCount.current && !showChat) {
+      const newest = messages[messages.length - 1]
+      if (!newest.isMine) {
+        setToast({ callsign: newest.callsign, message: newest.message, color: newest.color })
+        setTimeout(() => setToast(null), 8000)
+      }
+    }
+    prevMsgCount.current = messages.length
+  }, [messages.length, showChat])
+
+  // Unread zurücksetzen wenn Chat geöffnet wird
+  useEffect(() => {
+    if (showChat) useTrackerStore.setState({ unreadCount: 0 })
+  }, [showChat])
 
   // Auto-Rejoin nach Refresh: gespeicherten Join-Code verwenden
   useEffect(() => {
@@ -114,9 +133,44 @@ export function LiteApp() {
         )}
       </div>
 
-      {/* Chat Overlay - fixed über allem (auch über Leaflet auf Mobile) */}
+      {/* Chat Overlay */}
       {showChat && (
         <TeamChat onClose={() => setShowChat(false)} />
+      )}
+
+      {/* Chat-Toast bei neuen Nachrichten */}
+      {toast && !showChat && (
+        <div
+          onClick={() => { setToast(null); setShowChat(true) }}
+          style={{
+            position: 'fixed',
+            top: '60px',
+            left: '16px',
+            right: '16px',
+            maxWidth: '400px',
+            background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+            color: 'white',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            border: `2px solid ${toast.color}`,
+            boxShadow: `0 4px 20px rgba(0,0,0,0.5), 0 0 15px ${toast.color}40`,
+            zIndex: 10002,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            animation: 'slideIn 0.3s ease-out'
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={toast.color} strokeWidth="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: '11px', color: toast.color }}>{toast.callsign}</div>
+            <div style={{ fontSize: '13px', fontWeight: 600 }}>{toast.message}</div>
+          </div>
+          <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>Klick zum Antworten</div>
+        </div>
       )}
     </div>
   )

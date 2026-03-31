@@ -16,7 +16,7 @@ import type { Task, ProhibitedZone } from '../shared/types'
 import { latLonToUTM } from './utils/coordinatesWGS84'
 
 // Aktuelle App-Version (muss bei jedem Release angepasst werden)
-const APP_VERSION = '1.2.4'
+const APP_VERSION = '1.2.5'
 
 // Haversine-Distanzberechnung (Meter)
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -278,9 +278,12 @@ function App() {
   // Variometer Audio State - nur bei Grenzüberschreitung
   const varioLastStateRef = useRef<'neutral' | 'climbing' | 'sinking'>('neutral')
 
-  // Team Message Toast
+  // Team Message Toast + Quick Reply
   const [teamToast, setTeamToast] = useState<TeamMessage | null>(null)
+  const [teamToastReply, setTeamToastReply] = useState(false)
+  const [teamToastReplyText, setTeamToastReplyText] = useState('')
   const prevTeamMsgLenRef = useRef(0)
+  const teamSendMessage = useTeamStore(s => s.sendMessage)
 
   // Draw Mode State
   const [drawOpen, setDrawOpen] = useState(false)
@@ -1387,50 +1390,99 @@ function App() {
 
       {/* Team Message Toast - links oben */}
       {teamToast && (
-        <div style={{
-          position: 'fixed',
-          top: '80px',
-          left: '20px',
-          background: 'linear-gradient(135deg, #1e293b, #0f172a)',
-          color: 'white',
-          padding: '14px 18px',
-          borderRadius: '12px',
-          border: `2px solid ${teamToast.color}`,
-          boxShadow: `0 4px 20px rgba(0, 0, 0, 0.5), 0 0 15px ${teamToast.color}40`,
-          zIndex: 10002,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          animation: 'slideIn 0.3s ease-out',
-          minWidth: '280px',
-          maxWidth: '400px'
-        }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={teamToast.color} strokeWidth="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: '12px', color: teamToast.color, marginBottom: '2px' }}>
-              {teamToast.callsign}
+        <div
+          onClick={() => { if (!teamToastReply) setTeamToastReply(true) }}
+          style={{
+            position: 'fixed',
+            top: '80px',
+            left: '20px',
+            background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+            color: 'white',
+            padding: '14px 18px',
+            borderRadius: '12px',
+            border: `2px solid ${teamToast.color}`,
+            boxShadow: `0 4px 20px rgba(0, 0, 0, 0.5), 0 0 15px ${teamToast.color}40`,
+            zIndex: 10002,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            animation: 'slideIn 0.3s ease-out',
+            minWidth: '280px',
+            maxWidth: '400px',
+            cursor: teamToastReply ? 'default' : 'pointer'
+          }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={teamToast.color} strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: '12px', color: teamToast.color, marginBottom: '2px' }}>
+                {teamToast.callsign}
+              </div>
+              <div style={{ fontSize: '14px', fontWeight: 600 }}>
+                {teamToast.message}
+              </div>
             </div>
-            <div style={{ fontSize: '14px', fontWeight: 600 }}>
-              {teamToast.message}
-            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setTeamToast(null); setTeamToastReply(false); setTeamToastReplyText('') }}
+              style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: 'none',
+                color: 'rgba(255,255,255,0.5)',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '6px',
+                fontSize: '16px',
+                lineHeight: 1
+              }}
+            >
+              ✕
+            </button>
           </div>
-          <button
-            onClick={() => setTeamToast(null)}
-            style={{
-              background: 'rgba(255, 255, 255, 0.1)',
-              border: 'none',
-              color: 'rgba(255,255,255,0.5)',
-              cursor: 'pointer',
-              padding: '4px',
-              borderRadius: '6px',
-              fontSize: '16px',
-              lineHeight: 1
-            }}
-          >
-            ✕
-          </button>
+          {!teamToastReply && (
+            <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.35)', textAlign: 'center' }}>Klick zum Antworten</div>
+          )}
+          {teamToastReply && (
+            <div style={{ display: 'flex', gap: '6px' }} onClick={e => e.stopPropagation()}>
+              <input
+                autoFocus
+                value={teamToastReplyText}
+                onChange={e => setTeamToastReplyText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && teamToastReplyText.trim()) {
+                    teamSendMessage(teamToastReplyText.trim())
+                    setTeamToastReplyText('')
+                    setTeamToastReply(false)
+                    setTeamToast(null)
+                  }
+                  if (e.key === 'Escape') { setTeamToastReply(false); setTeamToastReplyText('') }
+                }}
+                placeholder="Antwort..."
+                style={{
+                  flex: 1, padding: '6px 10px', borderRadius: '6px',
+                  background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
+                  color: 'white', fontSize: '12px', outline: 'none'
+                }}
+              />
+              <button
+                onClick={() => {
+                  if (teamToastReplyText.trim()) {
+                    teamSendMessage(teamToastReplyText.trim())
+                    setTeamToastReplyText('')
+                    setTeamToastReply(false)
+                    setTeamToast(null)
+                  }
+                }}
+                style={{
+                  padding: '6px 12px', borderRadius: '6px', border: 'none',
+                  background: teamToastReplyText.trim() ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+                  color: 'white', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                }}
+              >
+                ↵
+              </button>
+            </div>
+          )}
         </div>
       )}
 

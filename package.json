@@ -1,6 +1,6 @@
 {
   "name": "nta-balloon-navigator",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Navigation Tool Austria - Heißluftballon Navigation Software",
   "main": "dist/main/main.js",
   "scripts": {
@@ -19,6 +19,7 @@
     "preview:lite": "vite preview --config vite.config.lite.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@electron/remote": "^2.1.0",
     "@supabase/supabase-js": "^2.93.3",
     "@types/cesium": "^1.67.14",

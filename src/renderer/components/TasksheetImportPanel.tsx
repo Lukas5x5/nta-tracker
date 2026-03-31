@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useFlightStore } from '../stores/flightStore'
+import { getOutdoor } from '../utils/outdoorStyles'
 import {
   parseTasksheetText,
   ParsedTask,
@@ -9,6 +10,7 @@ import {
   TASK_TYPE_NAMES,
   colorNameToHex
 } from '../utils/tasksheetParser'
+import { parseTasksheetWithAI } from '../utils/aiTasksheetParser'
 import { utmToLatLon } from '../utils/coordinatesWGS84'
 import { Task, Goal, GoalType, TaskType } from '../../shared/types'
 
@@ -99,7 +101,7 @@ function importTasksDirectly(
     const recognizedColor = colorNameToHex(parsedTask.markerColor)
     const taskColor = recognizedColor || settings.taskMarkerColors[(parsedTask.taskNumber - 1) % settings.taskMarkerColors.length]
 
-    let rings: number[] | undefined
+    const rings: number[] | undefined = parsedTask.rings
 
     // Bei Tasks mit mehreren Goals (z.B. HWZ): Für jedes Goal einen separaten Task erstellen
     if (parsedTask.goals.length > 1) {
@@ -310,6 +312,7 @@ interface TasksheetImportPanelProps {
 
 export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePdf, initialFile }: TasksheetImportPanelProps) {
   const { tasks, addTask, removeTask, setActiveTask, setSelectedGoal, settings, updateSettings, setTasksheetCoordPicker, activeCompetitionMap, openBackupDialog } = useFlightStore()
+  const o = getOutdoor(settings.outdoorMode)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [parseResult, setParseResult] = useState<TasksheetParseResult | null>(null)
@@ -357,13 +360,15 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
 
     try {
       let text = ''
+      let pdfBase64: string | undefined
 
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        // PDF als Base64 speichern für späteren Zugriff
+        // PDF als Base64 speichern für späteren Zugriff und KI-Parser
         const arrayBuffer = await file.arrayBuffer()
         const base64 = btoa(
           new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
         )
+        pdfBase64 = base64
         setLoadedPdfData({ name: file.name, data: base64 })
 
         // PDF parsen mit pdfjs-dist
@@ -386,10 +391,10 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
             const y = Math.round(item.transform[5]) // Y-Position
             const x = Math.round(item.transform[4]) // X-Position
 
-            // Finde existierende Zeile mit ähnlicher Y-Position (Toleranz 3)
+            // Finde existierende Zeile mit ähnlicher Y-Position (Toleranz 5)
             let foundY: number | null = null
             for (const existingY of lineGroups.keys()) {
-              if (Math.abs(existingY - y) <= 3) {
+              if (Math.abs(existingY - y) <= 5) {
                 foundY = existingY
                 break
               }
@@ -410,6 +415,10 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
             const items = lineGroups.get(y)!.sort((a, b) => a.x - b.x)
             const lineText = items.map(item => item.text).join(' ')
             text += lineText + '\n'
+            // Debug: Zeilen die "Task" enthalten loggen
+            if (/task/i.test(lineText)) {
+              console.log(`[PDF-Debug] Task-Zeile (y=${y}): "${lineText}"`)
+            }
           }
 
           // ═══ APT Diagramm-Erkennung: Profillinie aus PDF-Grafik extrahieren ═══
@@ -664,7 +673,7 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
         setLoadedPdfData(null) // Kein PDF zum Speichern
       }
 
-      processText(text)
+      await processText(text, pdfBase64)
     } catch (err) {
       console.error('Fehler beim Lesen:', err)
       setParseResult({
@@ -681,10 +690,31 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
     }
   }
 
-  // Text verarbeiten
-  const processText = (text: string) => {
+  // Text verarbeiten – erst KI-Parser (direkt PDF wenn möglich), dann Fallback auf Regex
+  const processText = async (text: string, pdfBase64Data?: string) => {
+    console.log('[Tasksheet] Extrahierter Text:\n' + text.substring(0, 2000))
+
+    // KI-Parser versuchen – PDF direkt wenn verfügbar
+    setIsLoading(true)
+    try {
+      const aiResult = await parseTasksheetWithAI(text, pdfBase64Data)
+      if (aiResult && aiResult.success && aiResult.tasks.length > 0) {
+        console.log(`[Tasksheet] KI-Parser: ${aiResult.tasks.length} Tasks erkannt`)
+        setParseResult(aiResult)
+        setSelectedTasks(new Set(aiResult.tasks.map(t => t.taskNumber)))
+        setImportStep('configure')
+        setIsLoading(false)
+        return
+      }
+      console.log('[Tasksheet] KI-Parser fehlgeschlagen, verwende Regex-Fallback')
+    } catch (err) {
+      console.warn('[Tasksheet] KI-Parser Fehler:', err)
+    }
+
+    // Fallback: Regex-Parser
     const result = parseTasksheetText(text)
     setParseResult(result)
+    setIsLoading(false)
 
     if (result.success) {
       setSelectedTasks(new Set(result.tasks.map(t => t.taskNumber)))
@@ -870,7 +900,7 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
       const recognizedColor = colorNameToHex(parsedTask.markerColor)
       const taskColor = recognizedColor || availableColors[(parsedTask.taskNumber - 1) % availableColors.length]
 
-      let rings: number[] | undefined
+      const rings: number[] | undefined = parsedTask.rings
 
       // Bei Tasks mit mehreren Goals (z.B. HWZ): Für jedes Goal einen separaten Task erstellen
       if (parsedTask.goals.length > 1) {
@@ -1087,15 +1117,16 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
       transformOrigin: 'center center'
     }} onClick={onClose}>
       <div style={{
-        background: '#1e293b',
+        background: o.panelBg,
+        color: o.textColor,
         borderRadius: '12px',
         width: '700px',
         minWidth: '600px',
         maxWidth: '95vw',
         maxHeight: '90vh',
         minHeight: '400px',
-        boxShadow: '0 25px 80px rgba(0,0,0,0.8)',
-        border: '1px solid rgba(255,255,255,0.15)',
+        boxShadow: o.panelShadow,
+        border: o.panelBorder,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         // Feste Skalierung - nicht von Parent beeinflusst
         transform: 'scale(1)',
@@ -1106,7 +1137,7 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
         {/* Header */}
         <div style={{
           padding: '16px 20px',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
           background: 'rgba(0,0,0,0.2)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between'
         }}>
@@ -1118,12 +1149,12 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
               <line x1="16" y1="17" x2="8" y2="17"/>
               <polyline points="10 9 9 9 8 9"/>
             </svg>
-            <span style={{ fontSize: '16px', fontWeight: 700, color: '#fff' }}>
+            <span style={{ fontSize: '16px', fontWeight: 700, color: o.textColor }}>
               Tasksheet importieren
             </span>
           </div>
           <button onClick={onClose} style={{
-            background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)',
+            background: 'none', border: 'none', color: `rgba(${o.c},${o.c},${o.c},0.5)`,
             cursor: 'pointer', padding: '4px'
           }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1133,7 +1164,7 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '20px', background: '#1e293b' }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: '20px', background: o.panelBg }}>
 
           {/* Datei auswählen oder Laden-Indikator */}
           {importStep === 'select' && !parseResult && (
@@ -1151,10 +1182,10 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                       <circle cx="12" cy="12" r="10" strokeDasharray="31.4" strokeDashoffset="10" />
                     </svg>
                   </div>
-                  <div style={{ fontSize: '14px', color: '#fff', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '14px', color: o.textColor, marginBottom: '8px' }}>
                     {initialFile?.name || 'Tasksheet wird geladen...'}
                   </div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>
+                  <div style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},0.5)` }}>
                     Bitte warten...
                   </div>
                 </>
@@ -1181,10 +1212,10 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                     </svg>
                   </div>
 
-                  <div style={{ fontSize: '14px', color: '#fff', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '14px', color: o.textColor, marginBottom: '8px' }}>
                     Tasksheet-PDF auswählen
                   </div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px' }}>
+                  <div style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '20px' }}>
                     PDF oder TXT Datei mit Task-Informationen
                   </div>
 
@@ -1216,7 +1247,7 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                 Fehler beim Parsen
               </div>
               {parseResult.errors.map((err, idx) => (
-                <div key={idx} style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)' }}>
+                <div key={idx} style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},0.7)` }}>
                   {err}
                 </div>
               ))}
@@ -1224,8 +1255,8 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                 onClick={() => { setParseResult(null); setImportStep('select') }}
                 style={{
                   marginTop: '12px', padding: '8px 16px',
-                  background: 'rgba(255,255,255,0.1)', border: 'none',
-                  borderRadius: '6px', color: '#fff', fontSize: '12px', cursor: 'pointer'
+                  background: `rgba(${o.c},${o.c},${o.c},0.1)`, border: 'none',
+                  borderRadius: '6px', color: o.textColor, fontSize: '12px', cursor: 'pointer'
                 }}
               >
                 Erneut versuchen
@@ -1242,18 +1273,18 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                 border: '1px solid rgba(59, 130, 246, 0.2)',
                 borderRadius: '8px', padding: '12px', marginBottom: '16px'
               }}>
-                <div style={{ display: 'flex', gap: '20px', fontSize: '12px', color: 'rgba(255,255,255,0.7)', flexWrap: 'wrap' }}>
-                  {parseResult.date && <span>Datum: <strong style={{ color: '#fff' }}>{parseResult.date}</strong></span>}
-                  {parseResult.flight && <span>Fahrt: <strong style={{ color: '#fff' }}>{parseResult.flight}</strong></span>}
-                  {parseResult.qnh && <span>QNH: <strong style={{ color: '#fff' }}>{parseResult.qnh} hPa</strong></span>}
+                <div style={{ display: 'flex', gap: '20px', fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},0.7)`, flexWrap: 'wrap' }}>
+                  {parseResult.date && <span>Datum: <strong style={{ color: o.textColor }}>{parseResult.date}</strong></span>}
+                  {parseResult.flight && <span>Fahrt: <strong style={{ color: o.textColor }}>{parseResult.flight}</strong></span>}
+                  {parseResult.qnh && <span>QNH: <strong style={{ color: o.textColor }}>{parseResult.qnh} hPa</strong></span>}
                   {activeCompetitionMap && <span>Karte: <strong style={{ color: '#22c55e' }}>{activeCompetitionMap.name}</strong></span>}
                 </div>
               </div>
 
               {/* Task-Liste mit Vorschau */}
-              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Gefundene Tasks ({parseResult.tasks.length})</span>
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>
+                <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.3)` }}>
                   Klick auf Koordinaten zum Bearbeiten
                 </span>
               </div>
@@ -1268,12 +1299,12 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                         ? 'rgba(100, 100, 100, 0.1)'
                         : selectedTasks.has(task.taskNumber)
                           ? 'rgba(59, 130, 246, 0.15)'
-                          : 'rgba(255,255,255,0.03)',
+                          : `rgba(${o.c},${o.c},${o.c},0.03)`,
                       border: `1px solid ${task.isCancelled
                         ? 'rgba(100, 100, 100, 0.3)'
                         : selectedTasks.has(task.taskNumber)
                           ? 'rgba(59, 130, 246, 0.4)'
-                          : 'rgba(255,255,255,0.1)'}`,
+                          : `rgba(${o.c},${o.c},${o.c},0.1)`}`,
                       borderRadius: '8px',
                       transition: 'all 0.15s',
                       opacity: task.isCancelled ? 0.5 : 1
@@ -1286,7 +1317,7 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                           onClick={() => !task.isCancelled && toggleTaskSelection(task.taskNumber)}
                           style={{
                             width: '20px', height: '20px', borderRadius: '4px', marginTop: '2px',
-                            border: `2px solid ${task.isCancelled ? 'rgba(100,100,100,0.3)' : selectedTasks.has(task.taskNumber) ? '#3b82f6' : 'rgba(255,255,255,0.3)'}`,
+                            border: `2px solid ${task.isCancelled ? 'rgba(100,100,100,0.3)' : selectedTasks.has(task.taskNumber) ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.3)`}`,
                             background: selectedTasks.has(task.taskNumber) && !task.isCancelled ? '#3b82f6' : 'transparent',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             cursor: task.isCancelled ? 'not-allowed' : 'pointer', flexShrink: 0
@@ -1302,13 +1333,13 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                         {/* Task Info */}
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '14px', fontWeight: 600, color: task.isCancelled ? 'rgba(255,255,255,0.4)' : '#fff' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 600, color: task.isCancelled ? `rgba(${o.c},${o.c},${o.c},0.4)` : o.textColor }}>
                               Task {task.taskNumber}
                             </span>
                             <span style={{
                               padding: '2px 8px', borderRadius: '4px',
                               background: task.isCancelled ? 'rgba(100,100,100,0.2)' : 'rgba(245, 158, 11, 0.2)',
-                              color: task.isCancelled ? 'rgba(255,255,255,0.4)' : '#f59e0b', fontSize: '11px', fontWeight: 600
+                              color: task.isCancelled ? `rgba(${o.c},${o.c},${o.c},0.4)` : '#f59e0b', fontSize: '11px', fontWeight: 600
                             }}>
                               {task.taskType}
                             </span>
@@ -1316,7 +1347,7 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                               <span style={{
                                 padding: '2px 8px', borderRadius: '4px',
                                 background: 'rgba(100, 100, 100, 0.3)',
-                                color: 'rgba(255,255,255,0.5)', fontSize: '10px'
+                                color: `rgba(${o.c},${o.c},${o.c},0.5)`, fontSize: '10px'
                               }}>
                                 CANCELLED
                               </span>
@@ -1340,11 +1371,12 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginTop: '4px' }}>
+                          <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginTop: '4px' }}>
                             {TASK_TYPE_NAMES[task.taskType] || task.taskName}
                             {task.mma > 0 && ` · MMA ${task.mma}m`}
                             {task.loggerMarker && ` · LM #${task.loggerMarker}`}
                             {task.markerColor && ` · ${task.markerColor}`}
+                            {task.rings && task.rings.length > 0 && ` · Ringe: ${task.rings.map(r => r >= 1000 ? (r / 1000) + 'km' : r + 'm').join(', ')}`}
                             {task.endTime && ` · bis ${task.endTime}`}
                           </div>
 
@@ -1367,10 +1399,10 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                                           style={{
                                             width: '50px', padding: '4px 6px',
                                             background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(59,130,246,0.5)',
-                                            borderRadius: '4px', color: '#fff', fontSize: '11px'
+                                            borderRadius: '4px', color: o.textColor, fontSize: '11px'
                                           }}
                                         />
-                                        <span style={{ color: 'rgba(255,255,255,0.3)' }}>/</span>
+                                        <span style={{ color: `rgba(${o.c},${o.c},${o.c},0.3)` }}>/</span>
                                         <input
                                           type="text"
                                           value={editCoords.northing}
@@ -1380,7 +1412,7 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                                           style={{
                                             width: '50px', padding: '4px 6px',
                                             background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(59,130,246,0.5)',
-                                            borderRadius: '4px', color: '#fff', fontSize: '11px'
+                                            borderRadius: '4px', color: o.textColor, fontSize: '11px'
                                           }}
                                         />
                                         <button
@@ -1421,8 +1453,8 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                                             setEditingGoalIndex(null)
                                           }}
                                           style={{
-                                            padding: '4px 8px', background: 'rgba(255,255,255,0.1)', border: 'none',
-                                            borderRadius: '4px', color: 'rgba(255,255,255,0.6)', fontSize: '10px', cursor: 'pointer'
+                                            padding: '4px 8px', background: `rgba(${o.c},${o.c},${o.c},0.1)`, border: 'none',
+                                            borderRadius: '4px', color: `rgba(${o.c},${o.c},${o.c},0.6)`, fontSize: '10px', cursor: 'pointer'
                                           }}
                                         >
                                           X
@@ -1443,8 +1475,8 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                                         style={{
                                           padding: '4px 8px', borderRadius: '4px',
                                           background: 'rgba(0,0,0,0.2)',
-                                          border: '1px solid rgba(255,255,255,0.1)',
-                                          color: 'rgba(255,255,255,0.7)', fontSize: '11px',
+                                          border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+                                          color: `rgba(${o.c},${o.c},${o.c},0.7)`, fontSize: '11px',
                                           cursor: 'pointer', fontFamily: 'monospace',
                                           display: 'flex', alignItems: 'center', gap: '4px'
                                         }}
@@ -1452,7 +1484,7 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                                       >
                                         {g.label && <span style={{ color: '#f59e0b', fontWeight: 600 }}>{g.label.toUpperCase()}</span>}
                                         <span>{g.eastingStr || g.easting}/{g.northingStr || g.northing}</span>
-                                        {g.altitude && <span style={{ color: 'rgba(255,255,255,0.4)' }}>{g.altitude}ft</span>}
+                                        {g.altitude && <span style={{ color: `rgba(${o.c},${o.c},${o.c},0.4)` }}>{g.altitude}ft</span>}
                                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.4 }}>
                                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                                           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -1480,10 +1512,10 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                                     style={{
                                       width: '60px', padding: '4px 6px',
                                       background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(59,130,246,0.5)',
-                                      borderRadius: '4px', color: '#fff', fontSize: '11px'
+                                      borderRadius: '4px', color: o.textColor, fontSize: '11px'
                                     }}
                                   />
-                                  <span style={{ color: 'rgba(255,255,255,0.3)' }}>/</span>
+                                  <span style={{ color: `rgba(${o.c},${o.c},${o.c},0.3)` }}>/</span>
                                   <input
                                     type="text"
                                     value={editCoords.northing}
@@ -1493,7 +1525,7 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                                     style={{
                                       width: '60px', padding: '4px 6px',
                                       background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(59,130,246,0.5)',
-                                      borderRadius: '4px', color: '#fff', fontSize: '11px'
+                                      borderRadius: '4px', color: o.textColor, fontSize: '11px'
                                     }}
                                   />
                                   <button
@@ -1537,8 +1569,8 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                                       setEditingGoalIndex(null)
                                     }}
                                     style={{
-                                      padding: '4px 8px', background: 'rgba(255,255,255,0.1)', border: 'none',
-                                      borderRadius: '4px', color: 'rgba(255,255,255,0.6)', fontSize: '10px', cursor: 'pointer'
+                                      padding: '4px 8px', background: `rgba(${o.c},${o.c},${o.c},0.1)`, border: 'none',
+                                      borderRadius: '4px', color: `rgba(${o.c},${o.c},${o.c},0.6)`, fontSize: '10px', cursor: 'pointer'
                                     }}
                                   >
                                     X
@@ -1588,16 +1620,16 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
         {importStep === 'configure' && parseResult?.success && (
           <div style={{
             padding: '16px 20px',
-            borderTop: '1px solid rgba(255,255,255,0.1)',
+            borderTop: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
             display: 'flex', gap: '12px', justifyContent: 'flex-end'
           }}>
             <button
               onClick={() => { setParseResult(null); setImportStep('select') }}
               style={{
                 padding: '10px 20px',
-                background: 'rgba(255,255,255,0.1)',
+                background: `rgba(${o.c},${o.c},${o.c},0.1)`,
                 border: 'none', borderRadius: '8px',
-                color: '#fff', fontSize: '13px', cursor: 'pointer'
+                color: o.textColor, fontSize: '13px', cursor: 'pointer'
               }}
             >
               Zurück
@@ -1609,9 +1641,9 @@ export function TasksheetImportPanel({ isOpen, onClose, championshipId, onSavePd
                 padding: '10px 24px',
                 background: selectedTasks.size > 0
                   ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                  : 'rgba(255,255,255,0.1)',
+                  : `rgba(${o.c},${o.c},${o.c},0.1)`,
                 border: 'none', borderRadius: '8px',
-                color: '#fff', fontSize: '13px', fontWeight: 600,
+                color: o.textColor, fontSize: '13px', fontWeight: 600,
                 cursor: selectedTasks.size > 0 ? 'pointer' : 'not-allowed',
                 opacity: selectedTasks.size > 0 ? 1 : 0.5
               }}

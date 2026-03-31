@@ -129,7 +129,7 @@ export function GasPanel({ isOpen, onClose }: GasPanelProps) {
         background: 'rgba(10, 15, 30, 0.92)',
         borderRadius: '12px',
         padding: '8px',
-        border: `1px solid rgba(255,255,255,${o.borderStrong})`,
+        border: `1px solid rgba(${o.c},${o.c},${o.c},${o.borderStrong})`,
         boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
         userSelect: 'none',
         cursor: isDragging ? 'grabbing' : 'grab',
@@ -148,7 +148,7 @@ export function GasPanel({ isOpen, onClose }: GasPanelProps) {
         marginBottom: '4px',
         padding: '0 2px'
       }}>
-        <span style={{ fontSize: '11px', fontWeight: 700, color: `rgba(255,255,255,${o.textSec})`, letterSpacing: '0.5px' }}>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`, letterSpacing: '0.5px' }}>
           GAS-TRACKER
           {gasBottleState.activeSince && (
             <span style={{ marginLeft: '8px', color: '#22c55e', fontSize: '10px' }}>{getActiveTime()}</span>
@@ -158,7 +158,7 @@ export function GasPanel({ isOpen, onClose }: GasPanelProps) {
           className="no-drag"
           onClick={onClose}
           style={{
-            background: 'none', border: 'none', color: `rgba(255,255,255,${o.textMuted})`,
+            background: 'none', border: 'none', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
             cursor: 'pointer', fontSize: '16px', padding: '2px 6px', lineHeight: 1
           }}
         >✕</button>
@@ -166,7 +166,7 @@ export function GasPanel({ isOpen, onClose }: GasPanelProps) {
 
       {bottles.length === 0 ? (
         <div style={{ width: W, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textMuted})`, textAlign: 'center' }}>
+          <span style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, textAlign: 'center' }}>
             Keine Flaschen konfiguriert<br />
             <span style={{ fontSize: '10px' }}>Einstellungen → Gas</span>
           </span>
@@ -176,14 +176,14 @@ export function GasPanel({ isOpen, onClose }: GasPanelProps) {
           {/* SVG Korb + Flaschen */}
           <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
             {/* Hintergrund-Kreis wie Windrose */}
-            <circle cx={CX} cy={H / 2 - 5} r={100} fill="rgba(0,0,0,0.3)" stroke={`rgba(255,255,255,${o.on ? 0.15 : 0.08})`} strokeWidth="0.5" />
+            <circle cx={CX} cy={H / 2 - 5} r={100} fill="rgba(0,0,0,0.3)" stroke={`rgba(${o.c},${o.c},${o.c},${o.on ? 0.15 : 0.08})`} strokeWidth="0.5" />
 
             {/* Seile vom Ballon zum Korb */}
-            <line x1={CX - BASKET_W / 2 + 10} y1={BASKET_Y} x2={CX - 30} y2={8} stroke={`rgba(255,255,255,${o.on ? 0.25 : 0.12})`} strokeWidth="1" />
-            <line x1={CX + BASKET_W / 2 - 10} y1={BASKET_Y} x2={CX + 30} y2={8} stroke={`rgba(255,255,255,${o.on ? 0.25 : 0.12})`} strokeWidth="1" />
+            <line x1={CX - BASKET_W / 2 + 10} y1={BASKET_Y} x2={CX - 30} y2={8} stroke={`rgba(${o.c},${o.c},${o.c},${o.on ? 0.25 : 0.12})`} strokeWidth="1" />
+            <line x1={CX + BASKET_W / 2 - 10} y1={BASKET_Y} x2={CX + 30} y2={8} stroke={`rgba(${o.c},${o.c},${o.c},${o.on ? 0.25 : 0.12})`} strokeWidth="1" />
 
             {/* Ballon-Hülle (oben, angedeutet) */}
-            <ellipse cx={CX} cy={18} rx={35} ry={16} fill="none" stroke={`rgba(255,255,255,${o.on ? 0.2 : 0.1})`} strokeWidth="1" strokeDasharray="4,3" />
+            <ellipse cx={CX} cy={18} rx={35} ry={16} fill="none" stroke={`rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`} strokeWidth="1" strokeDasharray="4,3" />
 
             {/* Gasflaschen im Korb */}
             {visibleBottles.map((bottle, i) => {
@@ -220,13 +220,13 @@ export function GasPanel({ isOpen, onClose }: GasPanelProps) {
                   {/* Flaschen-Körper (Umriss) */}
                   <rect x={bx} y={by + 8} width={BOTTLE_W} height={BOTTLE_H - 8}
                     rx={4} fill="rgba(0,0,0,0.4)"
-                    stroke={isHovered ? 'rgba(255,255,255,0.5)' : `rgba(255,255,255,${o.on ? 0.25 : 0.15})`}
+                    stroke={isHovered ? `rgba(${o.c},${o.c},${o.c},0.5)` : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.25 : 0.15})`}
                     strokeWidth={isHovered ? 1.5 : 1} />
 
                   {/* Flaschenhals */}
                   <rect x={bx + BOTTLE_W / 2 - 5} y={by} width={10} height={12}
                     rx={3} fill="rgba(0,0,0,0.4)"
-                    stroke={isHovered ? 'rgba(255,255,255,0.5)' : `rgba(255,255,255,${o.on ? 0.25 : 0.15})`}
+                    stroke={isHovered ? `rgba(${o.c},${o.c},${o.c},0.5)` : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.25 : 0.15})`}
                     strokeWidth={isHovered ? 1.5 : 1} />
 
                   {/* Füllstand (von unten) */}
@@ -369,7 +369,7 @@ export function GasPanel({ isOpen, onClose }: GasPanelProps) {
             padding: '2px 4px 0'
           }}>
             {/* Gesamt Restliter */}
-            <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.text})`, fontFamily: 'monospace' }}>
+            <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.text})`, fontFamily: 'monospace' }}>
               {bottles.reduce((sum, b) => sum + getRemainingLiters(b.id), 0).toFixed(0)}L gesamt
             </span>
 
@@ -379,7 +379,7 @@ export function GasPanel({ isOpen, onClose }: GasPanelProps) {
               onClick={resetGasTracker}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
-                fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`,
+                fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
                 padding: '2px 6px', textDecoration: 'underline'
               }}
             >Reset</button>

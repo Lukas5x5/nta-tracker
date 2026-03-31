@@ -4,7 +4,7 @@ import L from 'leaflet'
 import 'leaflet-imageoverlay-rotated'
 import { useFlightStore } from '../stores/flightStore'
 import { Task, Goal, WindLayer, ImportedTrajectory, TrajectoryPoint, Waypoint, FKeyAction } from '../../shared/types'
-import { formatCoordinate, latLonToUTM, utmToLatLon } from '../utils/coordinatesWGS84'
+import { formatCoordinate, latLonToUTM, latLonToMGRS, utmToLatLon } from '../utils/coordinatesWGS84'
 import { calculateBearing, calculateDestination } from '../utils/navigation'
 import { getOutdoor } from '../utils/outdoorStyles'
 // MapLayerPanel entfernt - Kartenverwaltung jetzt über Meisterschaften
@@ -1614,8 +1614,8 @@ function MapClickHandler({ onMapClick, hdgCourseMode, hdgPendingCourse, hdgPendi
 
       // Wenn HDG-Kurs-Modus aktiv, Kurslinie setzen oder aktualisieren
       if (hdgCourseMode) {
-        // Snapping zu Goals/Waypoints (10m Radius)
-        const SNAP_RADIUS = 10 // Meter
+        // Snapping zu Goals/Waypoints
+        const SNAP_RADIUS = 50 // Meter
         let snapLat = e.latlng.lat
         let snapLon = e.latlng.lng
         let closestDist = SNAP_RADIUS
@@ -2122,6 +2122,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
   const showLandingPrediction = useFlightStore(s => s.showLandingPrediction)
   const dropCalculator = useFlightStore(s => s.dropCalculator)
   const climbPointResult = useFlightStore(s => s.climbPointResult)
+  const coneLines = useFlightStore(s => s.coneLines)
   const landRunResult = useFlightStore(s => s.landRunResult)
   const angleResult = useFlightStore(s => s.angleResult)
   const activeToolPanel = useFlightStore(s => s.activeToolPanel)
@@ -2954,9 +2955,13 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
           const lineWidth = settings.hdgCourseLineWidth || 3
           const borderWidth = lineWidth + 3
 
-          // Berechne Mittelpunkt für Kurs-Anzeige
-          const midLat = (startLat + endLat) / 2
-          const midLon = (startLon + endLon) / 2
+          // Kurs-Badge Position: Bei "Beides" auf der Zu-Seite (nicht am Zentrum)
+          const midLat = lineMode === 'extended'
+            ? centerLat - latDiff * 0.5  // Halbe Strecke auf der "Zu"-Seite
+            : (startLat + endLat) / 2
+          const midLon = lineMode === 'extended'
+            ? centerLon - lonDiff * 0.5
+            : (startLon + endLon) / 2
 
           return (
             <React.Fragment key={courseLine.id}>
@@ -3376,10 +3381,75 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
         {/* Track */}
         {linePositions.length > 1 && (
           <>
+            {/* Unsichtbare dickere Linie für Hover-Erkennung */}
+            {!isRecording && track.length > 0 && (
+              <Polyline
+                positions={linePositions}
+                pathOptions={{
+                  color: 'transparent',
+                  weight: 20,
+                  opacity: 0
+                }}
+                eventHandlers={{
+                  mouseover: (e) => {
+                    // Finde nächsten Track-Punkt zur Mausposition
+                    const mousePos = e.latlng
+                    let closest = track[0]
+                    let closestDist = Infinity
+                    for (const tp of track) {
+                      const d = Math.abs(tp.position.latitude - mousePos.lat) + Math.abs(tp.position.longitude - mousePos.lng)
+                      if (d < closestDist) { closestDist = d; closest = tp }
+                    }
+                    if (closest) {
+                      const altFt = Math.round(closest.position.altitude * 3.28084)
+                      const speedKmh = closest.speed ? Math.round(closest.speed * 3.6) : 0
+                      const heading = (closest as any).heading != null ? Math.round((closest as any).heading) : null
+                      const time = new Date(closest.timestamp)
+                      const timeStr = `${time.getHours().toString().padStart(2,'0')}:${time.getMinutes().toString().padStart(2,'0')}:${time.getSeconds().toString().padStart(2,'0')}`
+                      const dateStr = `${time.getDate()}.${time.getMonth()+1}.${time.getFullYear()}`
+                      // Koordinaten
+                      const utm = latLonToUTM(closest.position.latitude, closest.position.longitude)
+                      const coordFmt = settings.coordinateFormat || 'mgrs4'
+                      const prec = coordFmt === 'mgrs4' ? 4 : coordFmt === 'mgrs6' ? 6 : 5
+                      const eZone = settings.utmZone || Math.floor((closest.position.longitude + 180) / 6) + 1
+                      const mgrs = latLonToMGRS(closest.position.latitude, closest.position.longitude, prec as 4|5|6, prec as 4|5|6, eZone)
+                      const gridRef = `${mgrs.easting}  ${mgrs.northing}`
+                      const utmFull = `${utm.zone}${utm.hemisphere === 'N' ? 'N' : 'S'} ${Math.round(utm.easting)}E ${Math.round(utm.northing)}N`
+                      const wgs = `${closest.position.latitude.toFixed(6)}° / ${closest.position.longitude.toFixed(6)}°`
+
+                      L.popup({ closeButton: false, autoPan: false, offset: [0, -10], maxWidth: 350 })
+                        .setLatLng([closest.position.latitude, closest.position.longitude])
+                        .setContent(
+                          `<div style="font-family:'JetBrains Mono',Consolas,monospace;background:rgba(10,15,30,0.98);color:white;border-radius:12px;padding:16px 20px;min-width:300px;">` +
+                            `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(59,130,246,0.3);">` +
+                              `<div>` +
+                                `<div style="font-size:10px;color:rgba(255,255,255,0.5);">Trackpunkt</div>` +
+                                `<div style="font-size:18px;font-weight:700;">${timeStr}</div>` +
+                                `<div style="font-size:10px;color:rgba(255,255,255,0.4);">${dateStr}</div>` +
+                              `</div>` +
+                              `<div style="font-size:24px;font-weight:800;color:#22c55e;margin-left:auto;">${altFt}ft</div>` +
+                            `</div>` +
+                            `<div style="display:flex;gap:20px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:13px;">` +
+                              `<div><div style="font-size:9px;color:rgba(255,255,255,0.4);">SPD</div><div style="font-weight:700;">${speedKmh} km/h</div></div>` +
+                              (heading != null ? `<div><div style="font-size:9px;color:rgba(255,255,255,0.4);">HDG</div><div style="font-weight:700;">${heading}°</div></div>` : '') +
+                            `</div>` +
+                            `<div style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:4px;">Grid (${prec}/${prec})</div>` +
+                            `<div style="font-size:20px;font-weight:700;color:#22c55e;letter-spacing:2px;margin-bottom:8px;">${gridRef}</div>` +
+                            `<div style="font-size:10px;color:rgba(255,255,255,0.35);">UTM: ${utmFull}</div>` +
+                            `<div style="font-size:10px;color:rgba(255,255,255,0.35);">WGS84: ${wgs}</div>` +
+                          `</div>`
+                        )
+                        .openOn(e.target._map)
+                    }
+                  },
+                  mouseout: (e) => {
+                    e.target._map.closePopup()
+                  }
+                }}
+              />
+            )}
             <Polyline
               positions={
-                // Tracklinie ohne den letzten Punkt (der vor dem Cursor wäre)
-                // Die aktuelle Position wird vom Balloon-Marker angezeigt
                 displayGpsData && linePositions.length > 2
                   ? linePositions.slice(0, -1)
                   : linePositions
@@ -3392,10 +3462,6 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
               interactive={false}
             />
 
-            {/* Track Point Markers – zoom-abhängig wie OziExplorer */}
-            {settings.trackPointMarkers && !isRecording && track.length > 0 && (
-              <TrackPointMarkers track={track} settings={settings} o={o} />
-            )}
           </>
         )}
 
@@ -3555,6 +3621,48 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
               center={[climbPointResult.bestPoint.lat, climbPointResult.bestPoint.lon]}
               radius={14}
               pathOptions={{ color: '#06b6d4', fillColor: 'transparent', fillOpacity: 0, weight: 2, opacity: 0.6 }}
+              interactive={false}
+            />
+          </>
+        )}
+
+        {/* Cone Navigator - Steuerungskegel */}
+        {coneLines && (
+          <>
+            {/* Linke Kegelhälfte (gelb) — Links bis Mitte */}
+            <Polygon
+              positions={[
+                ...coneLines.left.map(p => [p.lat, p.lon] as [number, number]),
+                ...([...coneLines.center].reverse()).map(p => [p.lat, p.lon] as [number, number])
+              ]}
+              pathOptions={{ color: 'transparent', fillColor: '#f59e0b', fillOpacity: 0.12, weight: 0 }}
+              interactive={false}
+            />
+            {/* Rechte Kegelhälfte (blau) — Mitte bis Rechts */}
+            <Polygon
+              positions={[
+                ...coneLines.center.map(p => [p.lat, p.lon] as [number, number]),
+                ...([...coneLines.right].reverse()).map(p => [p.lat, p.lon] as [number, number])
+              ]}
+              pathOptions={{ color: 'transparent', fillColor: '#3b82f6', fillOpacity: 0.12, weight: 0 }}
+              interactive={false}
+            />
+            {/* Linker Rand (orange) */}
+            <Polyline
+              positions={coneLines.left.map(p => [p.lat, p.lon] as [number, number])}
+              pathOptions={{ color: '#f59e0b', weight: 2, opacity: 0.7, dashArray: '6, 4' }}
+              interactive={false}
+            />
+            {/* Rechter Rand (blau) */}
+            <Polyline
+              positions={coneLines.right.map(p => [p.lat, p.lon] as [number, number])}
+              pathOptions={{ color: '#3b82f6', weight: 2, opacity: 0.7, dashArray: '6, 4' }}
+              interactive={false}
+            />
+            {/* Mitte (cyan, durchgezogen) */}
+            <Polyline
+              positions={coneLines.center.map(p => [p.lat, p.lon] as [number, number])}
+              pathOptions={{ color: '#06b6d4', weight: 2.5, opacity: 0.9 }}
               interactive={false}
             />
           </>
@@ -3919,7 +4027,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                   let bearing = Math.atan2(y, x) * 180 / Math.PI
                   bearing = (bearing + 360) % 360  // Normalize to 0-360
 
-                  // Berechne Mittelpunkt für Label-Position
+                  // Label-Position: Mitte der Linie
                   const midLat = (displayGpsData.latitude + selectedGoal.position.latitude) / 2
                   const midLon = (displayGpsData.longitude + selectedGoal.position.longitude) / 2
 

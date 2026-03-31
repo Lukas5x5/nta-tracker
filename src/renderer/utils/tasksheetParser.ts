@@ -24,6 +24,7 @@ export interface ParsedTask {
   markerCount?: number  // Anzahl der Marker (1-3)
   markerDrop: string | null
   endTime: string | null  // z.B. "0830 loc."
+  rings?: number[]  // Erkannte Ringe/Radien in Metern (z.B. [1000, 2000])
   needsUserInput: boolean  // true wenn Koordinaten fehlen
   isCancelled?: boolean  // Task wurde storniert
   // Spezielle Felder für APT (Altitude Profile Task)
@@ -95,9 +96,12 @@ function createParsedGoal(eastingStr: string, northingStr: string, extras?: {
  * Unterstützte Formate:
  * - "019 - 8572/4045 - MMA 100m" (Creston mit Goal-ID und MMA)
  * - "6847/2795 - MMA 50m" (WatchMeFly mit MMA nach Koordinate)
+ * - "6475 / 3498 1188 ft (MMA25m)" (Leerzeichen, Höhe, MMA in Klammern)
  * - "2995/0336 - radius 500m" (XDD mit Radius)
+ * - "6550 / 3400 r=500m" (3DT mit r= Radius)
  * - "3222/0819 - 1755ft" (mit Höhe in ft)
- * - "1536 / 5517" (Standard ohne Zusatzinfo)
+ * - "5395 1791" (nur Leerzeichen, kein Slash)
+ * - "1536 / 5517" (Standard mit Slash)
  */
 function extractAllCoordinates(text: string): ParsedGoal[] {
   const coords: ParsedGoal[] = []
@@ -105,68 +109,77 @@ function extractAllCoordinates(text: string): ParsedGoal[] {
 
   let match
 
+  // Universelles Trennzeichen: Slash oder Leerzeichen(e) zwischen 4-5 stelligen Zahlen
+  // SEP matcht: " / ", "/", "  " (mehrere Leerzeichen zwischen Zahlen)
+  const SEP = `[\\s]*[/][\\s]*|\\s{2,}`
+
   // Pattern 1: Goal-ID + Koordinaten + MMA
-  const pattern1 = /(\d{2,3})\s*[-–]\s*(\d{4,5})\s*\/\s*(\d{4,5})\s*[-–]\s*MMA\s*(\d+)\s*m/gi
+  const pattern1 = new RegExp(`(\\d{2,3})\\s*[-–]\\s*(\\d{4,5})(?:${SEP})(\\d{4,5})\\s*[-–]\\s*MMA\\s*(\\d+)\\s*m`, 'gi')
   while ((match = pattern1.exec(text)) !== null) {
-    const goalId = match[1]
-    const eastingStr = match[2]
-    const northingStr = match[3]
-    const mma = parseInt(match[4])
-    const key = `${eastingStr}/${northingStr}`
-    if (!foundCoords.has(key) && isValidCoordinate(parseInt(eastingStr), parseInt(northingStr))) {
+    const key = `${match[2]}/${match[3]}`
+    if (!foundCoords.has(key) && isValidCoordinate(parseInt(match[2]), parseInt(match[3]))) {
       foundCoords.add(key)
-      coords.push(createParsedGoal(eastingStr, northingStr, { goalId, mma }))
+      coords.push(createParsedGoal(match[2], match[3], { goalId: match[1], mma: parseInt(match[4]) }))
     }
   }
 
-  // Pattern 2: Koordinaten + MMA (ohne Goal-ID)
-  const pattern2 = /(\d{4,5})\s*\/\s*(\d{4,5})\s*[-–]\s*MMA\s*(\d+)\s*m/gi
+  // Pattern 2: Koordinaten + MMA (ohne Goal-ID) – auch "(MMA25m)" in Klammern
+  const pattern2 = new RegExp(`(\\d{4,5})(?:${SEP})(\\d{4,5})(?:[^\\n]*?)(?:[-–]\\s*)?(?:\\(?MMA\\s*R?(\\d+)\\s*m\\)?)`, 'gi')
   while ((match = pattern2.exec(text)) !== null) {
-    const eastingStr = match[1]
-    const northingStr = match[2]
-    const mma = parseInt(match[3])
-    const key = `${eastingStr}/${northingStr}`
-    if (!foundCoords.has(key) && isValidCoordinate(parseInt(eastingStr), parseInt(northingStr))) {
+    const key = `${match[1]}/${match[2]}`
+    if (!foundCoords.has(key) && isValidCoordinate(parseInt(match[1]), parseInt(match[2]))) {
       foundCoords.add(key)
-      coords.push(createParsedGoal(eastingStr, northingStr, { mma }))
+      coords.push(createParsedGoal(match[1], match[2], { mma: parseInt(match[3]) }))
     }
   }
 
-  // Pattern 3: Koordinaten + Radius
-  const pattern3 = /(\d{4,5})\s*\/\s*(\d{4,5})\s*[-–]\s*radius\s*(\d+)\s*m/gi
+  // Pattern 3: Koordinaten + Radius ("radius 500m" oder "r=500m")
+  const pattern3 = new RegExp(`(\\d{4,5})(?:${SEP})(\\d{4,5})\\s*(?:[-–]\\s*)?(?:radius|r\\s*=)\\s*(\\d+)\\s*m`, 'gi')
   while ((match = pattern3.exec(text)) !== null) {
-    const eastingStr = match[1]
-    const northingStr = match[2]
-    const radius = parseInt(match[3])
-    const key = `${eastingStr}/${northingStr}`
-    if (!foundCoords.has(key) && isValidCoordinate(parseInt(eastingStr), parseInt(northingStr))) {
+    const key = `${match[1]}/${match[2]}`
+    if (!foundCoords.has(key) && isValidCoordinate(parseInt(match[1]), parseInt(match[2]))) {
       foundCoords.add(key)
-      coords.push(createParsedGoal(eastingStr, northingStr, { radius }))
+      coords.push(createParsedGoal(match[1], match[2], { radius: parseInt(match[3]) }))
     }
   }
 
-  // Pattern 4: Koordinaten + Höhe in ft
-  const pattern4 = /(\d{4,5})\s*\/\s*(\d{4,5})\s*[-–]\s*(\d+)\s*ft/gi
+  // Pattern 4: Koordinaten + Höhe ("- 1755ft", "Alt: 1308ft", "1188 ft")
+  const pattern4 = new RegExp(`(\\d{4,5})(?:${SEP})(\\d{4,5})(?:\\s*[-–])?\\s*(?:Alt[:\\s]*)?\\s*(\\d{3,5})\\s*ft`, 'gi')
   while ((match = pattern4.exec(text)) !== null) {
-    const eastingStr = match[1]
-    const northingStr = match[2]
-    const altitude = parseInt(match[3])
-    const key = `${eastingStr}/${northingStr}`
-    if (!foundCoords.has(key) && isValidCoordinate(parseInt(eastingStr), parseInt(northingStr))) {
+    const key = `${match[1]}/${match[2]}`
+    if (!foundCoords.has(key) && isValidCoordinate(parseInt(match[1]), parseInt(match[2]))) {
       foundCoords.add(key)
-      coords.push(createParsedGoal(eastingStr, northingStr, { altitude }))
+      coords.push(createParsedGoal(match[1], match[2], { altitude: parseInt(match[3]) }))
     }
   }
 
-  // Pattern 5: Standard-Koordinaten ohne Zusatzinfo
+  // Pattern 5: Standard-Koordinaten mit Slash
   const pattern5 = /(\d{4,5})\s*\/\s*(\d{4,5})/gi
   while ((match = pattern5.exec(text)) !== null) {
-    const eastingStr = match[1]
-    const northingStr = match[2]
-    const key = `${eastingStr}/${northingStr}`
-    if (!foundCoords.has(key) && isValidCoordinate(parseInt(eastingStr), parseInt(northingStr))) {
+    const key = `${match[1]}/${match[2]}`
+    if (!foundCoords.has(key) && isValidCoordinate(parseInt(match[1]), parseInt(match[2]))) {
       foundCoords.add(key)
-      coords.push(createParsedGoal(eastingStr, northingStr))
+      coords.push(createParsedGoal(match[1], match[2]))
+    }
+  }
+
+  // Pattern 6: Koordinaten mit nur Leerzeichen (deutsch: "5395 1791")
+  // Nur wenn noch keine Koordinaten gefunden (um false positives zu vermeiden)
+  if (coords.length === 0) {
+    // Suche nach Zeilen die genau 2 vierstellige Zahlen haben
+    const spacePattern = /(?:^|\n)[^\n]*?(\d{4,5})\s+(\d{4,5})(?:\s|$)/gm
+    while ((match = spacePattern.exec(text)) !== null) {
+      const e = parseInt(match[1])
+      const n = parseInt(match[2])
+      const key = `${match[1]}/${match[2]}`
+      if (!foundCoords.has(key) && isValidCoordinate(e, n)) {
+        // Zusätzliche Prüfung: Nicht wenn es Teil einer Zeitangabe etc. ist
+        const context = match[0]
+        if (!/\d{2}\s*:\s*\d{2}/.test(context) && !/QNH|Briefing|Period|Launch/.test(context)) {
+          foundCoords.add(key)
+          coords.push(createParsedGoal(match[1], match[2]))
+        }
+      }
     }
   }
 
@@ -216,17 +229,24 @@ export function parseTasksheetText(text: string): TasksheetParseResult {
 
     // Bekannte Task-Typen
     const validTaskTypes = ['PDG', 'JDG', 'HWZ', 'FIN', 'FON', 'HNH', 'WSD', 'GBM', 'CRT', 'RTA',
-                           'ELB', 'LRN', 'MDT', 'MDD', 'XDI', 'XDT', 'XDD', 'ANG', 'SFL', 'LTT', 'MTT', 'APT']
+                           'ELB', 'LRN', 'MDT', 'MDD', 'XDI', 'XDT', 'XDD', 'ANG', 'SFL', 'LTT', 'MTT', 'APT', '3DT']
 
     // Tasks extrahieren - mehrere Patterns probieren
     // Speichere auch die Start-Position für jeden Task
-    const taskPatterns = [
+    const taskPatternsWithNumber = [
       // "Aufgabe 4 PDG" oder "Task 4 PDG"
       // Auch mit Bindestrich: "Task 1 - HWZ" oder "Task 2 - HWZ"
       /(?:Aufgabe|Task)\s*(\d{1,2})\s*[-–]?\s*(\d?[A-Z]{2,3})/gi,
+      // Deutsches Format: "Aufgabe 2 – QUAL DER WAHL (HWZ)" → Typ in Klammern
+      /(?:Aufgabe|Task)\s*(\d{1,2})\s*[-–]?\s*[^(]*?\((\d?[A-Z]{2,3})\)/gi,
       // "4. PDG" oder "4 PDG" (nur am Zeilenanfang oder nach Leerzeichen)
       /(?:^|\n)\s*(\d{1,2})\.?\s+(\d?[A-Z]{2,3})(?:\s|$)/gim,
     ]
+
+    // Pattern OHNE Nummer: "Task HWZ" oder "Task PDG" (Nummer fehlt im PDF)
+    // Auch: "Aufgabe DREIECKSFLÄCHE (LRN)" → Typ in Klammern
+    const taskPatternNoNumber = /(?:Aufgabe|Task)\s+(?:[A-Z]{2,3})\s/gi
+    const taskPatternNoNumberParens = /(?:Aufgabe|Task)\s+[^(]*?\((\d?[A-Z]{2,3})\)/gi
 
     // Sammle alle Task-Matches mit Position
     interface TaskMatch {
@@ -236,7 +256,8 @@ export function parseTasksheetText(text: string): TasksheetParseResult {
     }
     const taskMatches: TaskMatch[] = []
 
-    for (const taskPattern of taskPatterns) {
+    // Erst Patterns MIT Nummer durchsuchen
+    for (const taskPattern of taskPatternsWithNumber) {
       let taskMatch
       taskPattern.lastIndex = 0
 
@@ -244,8 +265,8 @@ export function parseTasksheetText(text: string): TasksheetParseResult {
         const taskNumber = parseInt(taskMatch[1])
         const taskType = taskMatch[2].toUpperCase()
 
-        // Nur gültige Task-Nummern (1-30) und bekannte Task-Typen
-        if (taskNumber < 1 || taskNumber > 30) continue
+        // Nur gültige Task-Nummern (1-99) und bekannte Task-Typen
+        if (taskNumber < 1 || taskNumber > 99) continue
         if (!validTaskTypes.includes(taskType)) continue
 
         // Prüfe ob diese Task-Nummer schon gefunden wurde
@@ -260,8 +281,58 @@ export function parseTasksheetText(text: string): TasksheetParseResult {
       }
     }
 
+    // Dann Patterns OHNE Nummer durchsuchen (z.B. "Task HWZ" ohne Ziffer)
+    for (const noNumPattern of [taskPatternNoNumber, taskPatternNoNumberParens]) {
+      let taskMatch
+      noNumPattern.lastIndex = 0
+
+      while ((taskMatch = noNumPattern.exec(text)) !== null) {
+        const taskType = (taskMatch[1] || taskMatch[0].match(/[A-Z]{2,3}/)?.[0] || '').toUpperCase()
+        if (!validTaskTypes.includes(taskType)) continue
+
+        // Prüfe ob an dieser Position schon ein Task gefunden wurde (mit oder ohne Nummer)
+        const alreadyFound = taskMatches.some(t =>
+          Math.abs(t.startIndex - taskMatch!.index) < 20 && t.taskType === taskType
+        )
+        if (alreadyFound) continue
+
+        // Auch prüfen ob ein Task mit Nummer an ähnlicher Position existiert
+        const nearbyNumbered = taskMatches.some(t =>
+          Math.abs(t.startIndex - taskMatch!.index) < 20
+        )
+        if (nearbyNumbered) continue
+
+        // Automatische Nummer: Nächste freie Nummer vergeben basierend auf Reihenfolge
+        // Temporär 0, wird unten nach Sortierung korrigiert
+        taskMatches.push({
+          taskNumber: 0,
+          taskType,
+          startIndex: taskMatch.index
+        })
+        console.log(`[Tasksheet Parser] Found task WITHOUT number: ${taskType} at index ${taskMatch.index}`)
+      }
+    }
+
     // Sortiere nach Position im Text
     taskMatches.sort((a, b) => a.startIndex - b.startIndex)
+
+    // Automatische Nummern für Tasks ohne Nummer vergeben
+    // Nutze die Reihenfolge im Text und vergebene Nummern
+    let autoNumber = 1
+    for (const match of taskMatches) {
+      if (match.taskNumber === 0) {
+        // Finde nächste freie Nummer
+        while (taskMatches.some(t => t.taskNumber === autoNumber)) {
+          autoNumber++
+        }
+        match.taskNumber = autoNumber
+        console.log(`[Tasksheet Parser] Auto-assigned number ${autoNumber} to ${match.taskType}`)
+        autoNumber++
+      } else {
+        // Setze autoNumber auf mindestens diese Nummer + 1
+        autoNumber = Math.max(autoNumber, match.taskNumber + 1)
+      }
+    }
 
     // Parse jeden Task mit seinem Abschnitt
     for (let i = 0; i < taskMatches.length; i++) {
@@ -500,16 +571,75 @@ function parseIndividualTask(
   }
 
   // Marker Drop extrahieren - deutsch und englisch
-  // "Marker Drop frei", "Marker drop gravity", "Marker drop free"
-  const dropMatch = taskSection.match(/Marker\s*[Dd]rop[:\s]*([a-zäöü]+)/i)
+  // "Marker Drop frei", "Marker drop gravity", "Marker drop free", "Absetzen fallenlassen"
+  const dropMatch = taskSection.match(/(?:Marker\s*[Dd]rop|Absetzen)[:\s]*([a-zäöü]+)/i)
   if (dropMatch && dropMatch[1] !== '-') {
     task.markerDrop = dropMatch[1].toLowerCase()
     console.log(`[parseIndividualTask] Task ${taskNumber}: Marker Drop = ${task.markerDrop}`)
   }
 
+  // Ringe/Radien/Distanzen extrahieren
+  // Erkennt: "radius 2km", "radius 500m", "R 2km", "minimum 1 km - maximum 2 km",
+  // "min. 3 km", "inner circle 1km", "outer circle 2km", "1km / 2km", "distance 1-2km"
+  const extractedRings: number[] = []
+
+  // Pattern: "radius Xkm" / "radius Xm" / "R Xkm"
+  const radiusMatches = taskSection.matchAll(/(?:radius|R)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(km|m)\b/gi)
+  for (const m of radiusMatches) {
+    const val = parseFloat(m[1].replace(',', '.'))
+    extractedRings.push(m[2].toLowerCase() === 'km' ? val * 1000 : val)
+  }
+
+  // Pattern: "minimum X km - maximum Y km" / "min X km max Y km"
+  const minMaxMatch = taskSection.match(/min(?:imum)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(km|m)\s*[-–]?\s*max(?:imum)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(km|m)/i)
+  if (minMaxMatch) {
+    const minVal = parseFloat(minMaxMatch[1].replace(',', '.'))
+    const minUnit = minMaxMatch[2].toLowerCase()
+    const maxVal = parseFloat(minMaxMatch[3].replace(',', '.'))
+    const maxUnit = minMaxMatch[4].toLowerCase()
+    extractedRings.push(minUnit === 'km' ? minVal * 1000 : minVal)
+    extractedRings.push(maxUnit === 'km' ? maxVal * 1000 : maxVal)
+  }
+
+  // Pattern: "inner circle Xkm" / "outer circle Xkm"
+  const circleMatches = taskSection.matchAll(/(?:inner|outer)\s*(?:circle|ring|radius)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(km|m)/gi)
+  for (const m of circleMatches) {
+    const val = parseFloat(m[1].replace(',', '.'))
+    extractedRings.push(m[2].toLowerCase() === 'km' ? val * 1000 : val)
+  }
+
+  // Pattern: "Distance from A to B: minimum X km - maximum Y km"
+  const distABMatch = taskSection.match(/[Dd]istance.*?min(?:imum)?\s*(\d+(?:[.,]\d+)?)\s*(km|m)\s*[-–]?\s*max(?:imum)?\s*(\d+(?:[.,]\d+)?)\s*(km|m)/i)
+  if (distABMatch && extractedRings.length === 0) {
+    const minVal = parseFloat(distABMatch[1].replace(',', '.'))
+    const minUnit = distABMatch[2].toLowerCase()
+    const maxVal = parseFloat(distABMatch[3].replace(',', '.'))
+    const maxUnit = distABMatch[4].toLowerCase()
+    extractedRings.push(minUnit === 'km' ? minVal * 1000 : minVal)
+    extractedRings.push(maxUnit === 'km' ? maxVal * 1000 : maxVal)
+  }
+
+  // Pattern: "min. 3 km from declaration" (einzelner Radius)
+  if (extractedRings.length === 0) {
+    const singleDistMatch = taskSection.match(/min(?:\.)?\s*(\d+(?:[.,]\d+)?)\s*(km|m)\s*(?:from|von|between)/i)
+    if (singleDistMatch) {
+      const val = parseFloat(singleDistMatch[1].replace(',', '.'))
+      extractedRings.push(singleDistMatch[2].toLowerCase() === 'km' ? val * 1000 : val)
+    }
+  }
+
+  // Deduplizieren und sortieren
+  if (extractedRings.length > 0) {
+    task.rings = [...new Set(extractedRings)].sort((a, b) => a - b)
+    console.log(`[parseIndividualTask] Task ${taskNumber}: Ringe erkannt = ${task.rings.map(r => r >= 1000 ? (r/1000) + 'km' : r + 'm').join(', ')}`)
+  }
+
   // Wertungsperiode/Scoring Period Ende extrahieren
   // "endet um 20:00 loc", "ends at 08:30:00", "Scoring Period End: 08:00"
-  const endTimeMatch = taskSection.match(/(?:endet\s*(?:um)?|ends\s*at|Scoring\s*Period\s*End[:\s]*)\s*(\d{2}):?(\d{2})/i)
+  // "Wertungsperiode bis 12:30 loc", "bis 14:00 loc"
+  // Normalisiere Leerzeichen in Zeitangaben: "1 2 : 3 0" → "12:30"
+  const normalizedSection = taskSection.replace(/(\d)\s+(\d)\s*:\s*(\d)\s+(\d)/g, '$1$2:$3$4')
+  const endTimeMatch = normalizedSection.match(/(?:endet\s*(?:um)?|ends\s*at|Scoring\s*[Pp]eriod\s*[Ee]nd[s]?[:\s]*|Wertungsperiode\s*(?:bis)?|(?:^|\s)bis)\s*(\d{2}):?(\d{2})/im)
   if (endTimeMatch) {
     task.endTime = `${endTimeMatch[1]}:${endTimeMatch[2]}`
     console.log(`[parseIndividualTask] Task ${taskNumber}: End Time = ${task.endTime}`)

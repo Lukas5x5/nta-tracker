@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { getOutdoor } from '../utils/outdoorStyles'
 import { useFlightStore } from '../stores/flightStore'
 import { formatAltitude, formatSpeed, formatHeading, formatVariometer, formatDistance } from '../utils/formatting'
-import { calculateDistance, calculateBearing, calculateDestination, calculateClimbPoint, ClimbPointResult, calculateLandRun, LandRunResult, LandRunLimits, calculateAngleTask, AngleTaskResult, interpolateWind } from '../utils/navigation'
+import { calculateDistance, calculateBearing, calculateDestination, calculateClimbPoint, ClimbPointResult, calculatePdgFon, PdgFonResult, calculatePdgFonCorrection, calculateLandRun, LandRunResult, LandRunLimits, calculateAngleTask, AngleTaskResult, interpolateWind } from '../utils/navigation'
+import { ConeNavigatorPanel } from './ConeNavigatorPanel'
 import { latLonToUTM, utmToLatLon, formatCoordinate, getGridPrecision } from '../utils/coordinatesWGS84'
 import { NavPanelField, NavPanelFieldType, GPSFix, Goal, Task } from '../../shared/types'
 import { AltitudeProfilePanel } from './AltitudeProfilePanel'
@@ -139,6 +140,14 @@ export function NavigationPanel() {
   const [lrnTotalValue, setLrnTotalValue] = useState(20) // Min oder km
   const [lrnResult, setLrnResult] = useState<LandRunResult | null>(null)
   const [lrnCalculating, setLrnCalculating] = useState(false)
+  const [landingLiveVario, setLandingLiveVario] = useState(false)
+
+  // Live Vario: Sinkrate automatisch aus dem Variometer aktualisieren
+  useEffect(() => {
+    if (!landingLiveVario) return
+    const vario = Math.abs(baroData?.variometer || 0)
+    if (vario > 0.1) setLandingSinkRate(Math.round(vario * 10) / 10)
+  }, [landingLiveVario, baroData?.variometer])
   const [lrnSelectedAlt, setLrnSelectedAlt] = useState<number>(-1) // Index der ausgewählten Alternative (-1 = best)
   const [lrnAltLimit, setLrnAltLimit] = useState(false) // Höhenbegrenzung aktiv?
   const [lrnAltLimitMode, setLrnAltLimitMode] = useState<'ceiling' | 'floor'>('ceiling') // Obergrenze oder Untergrenze
@@ -231,12 +240,20 @@ export function NavigationPanel() {
     }
   }
 
-  const [climbRate, setClimbRate] = useState(2)  // m/s
+  const [climbRate, setClimbRate] = useState(2)  // m/s (legacy)
   const [climbDirection, setClimbDirection] = useState<'up' | 'down'>('up')
   const [climbMinAltFt, setClimbMinAltFt] = useState(1000)  // ft
+  const [climbMaxAltFt, setClimbMaxAltFt] = useState(0)  // ft – 0 = kein Limit
   const [climbMinDist, setClimbMinDist] = useState(1000)  // m
   const [climbExactMode, setClimbExactMode] = useState(false)
   const [climbLeadTime, setClimbLeadTime] = useState(0)  // Vorlaufzeit in Sekunden
+  const [climbShowAdvanced, setClimbShowAdvanced] = useState(false)
+  // PDG/FON V2 – neues Tool
+  const [pdgResult, setPdgResult] = useState<PdgFonResult | null>(null)
+  const [pdgDeclared, setPdgDeclared] = useState<{ lat: number; lon: number; altitude: number } | null>(null)
+  const [pdgCountdownStart, setPdgCountdownStart] = useState<number | null>(null)
+  const [pdgCountdown, setPdgCountdown] = useState<number | null>(null)
+  // Cone Navigator States (jetzt in ConeNavigatorPanel.tsx)
   const [climbCountdownStart, setClimbCountdownStart] = useState<number | null>(null)
   const [climbCountdownRemaining, setClimbCountdownRemaining] = useState<number | null>(null)
   const [climbResult, setClimbResultLocal] = useState<ClimbPointResult | null>(null)
@@ -257,6 +274,19 @@ export function NavigationPanel() {
     const timer = setInterval(update, 1000)
     return () => clearInterval(timer)
   }, [climbCountdownStart, climbResult])
+
+  // PDG/FON V2 Countdown (30s Vorlaufzeit)
+  useEffect(() => {
+    if (!pdgCountdownStart) { setPdgCountdown(null); return }
+    const update = () => {
+      const elapsed = (Date.now() - pdgCountdownStart) / 1000
+      const remaining = 30 - elapsed
+      setPdgCountdown(Math.max(0, Math.round(remaining)))
+    }
+    update()
+    const timer = setInterval(update, 200)
+    return () => clearInterval(timer)
+  }, [pdgCountdownStart])
 
   const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number; isTouch: boolean } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -348,14 +378,15 @@ export function NavigationPanel() {
         : { left: '50%', top: '50%', transform: `translate(-50%, -50%) scale(${panelScale})` }
       ),
       zIndex: 2000,
-      background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+      background: o.panelGradient,
       borderRadius: '16px',
       padding: '16px',
-      boxShadow: '0 12px 40px rgba(0,0,0,0.7)',
-      border: active ? `1px solid ${borderColor}` : '1px solid rgba(255, 255, 255, 0.1)',
+      boxShadow: o.panelShadow,
+      border: active ? `1px solid ${borderColor}` : o.panelBorder,
       transformOrigin: 'center center',
       cursor: isToolDragging ? 'grabbing' : 'grab',
       userSelect: 'none' as const,
+      color: o.textColor,
     }
   }
 
@@ -817,17 +848,18 @@ export function NavigationPanel() {
         left: position.x,
         top: position.y,
         zIndex: 1000,
-        background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+        background: o.panelGradient,
         borderRadius: '16px',
         padding: '16px',
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
         minWidth: '200px',
         maxWidth: '240px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-        border: '1px solid rgba(255,255,255,0.1)',
+        boxShadow: o.panelShadow,
+        border: o.panelBorder,
         transform: `scale(${scale})`,
-        transformOrigin: 'top left'
+        transformOrigin: 'top left',
+        color: o.textColor
       }}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
@@ -839,12 +871,12 @@ export function NavigationPanel() {
         alignItems: 'center',
         marginBottom: '12px',
         paddingBottom: '8px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)'
+        borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)'
       }}>
         <div style={{
           fontSize: '14px',
           fontWeight: 600,
-          color: `rgba(255,255,255,${o.textSec})`,
+          color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`,
           letterSpacing: '1px'
         }}>
           NAVIGATION
@@ -857,9 +889,9 @@ export function NavigationPanel() {
               distanceUnit: settings.altitudeUnit === 'meters' ? 'feet' : 'meters'
             })}
             style={{
-              background: `rgba(255,255,255,${o.border})`,
+              background: `rgba(${o.c},${o.c},${o.c},${o.border})`,
               border: 'none',
-              color: 'white',
+              color: o.textColor,
               fontSize: '11px',
               fontWeight: 700,
               cursor: 'pointer',
@@ -878,7 +910,7 @@ export function NavigationPanel() {
             style={{
               background: showSettings ? 'rgba(59, 130, 246, 0.3)' : 'transparent',
               border: 'none',
-              color: showSettings ? '#3b82f6' : `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+              color: showSettings ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
               fontSize: '18px',
               cursor: 'pointer',
               padding: '4px 8px',
@@ -900,7 +932,7 @@ export function NavigationPanel() {
           maxHeight: '300px',
           overflowY: 'auto'
         }}>
-          <div style={{ fontSize: '12px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '10px' }}>
+          <div style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '10px' }}>
             Felder anzeigen/verbergen:
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -911,8 +943,8 @@ export function NavigationPanel() {
                 style={{
                   padding: '8px 10px',
                   borderRadius: '8px',
-                  background: field.enabled ? 'rgba(34, 197, 94, 0.15)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
-                  border: field.enabled ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(255,255,255,0.08)',
+                  background: field.enabled ? 'rgba(34, 197, 94, 0.15)' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`,
+                  border: field.enabled ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(${o.c},${o.c},${o.c},0.08)',
                   cursor: 'pointer',
                   transition: 'all 0.15s'
                 }}
@@ -927,26 +959,26 @@ export function NavigationPanel() {
                     width: '16px',
                     height: '16px',
                     borderRadius: '4px',
-                    background: field.enabled ? '#22c55e' : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                    background: field.enabled ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '10px',
-                    color: 'white'
+                    color: o.textColor
                   }}>
                     {field.enabled && '✓'}
                   </div>
                   <span style={{
                     fontSize: '12px',
                     fontWeight: 600,
-                    color: field.enabled ? '#22c55e' : `rgba(255,255,255,${o.on ? 0.92 : 0.6})`
+                    color: field.enabled ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.92 : 0.6})`
                   }}>
                     {field.label}
                   </span>
                 </div>
                 <div style={{
                   fontSize: '10px',
-                  color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+                  color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
                   paddingLeft: '24px',
                   lineHeight: 1.3
                 }}>
@@ -957,7 +989,7 @@ export function NavigationPanel() {
           </div>
 
           {/* Trennlinie */}
-          <div style={{ height: '1px', background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`, margin: '12px 0' }} />
+          <div style={{ height: '1px', background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`, margin: '12px 0' }} />
 
           {/* GPS Simulation Button */}
           <button
@@ -972,11 +1004,11 @@ export function NavigationPanel() {
               borderRadius: '8px',
               background: gpsSimulation.active
                 ? 'linear-gradient(135deg, rgba(34,197,94,0.2), rgba(34,197,94,0.1))'
-                : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
+                : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.12 : 0.05})`,
               border: gpsSimulation.active
                 ? '1px solid rgba(34, 197, 94, 0.4)'
-                : '1px solid rgba(255,255,255,0.1)',
-              color: gpsSimulation.active ? '#22c55e' : `rgba(255,255,255,${o.textSec})`,
+                : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+              color: gpsSimulation.active ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.textSec})`,
               fontSize: '13px',
               fontWeight: 600,
               cursor: 'pointer',
@@ -1021,7 +1053,7 @@ export function NavigationPanel() {
                 borderRadius: '8px',
                 background: isSelected
                   ? 'rgba(59, 130, 246, 0.15)'
-                  : field.bgColor || `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+                  : field.bgColor || `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`,
                 border: isSelected ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid transparent',
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -1033,7 +1065,7 @@ export function NavigationPanel() {
               {/* Label */}
               <div style={{
                 fontSize: '12px',
-                color: `rgba(255,255,255,${o.textMuted})`,
+                color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
                 fontWeight: 600,
                 letterSpacing: '0.5px',
                 minWidth: '40px'
@@ -1066,7 +1098,7 @@ export function NavigationPanel() {
       {/* Trennlinie */}
       <div style={{
         height: '1px',
-        background: `rgba(255,255,255,${o.border})`,
+        background: `rgba(${o.c},${o.c},${o.c},${o.border})`,
         margin: '10px 0'
       }} />
 
@@ -1085,9 +1117,9 @@ export function NavigationPanel() {
             minWidth: '60px',
             padding: '8px 10px',
             borderRadius: '6px',
-            background: gpsData ? 'rgba(239, 68, 68, 0.15)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+            background: gpsData ? 'rgba(239, 68, 68, 0.15)' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`,
             border: 'none',
-            color: gpsData ? '#ef4444' : `rgba(255,255,255,${o.on ? 0.5 : 0.3})`,
+            color: gpsData ? '#ef4444' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})`,
             fontSize: '11px',
             fontWeight: 600,
             cursor: gpsData ? 'pointer' : 'not-allowed',
@@ -1114,9 +1146,9 @@ export function NavigationPanel() {
             borderRadius: '6px',
             background: (showDropsPanel || markers.length > 0)
               ? 'rgba(239, 68, 68, 0.15)'
-              : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+              : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`,
             border: 'none',
-            color: (showDropsPanel || markers.length > 0) ? '#ef4444' : `rgba(255,255,255,${o.textMuted})`,
+            color: (showDropsPanel || markers.length > 0) ? '#ef4444' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
             fontSize: '11px',
             fontWeight: 600,
             cursor: 'pointer',
@@ -1144,9 +1176,9 @@ export function NavigationPanel() {
             borderRadius: '6px',
             background: (showCoursePanel || hdgCourseLines.length > 0)
               ? 'rgba(245, 158, 11, 0.15)'
-              : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+              : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`,
             border: 'none',
-            color: (showCoursePanel || hdgCourseLines.length > 0) ? '#f59e0b' : `rgba(255,255,255,${o.textMuted})`,
+            color: (showCoursePanel || hdgCourseLines.length > 0) ? '#f59e0b' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
             fontSize: '11px',
             fontWeight: 600,
             cursor: 'pointer',
@@ -1179,12 +1211,12 @@ export function NavigationPanel() {
               ...subPanelPosition,
               top: position.y,
               zIndex: 1001,
-              background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+              background: o.panelGradient,
               borderRadius: '16px',
               padding: '16px',
               minWidth: '220px',
               maxWidth: '280px',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+              boxShadow: o.panelShadow,
               border: '1px solid rgba(59, 130, 246, 0.3)',
               transform: `scale(${scale})`,
               transformOrigin: subPanelOnRight ? 'top left' : 'top right'
@@ -1197,7 +1229,7 @@ export function NavigationPanel() {
               alignItems: 'center',
               marginBottom: '16px',
               paddingBottom: '12px',
-              borderBottom: '1px solid rgba(255,255,255,0.1)'
+              borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)'
             }}>
               <div style={{
                 fontSize: '14px',
@@ -1211,7 +1243,7 @@ export function NavigationPanel() {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+                  color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
                   fontSize: '18px',
                   cursor: 'pointer',
                   padding: '4px 8px'
@@ -1224,7 +1256,7 @@ export function NavigationPanel() {
             {/* Beschreibung */}
             <div style={{
               fontSize: '11px',
-              color: `rgba(255,255,255,${o.textMuted})`,
+              color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
               marginBottom: '16px',
               lineHeight: 1.4
             }}>
@@ -1233,7 +1265,7 @@ export function NavigationPanel() {
 
             {/* Position */}
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginBottom: '8px' }}>
                 Position
               </div>
               <div style={{ display: 'flex', gap: '6px' }}>
@@ -1244,9 +1276,9 @@ export function NavigationPanel() {
                     flex: 1,
                     padding: '8px',
                     borderRadius: '8px',
-                    background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                    background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
                     border: 'none',
-                    color: fields.findIndex(f => f.id === editingField) === 0 ? `rgba(255,255,255,${o.on ? 0.35 : 0.2})` : 'white',
+                    color: fields.findIndex(f => f.id === editingField) === 0 ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.35 : 0.2})` : 'white',
                     fontSize: '14px',
                     cursor: fields.findIndex(f => f.id === editingField) === 0 ? 'not-allowed' : 'pointer'
                   }}
@@ -1260,9 +1292,9 @@ export function NavigationPanel() {
                     flex: 1,
                     padding: '8px',
                     borderRadius: '8px',
-                    background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                    background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
                     border: 'none',
-                    color: fields.findIndex(f => f.id === editingField) === fields.length - 1 ? `rgba(255,255,255,${o.on ? 0.35 : 0.2})` : 'white',
+                    color: fields.findIndex(f => f.id === editingField) === fields.length - 1 ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.35 : 0.2})` : 'white',
                     fontSize: '14px',
                     cursor: fields.findIndex(f => f.id === editingField) === fields.length - 1 ? 'not-allowed' : 'pointer'
                   }}
@@ -1280,7 +1312,7 @@ export function NavigationPanel() {
                 alignItems: 'center',
                 marginBottom: '8px'
               }}>
-                <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
+                <span style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})` }}>
                   Schriftgröße
                 </span>
                 <span style={{
@@ -1308,7 +1340,7 @@ export function NavigationPanel() {
                   width: '100%',
                   height: '6px',
                   borderRadius: '3px',
-                  background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                  background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
                   appearance: 'none',
                   cursor: 'pointer'
                 }}
@@ -1318,8 +1350,8 @@ export function NavigationPanel() {
                 justifyContent: 'space-between',
                 marginTop: '4px'
               }}>
-                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})` }}>12px</span>
-                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})` }}>48px</span>
+                <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})` }}>12px</span>
+                <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})` }}>48px</span>
               </div>
             </div>
 
@@ -1331,7 +1363,7 @@ export function NavigationPanel() {
                 alignItems: 'center',
                 marginBottom: '8px'
               }}>
-                <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
+                <span style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})` }}>
                   Feldhöhe
                 </span>
                 <span style={{
@@ -1353,7 +1385,7 @@ export function NavigationPanel() {
                   width: '100%',
                   height: '6px',
                   borderRadius: '3px',
-                  background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                  background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
                   appearance: 'none',
                   cursor: 'pointer'
                 }}
@@ -1363,61 +1395,105 @@ export function NavigationPanel() {
                 justifyContent: 'space-between',
                 marginTop: '4px'
               }}>
-                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})` }}>24px</span>
-                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})` }}>60px</span>
+                <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})` }}>24px</span>
+                <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})` }}>60px</span>
               </div>
             </div>
 
             {/* Textfarbe */}
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginBottom: '8px' }}>
                 Textfarbe
               </div>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {colorOptions.map(c => (
-                  <button
-                    key={c}
-                    onClick={() => updateField(editingField, { color: c })}
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '6px',
-                      background: c,
-                      border: currentField.color === c
-                        ? '3px solid #3b82f6'
-                        : '2px solid rgba(255,255,255,0.2)',
-                      cursor: 'pointer'
-                    }}
-                  />
-                ))}
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {[...colorOptions, ...(settings.navCustomTextColors || [])].map(c => {
+                  const isCustom = !colorOptions.includes(c)
+                  return (
+                    <div key={c} style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => updateField(editingField, { color: c })}
+                        style={{
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '6px',
+                          background: c,
+                          border: currentField.color === c
+                            ? '3px solid #3b82f6'
+                            : `2px solid rgba(${o.c},${o.c},${o.c},0.2)`,
+                          cursor: 'pointer'
+                        }}
+                      />
+                      {isCustom && <span onClick={(e) => {
+                        e.stopPropagation()
+                        updateSettings({ navCustomTextColors: (settings.navCustomTextColors || []).filter((x: string) => x !== c) })
+                      }} style={{ position: 'absolute', top: '-5px', right: '-5px', fontSize: '8px', background: '#ef4444', color: '#fff', borderRadius: '50%', width: '14px', height: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', lineHeight: 1, zIndex: 1 }}>×</span>}
+                    </div>
+                  )
+                })}
+                <input
+                  type="color"
+                  value={currentField.color || '#ffffff'}
+                  onChange={e => updateField(editingField, { color: e.target.value })}
+                  onBlur={e => {
+                    const color = e.target.value
+                    const existing = settings.navCustomTextColors || []
+                    if (!colorOptions.includes(color) && !existing.includes(color)) {
+                      updateSettings({ navCustomTextColors: [...existing, color] })
+                    }
+                  }}
+                  style={{ width: '28px', height: '28px', border: 'none', padding: 0, cursor: 'pointer', borderRadius: '6px', background: 'none' }}
+                  title="Eigene Farbe hinzufügen"
+                />
               </div>
             </div>
 
             {/* Hintergrundfarbe */}
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginBottom: '8px' }}>
                 Hintergrund
               </div>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {bgColorOptions.map(c => (
-                  <button
-                    key={c}
-                    onClick={() => updateField(editingField, { bgColor: c === 'transparent' ? undefined : c })}
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '6px',
-                      background: c === 'transparent'
-                        ? 'repeating-linear-gradient(45deg, #444, #444 4px, #333 4px, #333 8px)'
-                        : c,
-                      border: (currentField.bgColor === c) || (c === 'transparent' && !currentField.bgColor)
-                        ? '3px solid #3b82f6'
-                        : '2px solid rgba(255,255,255,0.2)',
-                      cursor: 'pointer'
-                    }}
-                    title={c === 'transparent' ? 'Kein Hintergrund' : ''}
-                  />
-                ))}
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {[...bgColorOptions, ...(settings.navCustomBgColors || [])].map(c => {
+                  const isCustom = !bgColorOptions.includes(c)
+                  return (
+                    <div key={c} style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => updateField(editingField, { bgColor: c === 'transparent' ? undefined : c })}
+                        style={{
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '6px',
+                          background: c === 'transparent'
+                            ? 'repeating-linear-gradient(45deg, #444, #444 4px, #333 4px, #333 8px)'
+                            : c,
+                          border: (currentField.bgColor === c) || (c === 'transparent' && !currentField.bgColor)
+                            ? '3px solid #3b82f6'
+                            : `2px solid rgba(${o.c},${o.c},${o.c},0.2)`,
+                          cursor: 'pointer'
+                        }}
+                        title={c === 'transparent' ? 'Kein Hintergrund' : ''}
+                      />
+                      {isCustom && <span onClick={(e) => {
+                        e.stopPropagation()
+                        updateSettings({ navCustomBgColors: (settings.navCustomBgColors || []).filter((x: string) => x !== c) })
+                      }} style={{ position: 'absolute', top: '-5px', right: '-5px', fontSize: '8px', background: '#ef4444', color: '#fff', borderRadius: '50%', width: '14px', height: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', lineHeight: 1, zIndex: 1 }}>×</span>}
+                    </div>
+                  )
+                })}
+                <input
+                  type="color"
+                  value={currentField.bgColor?.startsWith('#') ? currentField.bgColor : '#1e293b'}
+                  onChange={e => updateField(editingField, { bgColor: e.target.value })}
+                  onBlur={e => {
+                    const color = e.target.value
+                    const existing = settings.navCustomBgColors || []
+                    if (!bgColorOptions.includes(color) && !existing.includes(color)) {
+                      updateSettings({ navCustomBgColors: [...existing, color] })
+                    }
+                  }}
+                  style={{ width: '28px', height: '28px', border: 'none', padding: 0, cursor: 'pointer', borderRadius: '6px', background: 'none' }}
+                  title="Eigene Hintergrundfarbe hinzufügen"
+                />
               </div>
             </div>
 
@@ -1450,13 +1526,13 @@ export function NavigationPanel() {
             ...subPanelPosition,
             top: position.y,
             zIndex: 1001,
-            background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+            background: o.panelGradient,
             borderRadius: '16px',
             padding: '16px',
             minWidth: '220px',
             maxWidth: '280px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: o.panelShadow,
+            border: o.panelBorder,
             transform: `scale(${scale})`,
             transformOrigin: subPanelOnRight ? 'top left' : 'top right'
           }}
@@ -1468,7 +1544,7 @@ export function NavigationPanel() {
             alignItems: 'center',
             marginBottom: '16px',
             paddingBottom: '12px',
-            borderBottom: '1px solid rgba(255,255,255,0.1)'
+            borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)'
           }}>
             <div style={{
               fontSize: '14px',
@@ -1482,7 +1558,7 @@ export function NavigationPanel() {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+                color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
                 fontSize: '18px',
                 cursor: 'pointer',
                 padding: '4px 8px'
@@ -1494,7 +1570,7 @@ export function NavigationPanel() {
 
           {/* Linientyp-Auswahl */}
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '6px' }}>
+            <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginBottom: '6px' }}>
               Linientyp
             </div>
             <div style={{ display: 'flex', gap: '4px' }}>
@@ -1512,9 +1588,9 @@ export function NavigationPanel() {
                     borderRadius: '6px',
                     background: hdgPendingLineMode === mode
                       ? '#f59e0b'
-                      : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                      : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
                     border: 'none',
-                    color: hdgPendingLineMode === mode ? 'black' : `rgba(255,255,255,${o.textSec})`,
+                    color: hdgPendingLineMode === mode ? 'black' : `rgba(${o.c},${o.c},${o.c},${o.textSec})`,
                     fontSize: '11px',
                     fontWeight: 600,
                     cursor: 'pointer',
@@ -1548,7 +1624,7 @@ export function NavigationPanel() {
                   : 'rgba(245, 158, 11, 0.2)'}`,
               marginBottom: '12px'
             }}>
-              <div style={{ fontSize: '12px', color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, marginBottom: '8px' }}>
+              <div style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.92 : 0.6})`, marginBottom: '8px' }}>
                 {editingCourseLineId ? 'Kurs bearbeiten (0-360°)' : 'Kurs eingeben (0-360°)'}
               </div>
               <input
@@ -1571,9 +1647,9 @@ export function NavigationPanel() {
                   width: '100%',
                   padding: '10px 14px',
                   borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.2)',
+                  border: '1px solid rgba(${o.c},${o.c},${o.c},0.2)',
                   background: 'rgba(0,0,0,0.4)',
-                  color: 'white',
+                  color: o.textColor,
                   fontSize: '18px',
                   fontFamily: 'monospace',
                   fontWeight: 600,
@@ -1624,7 +1700,7 @@ export function NavigationPanel() {
                 </div>
               )}
               {!editingCourseLineId && !hdgCourseMode && courseInputValue && (
-                <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginTop: '8px' }}>
+                <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginTop: '8px' }}>
                   Gueltigen Kurs eingeben (0-360)
                 </div>
               )}
@@ -1640,9 +1716,9 @@ export function NavigationPanel() {
                   marginTop: '8px',
                   padding: '8px',
                   borderRadius: '6px',
-                  background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                  background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
                   border: 'none',
-                  color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`,
+                  color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.92 : 0.6})`,
                   fontSize: '12px',
                   cursor: 'pointer'
                 }}
@@ -1687,7 +1763,7 @@ export function NavigationPanel() {
                     display: 'flex',
                     flexDirection: 'column',
                     padding: '12px 14px',
-                    background: isRepositioning ? 'rgba(34, 197, 94, 0.1)' : editingCourseLineId === line.id ? 'rgba(59, 130, 246, 0.08)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
+                    background: isRepositioning ? 'rgba(34, 197, 94, 0.1)' : editingCourseLineId === line.id ? 'rgba(59, 130, 246, 0.08)' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`,
                     borderRadius: '10px',
                     border: `2px solid ${isRepositioning ? '#22c55e' : editingCourseLineId === line.id ? '#3b82f6' : line.color + '40'}`
                   }}
@@ -1713,7 +1789,7 @@ export function NavigationPanel() {
                       }}>
                         {line.course.toFixed(0).padStart(3, '0')}°
                       </span>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" style={{ marginLeft: '4px' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(${o.c},${o.c},${o.c},0.3)" strokeWidth="2" style={{ marginLeft: '4px' }}>
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                       </svg>
@@ -1785,9 +1861,9 @@ export function NavigationPanel() {
                           }}
                           style={{
                             flex: gpsData ? 1 : undefined,
-                            background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                            background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
                             border: 'none',
-                            color: `rgba(255,255,255,${o.textSec})`,
+                            color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`,
                             fontSize: '11px',
                             cursor: 'pointer',
                             padding: '6px 8px',
@@ -1809,10 +1885,10 @@ export function NavigationPanel() {
                       style={{
                         marginTop: '8px',
                         padding: '6px 10px',
-                        background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
-                        border: '1px solid rgba(255,255,255,0.1)',
+                        background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.12 : 0.05})`,
+                        border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                         borderRadius: '6px',
-                        color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`,
+                        color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.92 : 0.6})`,
                         fontSize: '11px',
                         cursor: 'pointer',
                         display: 'flex',
@@ -1859,9 +1935,9 @@ export function NavigationPanel() {
               marginTop: '16px',
               padding: '12px',
               borderRadius: '8px',
-              background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+              background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
               border: 'none',
-              color: 'white',
+              color: o.textColor,
               fontSize: '14px',
               fontWeight: 500,
               cursor: 'pointer'
@@ -1882,13 +1958,13 @@ export function NavigationPanel() {
             zIndex: 1001,
             background: gpsSimulation.active
               ? 'linear-gradient(180deg, rgba(22,101,52,0.95) 0%, rgba(15,23,42,0.98) 30%)'
-              : 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+              : o.panelGradient,
             borderRadius: '16px',
             padding: '16px',
             minWidth: '240px',
             maxWidth: '280px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-            border: gpsSimulation.active ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(255,255,255,0.1)',
+            boxShadow: o.panelShadow,
+            border: gpsSimulation.active ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
             transform: `scale(${scale})`,
             transformOrigin: subPanelOnRight ? 'top left' : 'top right'
           }}
@@ -1900,7 +1976,7 @@ export function NavigationPanel() {
             alignItems: 'center',
             marginBottom: '16px',
             paddingBottom: '12px',
-            borderBottom: '1px solid rgba(255,255,255,0.1)'
+            borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)'
           }}>
             <div style={{
               fontSize: '14px',
@@ -1928,7 +2004,7 @@ export function NavigationPanel() {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+                color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
                 fontSize: '18px',
                 cursor: 'pointer',
                 padding: '4px 8px'
@@ -1940,7 +2016,7 @@ export function NavigationPanel() {
 
           {/* Startpunkt */}
           <div style={{ marginBottom: '10px' }}>
-            <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '6px' }}>
+            <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '6px' }}>
               Startpunkt
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -1957,7 +2033,7 @@ export function NavigationPanel() {
                     ? '1px solid #f59e0b'
                     : '1px solid rgba(59,130,246,0.3)',
                   borderRadius: '6px',
-                  color: 'white',
+                  color: o.textColor,
                   fontSize: '11px',
                   fontWeight: 600,
                   cursor: gpsSimulation.active ? 'not-allowed' : 'pointer',
@@ -1987,7 +2063,7 @@ export function NavigationPanel() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
             {/* Kurs */}
             <div style={{ opacity: gpsSimulation.followWind ? 0.4 : 1 }}>
-              <div style={{ fontSize: '10px', color: gpsSimulation.followWind ? 'rgba(96,165,250,0.6)' : `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>
+              <div style={{ fontSize: '10px', color: gpsSimulation.followWind ? 'rgba(96,165,250,0.6)' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '4px' }}>
                 Kurs (°) {gpsSimulation.followWind && '🌬️'}
               </div>
               <input
@@ -2001,7 +2077,7 @@ export function NavigationPanel() {
                   width: '100%',
                   padding: '8px',
                   background: gpsSimulation.followWind ? 'rgba(59,130,246,0.1)' : 'rgba(0,0,0,0.3)',
-                  border: gpsSimulation.followWind ? '1px solid rgba(59,130,246,0.2)' : '1px solid rgba(255,255,255,0.1)',
+                  border: gpsSimulation.followWind ? '1px solid rgba(59,130,246,0.2)' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                   borderRadius: '6px',
                   color: gpsSimulation.followWind ? '#60a5fa' : 'white',
                   fontSize: '14px',
@@ -2014,7 +2090,7 @@ export function NavigationPanel() {
 
             {/* Geschwindigkeit */}
             <div style={{ opacity: gpsSimulation.followWind ? 0.4 : 1 }}>
-              <div style={{ fontSize: '10px', color: gpsSimulation.followWind ? 'rgba(96,165,250,0.6)' : `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>
+              <div style={{ fontSize: '10px', color: gpsSimulation.followWind ? 'rgba(96,165,250,0.6)' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '4px' }}>
                 Speed (km/h) {gpsSimulation.followWind && '🌬️'}
               </div>
               <input
@@ -2029,7 +2105,7 @@ export function NavigationPanel() {
                   width: '100%',
                   padding: '8px',
                   background: gpsSimulation.followWind ? 'rgba(59,130,246,0.1)' : 'rgba(0,0,0,0.3)',
-                  border: gpsSimulation.followWind ? '1px solid rgba(59,130,246,0.2)' : '1px solid rgba(255,255,255,0.1)',
+                  border: gpsSimulation.followWind ? '1px solid rgba(59,130,246,0.2)' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                   borderRadius: '6px',
                   color: gpsSimulation.followWind ? '#60a5fa' : 'white',
                   fontSize: '14px',
@@ -2042,7 +2118,7 @@ export function NavigationPanel() {
 
             {/* Höhe */}
             <div>
-              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>
+              <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '4px' }}>
                 Höhe ({settings.altitudeUnit === 'feet' ? 'ft' : 'm'})
               </div>
               <input
@@ -2068,9 +2144,9 @@ export function NavigationPanel() {
                   width: '100%',
                   padding: '8px',
                   background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                   borderRadius: '6px',
-                  color: 'white',
+                  color: o.textColor,
                   fontSize: '14px',
                   fontWeight: 600,
                   textAlign: 'center',
@@ -2081,7 +2157,7 @@ export function NavigationPanel() {
 
             {/* Vario */}
             <div>
-              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>
+              <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '4px' }}>
                 Vario (m/s)
               </div>
               <input
@@ -2095,7 +2171,7 @@ export function NavigationPanel() {
                   width: '100%',
                   padding: '8px',
                   background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                   borderRadius: '6px',
                   color: gpsSimulation.vario > 0 ? '#22c55e' : gpsSimulation.vario < 0 ? '#ef4444' : 'white',
                   fontSize: '14px',
@@ -2118,11 +2194,11 @@ export function NavigationPanel() {
               borderRadius: '8px',
               background: gpsSimulation.followWind
                 ? 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(139,92,246,0.2))'
-                : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
+                : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.12 : 0.05})`,
               border: gpsSimulation.followWind
                 ? '1px solid rgba(59,130,246,0.5)'
-                : '1px solid rgba(255,255,255,0.1)',
-              color: gpsSimulation.followWind ? '#60a5fa' : `rgba(255,255,255,${o.textMuted})`,
+                : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+              color: gpsSimulation.followWind ? '#60a5fa' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
               fontSize: '12px',
               fontWeight: 600,
               cursor: windLayers.length === 0 ? 'not-allowed' : 'pointer',
@@ -2149,7 +2225,7 @@ export function NavigationPanel() {
             )}
             {!gpsSimulation.followWind && windLayers.length > 0 && (
               <span style={{
-                color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})`,
+                color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})`,
                 fontSize: '10px',
                 marginLeft: 'auto'
               }}>
@@ -2181,10 +2257,10 @@ export function NavigationPanel() {
                   padding: '10px',
                   background: gpsSimulation.startPosition
                     ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                    : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                    : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
                   border: 'none',
                   borderRadius: '8px',
-                  color: 'white',
+                  color: o.textColor,
                   fontSize: '13px',
                   fontWeight: 700,
                   cursor: gpsSimulation.startPosition ? 'pointer' : 'not-allowed',
@@ -2246,44 +2322,55 @@ export function NavigationPanel() {
             <div style={{
               fontSize: '13px',
               fontWeight: 600,
-              color: showLandingPrediction ? '#a855f7' : `rgba(255,255,255,${o.on ? 0.95 : 0.8})`,
+              color: showLandingPrediction ? '#a855f7' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.95 : 0.8})`,
               display: 'flex',
               alignItems: 'center',
               gap: '6px'
             }}>
               Landeprognose
               {landingPredictionLoading && (
-                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, fontWeight: 400 }}>...</span>
+                <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, fontWeight: 400 }}>...</span>
               )}
             </div>
             <button
               onClick={() => setActiveToolPanel(null)}
               style={{
-                background: 'none', border: 'none', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+                background: 'none', border: 'none', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
                 cursor: 'pointer', fontSize: '16px', padding: '0 2px', lineHeight: 1
               }}
             >x</button>
           </div>
 
-          {/* Sinkrate Regler */}
-          <div style={{ marginBottom: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
-                Sinkrate
-              </span>
-              <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
-                {settings.variometerUnit === 'fpm' ? Math.round(landingSinkRate * 196.85) : landingSinkRate.toFixed(1)} {settings.variometerUnit === 'fpm' ? 'fpm' : 'm/s'}
-              </span>
-            </div>
-            <input
-              type="range"
-              min="1"
-              max="50"
-              value={Math.round(landingSinkRate * 10)}
-              onChange={e => setLandingSinkRate(Number(e.target.value) / 10)}
-              style={{ width: '100%', accentColor: '#a855f7', cursor: 'pointer' }}
-            />
+          {/* Live Vario Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', flex: 1 }}>
+              <input type="checkbox" checked={landingLiveVario} onChange={e => {
+                setLandingLiveVario(e.target.checked)
+                if (e.target.checked) {
+                  const vario = Math.abs(baroData?.variometer || 0)
+                  if (vario > 0.1) setLandingSinkRate(Math.round(vario * 10) / 10)
+                }
+              }} style={{ accentColor: '#a855f7', cursor: 'pointer' }} />
+              <span style={{ fontSize: '10px', color: landingLiveVario ? '#a855f7' : `rgba(${o.c},${o.c},${o.c},${o.textSec})`, fontWeight: landingLiveVario ? 700 : 400 }}>Live Vario</span>
+            </label>
+            <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
+              {settings.variometerUnit === 'fpm' ? Math.round(landingSinkRate * 196.85) : landingSinkRate.toFixed(1)} {settings.variometerUnit === 'fpm' ? 'fpm' : 'm/s'}
+            </span>
           </div>
+
+          {/* Sinkrate Regler (nur wenn nicht Live Vario) */}
+          {!landingLiveVario && (
+            <div style={{ marginBottom: '8px' }}>
+              <input
+                type="range"
+                min="1"
+                max="50"
+                value={Math.round(landingSinkRate * 10)}
+                onChange={e => setLandingSinkRate(Number(e.target.value) / 10)}
+                style={{ width: '100%', accentColor: '#a855f7', cursor: 'pointer' }}
+              />
+            </div>
+          )}
 
           {/* Aktivieren/Deaktivieren */}
           <button
@@ -2297,8 +2384,8 @@ export function NavigationPanel() {
               border: 'none',
               background: showLandingPrediction
                 ? 'linear-gradient(135deg, rgba(168,85,247,0.4), rgba(168,85,247,0.2))'
-                : filteredWindLayers.length === 0 ? `rgba(255,255,255,${o.on ? 0.08 : 0.03})` : 'rgba(168,85,247,0.1)',
-              color: showLandingPrediction ? '#fff' : filteredWindLayers.length === 0 ? `rgba(255,255,255,${o.on ? 0.4 : 0.25})` : '#a855f7',
+                : filteredWindLayers.length === 0 ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})` : 'rgba(168,85,247,0.1)',
+              color: showLandingPrediction ? '#fff' : filteredWindLayers.length === 0 ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.4 : 0.25})` : '#a855f7',
               fontSize: '12px',
               fontWeight: 600,
               cursor: filteredWindLayers.length === 0 ? 'not-allowed' : 'pointer',
@@ -2312,7 +2399,7 @@ export function NavigationPanel() {
           {/* Wind-Info */}
           {filteredWindLayers.length === 0 && (
             <div style={{
-              fontSize: '10px', color: `rgba(255,255,255,${o.textDim})`,
+              fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textDim})`,
               marginTop: '6px', textAlign: 'center', fontStyle: 'italic'
             }}>
               Keine Windschichten. Bewege den Ballon um Wind zu messen.
@@ -2327,8 +2414,8 @@ export function NavigationPanel() {
               fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '4px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Entfernung</span>
-                <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Entfernung</span>
+                <span style={{ color: o.textColor, fontWeight: 600, fontFamily: 'monospace' }}>
                   {landingPrediction.totalDistanceMeters < 1000
                     ? `${Math.round(landingPrediction.totalDistanceMeters)} m`
                     : `${(landingPrediction.totalDistanceMeters / 1000).toFixed(1)} km`
@@ -2336,20 +2423,20 @@ export function NavigationPanel() {
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Flugzeit</span>
-                <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Flugzeit</span>
+                <span style={{ color: o.textColor, fontWeight: 600, fontFamily: 'monospace' }}>
                   {Math.floor(landingPrediction.totalTimeSeconds / 60)}:{String(Math.floor(landingPrediction.totalTimeSeconds % 60)).padStart(2, '0')} min
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Boden</span>
-                <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Boden</span>
+                <span style={{ color: o.textColor, fontWeight: 600, fontFamily: 'monospace' }}>
                   {Math.round(landingPrediction.groundElevation)} m ({Math.round(landingPrediction.groundElevation * 3.28084)} ft)
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Wind</span>
-                <span style={{ color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, fontFamily: 'monospace' }}>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Wind</span>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.92 : 0.6})`, fontFamily: 'monospace' }}>
                   {filteredWindLayers.length}{windSourceFilter !== 'all' ? `/${windLayers.length}` : ''} Schichten
                 </span>
               </div>
@@ -2377,7 +2464,7 @@ export function NavigationPanel() {
           }}>
             <div style={{
               fontSize: '13px', fontWeight: 600,
-              color: dropCalculator.active ? '#f97316' : `rgba(255,255,255,${o.on ? 0.95 : 0.8})`,
+              color: dropCalculator.active ? '#f97316' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.95 : 0.8})`,
               display: 'flex', alignItems: 'center', gap: '6px'
             }}>
               Marker Drop
@@ -2391,7 +2478,7 @@ export function NavigationPanel() {
             <button
               onClick={() => setActiveToolPanel(null)}
               style={{
-                background: 'none', border: 'none', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+                background: 'none', border: 'none', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
                 cursor: 'pointer', fontSize: '16px', padding: '0 2px', lineHeight: 1
               }}
             >x</button>
@@ -2405,9 +2492,9 @@ export function NavigationPanel() {
               width: '100%', padding: '8px', borderRadius: '8px', border: 'none',
               background: dropCalculator.active
                 ? 'linear-gradient(135deg, rgba(249,115,22,0.4), rgba(249,115,22,0.2))'
-                : filteredWindLayers.length === 0 ? `rgba(255,255,255,${o.on ? 0.08 : 0.03})` : 'rgba(249,115,22,0.1)',
+                : filteredWindLayers.length === 0 ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})` : 'rgba(249,115,22,0.1)',
               color: dropCalculator.active ? '#fff'
-                : filteredWindLayers.length === 0 ? `rgba(255,255,255,${o.on ? 0.4 : 0.25})` : '#f97316',
+                : filteredWindLayers.length === 0 ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.4 : 0.25})` : '#f97316',
               fontSize: '12px', fontWeight: 600,
               cursor: filteredWindLayers.length === 0 ? 'not-allowed' : 'pointer',
               transition: 'all 0.15s',
@@ -2420,7 +2507,7 @@ export function NavigationPanel() {
           {/* Wind-Info */}
           {filteredWindLayers.length === 0 && (
             <div style={{
-              fontSize: '10px', color: `rgba(255,255,255,${o.textDim})`,
+              fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textDim})`,
               marginTop: '6px', textAlign: 'center', fontStyle: 'italic'
             }}>
               Keine Windschichten vorhanden.
@@ -2438,7 +2525,7 @@ export function NavigationPanel() {
               {dropCalculator.distanceToGoal !== null ? (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Abstand Ziel</span>
+                    <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Abstand Ziel</span>
                     <span style={{
                       fontWeight: 700, fontFamily: 'monospace', fontSize: '16px',
                       color: dropCalculator.dropNow ? '#22c55e'
@@ -2461,27 +2548,27 @@ export function NavigationPanel() {
                   )}
                 </>
               ) : (
-                <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textDim})`, textAlign: 'center', fontStyle: 'italic' }}>
+                <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textDim})`, textAlign: 'center', fontStyle: 'italic' }}>
                   Kein Ziel ausgewählt
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Fallzeit</span>
-                <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Fallzeit</span>
+                <span style={{ color: o.textColor, fontWeight: 600, fontFamily: 'monospace' }}>
                   {dropCalculator.timeToImpact !== null ? `${dropCalculator.timeToImpact.toFixed(1)} s` : '--'}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Boden</span>
-                <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Boden</span>
+                <span style={{ color: o.textColor, fontWeight: 600, fontFamily: 'monospace' }}>
                   {dropCalculator.groundElevation !== null
                     ? `${Math.round(dropCalculator.groundElevation)} m (${Math.round(dropCalculator.groundElevation * 3.28084)} ft)`
                     : '--'}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Wind</span>
-                <span style={{ color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, fontFamily: 'monospace' }}>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Wind</span>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.92 : 0.6})`, fontFamily: 'monospace' }}>
                   {filteredWindLayers.length}{windSourceFilter !== 'all' ? `/${windLayers.length}` : ''} Schichten
                 </span>
               </div>
@@ -2490,922 +2577,217 @@ export function NavigationPanel() {
         </div>
       )}
 
-      {/* PDG/FON Berechnung Panel - eigenständiges schwebendes Fenster */}
+      {/* PDG Cone Navigator */}
       {showClimbPanel && (
-        <div
+        <ConeNavigatorPanel
+          onClose={() => setActiveToolPanel(null)}
           onMouseDown={handleToolMouseDown}
           onTouchStart={handleToolTouchStart}
-          style={{
-            ...toolPanelStyle(settings.climbPanelScale ?? 1, 'rgba(6, 182, 212, 0.3)', !!climbResult),
-            minWidth: '240px',
-            maxWidth: '280px',
-          }}
-        >
-          {/* Header */}
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            marginBottom: '12px', paddingBottom: '8px',
-            borderBottom: '1px solid rgba(6, 182, 212, 0.2)'
-          }}>
-            <div style={{
-              fontSize: '13px', fontWeight: 600,
-              color: '#06b6d4',
-              display: 'flex', alignItems: 'center', gap: '6px'
-            }}>
-              PDG/FON Berechnung
-            </div>
-            <button
-              onClick={() => setActiveToolPanel(null)}
-              style={{
-                background: 'none', border: 'none', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
-                cursor: 'pointer', fontSize: '16px', padding: '0 2px', lineHeight: 1
-              }}
-            >x</button>
-          </div>
-
-          {/* Richtung Toggle */}
-          <div style={{ marginBottom: '10px' }}>
-            <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px', textTransform: 'uppercase' }}>
-              Richtung
-            </div>
-            <div style={{ display: 'flex', gap: '4px' }}>
-              {(['up', 'down'] as const).map(dir => (
-                <button
-                  key={dir}
-                  onClick={() => setClimbDirection(dir)}
-                  style={{
-                    flex: 1, padding: '6px', fontSize: '11px',
-                    background: climbDirection === dir ? '#06b6d4' : `rgba(255,255,255,${o.on ? 0.12 : 0.05})`,
-                    color: 'white',
-                    border: climbDirection === dir ? 'none' : '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '6px', cursor: 'pointer', fontWeight: 600
-                  }}
-                >
-                  {dir === 'up' ? 'Steigen ▲' : 'Sinken ▼'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Steig-/Sinkrate */}
-          <div style={{ marginBottom: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
-                {climbDirection === 'up' ? 'Steigrate' : 'Sinkrate'}
-              </span>
-              <span style={{ fontSize: '13px', color: '#06b6d4', fontWeight: 700, fontFamily: 'monospace' }}>
-                {settings.variometerUnit === 'fpm' ? Math.round(climbRate * 196.85) : climbRate.toFixed(1)} {settings.variometerUnit === 'fpm' ? 'fpm' : 'm/s'}
-              </span>
-            </div>
-            <input
-              type="range"
-              min="1"
-              max="50"
-              value={Math.round(climbRate * 10)}
-              onChange={e => setClimbRate(Number(e.target.value) / 10)}
-              style={{ width: '100%', accentColor: '#06b6d4', cursor: 'pointer' }}
-            />
-          </div>
-
-          {/* Mindest-Höhenänderung */}
-          <div style={{ marginBottom: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
-                Mindesthöhe
-              </span>
-              <span style={{ fontSize: '13px', color: '#06b6d4', fontWeight: 700, fontFamily: 'monospace' }}>
-                {climbMinAltFt} ft
-              </span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="3000"
-              step="100"
-              value={climbMinAltFt}
-              onChange={e => setClimbMinAltFt(Number(e.target.value))}
-              style={{ width: '100%', accentColor: '#06b6d4', cursor: 'pointer' }}
-            />
-          </div>
-
-          {/* Mindestentfernung */}
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
-                Mindestentfernung
-              </span>
-              <span style={{ fontSize: '13px', color: '#06b6d4', fontWeight: 700, fontFamily: 'monospace' }}>
-                {climbMinDist >= 1000 ? `${(climbMinDist / 1000).toFixed(1)} km` : `${climbMinDist} m`}
-              </span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="5000"
-              step="100"
-              value={climbMinDist}
-              onChange={e => setClimbMinDist(Number(e.target.value))}
-              style={{ width: '100%', accentColor: '#06b6d4', cursor: 'pointer' }}
-            />
-          </div>
-
-          {/* Vorlaufzeit */}
-          <div style={{ marginBottom: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
-                Vorlaufzeit
-              </span>
-              <span style={{ fontSize: '13px', color: climbLeadTime > 0 ? '#f59e0b' : '#06b6d4', fontWeight: 700, fontFamily: 'monospace' }}>
-                {climbLeadTime > 0 ? `${climbLeadTime} sek` : 'Aus'}
-              </span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="120"
-              step="5"
-              value={climbLeadTime}
-              onChange={e => setClimbLeadTime(Number(e.target.value))}
-              style={{ width: '100%', accentColor: '#06b6d4', cursor: 'pointer' }}
-            />
-          </div>
-
-          {/* Exakt-Modus Checkbox */}
-          <label style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            marginBottom: '12px', cursor: 'pointer',
-            fontSize: '11px', color: `rgba(255,255,255,${o.textSec})`
-          }}>
-            <input
-              type="checkbox"
-              checked={climbExactMode}
-              onChange={e => setClimbExactMode(e.target.checked)}
-              style={{ accentColor: '#06b6d4', cursor: 'pointer', width: '14px', height: '14px' }}
-            />
-            <span>Exakte Werte (stoppt bei ft/m statt besten Punkt zu suchen)</span>
-          </label>
-
-          {/* Berechnen Button */}
-          <button
-            onClick={() => {
-              if (!gpsData || !selectedGoal || filteredWindLayers.length === 0) return
-              const currentAlt = baroData?.pressureAltitude || gpsData.altitude || 0
-              const effectiveRate = climbDirection === 'up' ? climbRate : -climbRate
-              const result = calculateClimbPoint(
-                gpsData.latitude, gpsData.longitude, currentAlt,
-                effectiveRate, climbMinAltFt, climbMinDist,
-                filteredWindLayers,
-                selectedGoal.position.latitude, selectedGoal.position.longitude,
-                climbExactMode,
-                climbLeadTime,
-                30  // 30s Ramp-Up (Beschleunigungsphase)
-              )
-              setClimbResultLocal(result)
-              setClimbPointResult(result ? {
-                path: result.path,
-                bestPoint: result.bestPoint,
-                distanceToGoal: result.distanceToGoal
-              } : null)
-              // Countdown starten wenn Vorlaufzeit > 0
-              setClimbCountdownStart(climbLeadTime > 0 && result ? Date.now() : null)
-            }}
-            disabled={!gpsData || !selectedGoal || filteredWindLayers.length === 0}
-            style={{
-              width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
-              background: (!gpsData || !selectedGoal || filteredWindLayers.length === 0)
-                ? `rgba(255,255,255,${o.on ? 0.08 : 0.03})`
-                : '#06b6d4',
-              color: (!gpsData || !selectedGoal || filteredWindLayers.length === 0)
-                ? `rgba(255,255,255,${o.on ? 0.4 : 0.25})` : 'white',
-              fontSize: '12px', fontWeight: 700,
-              cursor: (!gpsData || !selectedGoal || filteredWindLayers.length === 0) ? 'not-allowed' : 'pointer',
-              opacity: (!gpsData || !selectedGoal || filteredWindLayers.length === 0) ? 0.5 : 1
-            }}
-          >
-            Berechnen
-          </button>
-
-          {/* Fehlende Voraussetzungen */}
-          {(!selectedGoal || filteredWindLayers.length === 0) && (
-            <div style={{
-              fontSize: '10px', color: `rgba(255,255,255,${o.textDim})`,
-              marginTop: '6px', textAlign: 'center', fontStyle: 'italic'
-            }}>
-              {!selectedGoal && filteredWindLayers.length === 0
-                ? 'Kein Ziel und keine Windschichten.'
-                : !selectedGoal
-                  ? 'Kein Ziel ausgewählt.'
-                  : 'Keine Windschichten vorhanden.'}
-            </div>
-          )}
-
-          {/* Live-Countdown */}
-          {climbResult && climbResult.leadTime > 0 && climbCountdownRemaining !== null && (
-            <div style={{
-              marginTop: '10px', padding: '12px',
-              background: climbCountdownRemaining <= 0
-                ? 'rgba(239,68,68,0.15)'
-                : climbCountdownRemaining <= 10
-                  ? 'rgba(245,158,11,0.12)'
-                  : 'rgba(34,197,94,0.1)',
-              border: `1px solid ${
-                climbCountdownRemaining <= 0
-                  ? 'rgba(239,68,68,0.4)'
-                  : climbCountdownRemaining <= 10
-                    ? 'rgba(245,158,11,0.3)'
-                    : 'rgba(34,197,94,0.2)'
-              }`,
-              borderRadius: '8px',
-              textAlign: 'center'
-            }}>
-              {climbCountdownRemaining <= 0 ? (
-                <div style={{
-                  fontSize: '20px', fontWeight: 800, fontFamily: 'monospace',
-                  color: '#ef4444',
-                  animation: 'pulse 1s infinite'
-                }}>
-                  JETZT {climbDirection === 'up' ? 'STEIGEN' : 'SINKEN'}
-                </div>
-              ) : (
-                <>
-                  <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase', marginBottom: '4px' }}>
-                    {climbDirection === 'up' ? 'Steigen' : 'Sinken'} beginnen in
-                  </div>
-                  <div style={{
-                    fontSize: '28px', fontWeight: 800, fontFamily: 'monospace',
-                    color: climbCountdownRemaining <= 10 ? '#f59e0b' : '#22c55e',
-                    letterSpacing: '1px'
-                  }}>
-                    {climbCountdownRemaining} sek
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Ergebnis */}
-          {climbResult && (
-            <div style={{
-              marginTop: '10px', padding: '10px',
-              background: 'rgba(0,0,0,0.3)', borderRadius: '8px',
-              fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '6px'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Abstand Ziel</span>
-                <span style={{
-                  fontWeight: 700, fontFamily: 'monospace', fontSize: '16px',
-                  color: (goalDistance ?? Infinity) < 100 ? '#22c55e'
-                       : (goalDistance ?? Infinity) < 500 ? '#eab308'
-                       : '#ef4444'
-                }}>
-                  {goalDistance !== null ? `${Math.round(goalDistance)} m` : '-- m'}
-                </span>
-              </div>
-              {/* Benötigte Rate – Echtzeit basierend auf Distanz und Höhendifferenz */}
-              {(() => {
-                if (!gpsData || !selectedGoal) return null
-                const currentAlt = baroData?.pressureAltitude || gpsData.altitude || 0
-                const targetAlt = climbResult.bestPoint.altitude
-                const altDiff = targetAlt - currentAlt  // Positiv = muss steigen, negativ = muss sinken
-                // Horizontaldistanz zum berechneten Punkt
-                const hDist = calculateDistance(
-                  gpsData.latitude, gpsData.longitude,
-                  climbResult.bestPoint.lat, climbResult.bestPoint.lon
-                )
-                // Geschwindigkeit des Ballons in m/s
-                const speedMs = (gpsData.speed || 0) / 3.6
-                if (speedMs < 0.5 || hDist < 10) return null  // Zu langsam oder schon da
-                const timeToPoint = hDist / speedMs  // Sekunden bis zum Punkt
-                const requiredRate = altDiff / timeToPoint  // m/s die nötig sind
-                const absRate = Math.abs(requiredRate)
-                const direction = requiredRate > 0.05 ? 'steigen' : requiredRate < -0.05 ? 'sinken' : 'halten'
-                return (
-                  <div style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '6px 8px', marginTop: '2px', marginBottom: '2px',
-                    background: 'rgba(6,182,212,0.08)',
-                    border: '1px solid rgba(6,182,212,0.2)',
-                    borderRadius: '6px'
-                  }}>
-                    <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>
-                      Benötigte Rate
-                    </span>
-                    <span style={{
-                      fontWeight: 700, fontFamily: 'monospace', fontSize: '14px',
-                      color: direction === 'steigen' ? '#22c55e'
-                           : direction === 'sinken' ? '#ef4444'
-                           : '#06b6d4'
-                    }}>
-                      {direction === 'halten' ? `~ 0 ${settings.variometerUnit === 'fpm' ? 'fpm' : 'm/s'}`
-                       : `${requiredRate > 0 ? '+' : ''}${settings.variometerUnit === 'fpm' ? Math.round(requiredRate * 196.85) : requiredRate.toFixed(1)} ${settings.variometerUnit === 'fpm' ? 'fpm' : 'm/s'}`}
-                    </span>
-                  </div>
-                )
-              })()}
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Höhenänderung</span>
-                <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
-                  {climbResult.altitudeChange > 0 ? '+' : ''}{Math.round(climbResult.altitudeChange * 3.28084)} ft
-                  <span style={{ fontSize: '9px', opacity: 0.6, marginLeft: '4px' }}>
-                    ({climbResult.altitudeChange > 0 ? '+' : ''}{climbResult.altitudeChange} m)
-                  </span>
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>{climbDirection === 'up' ? 'Steigzeit' : 'Sinkzeit'}</span>
-                <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
-                  {Math.floor(climbResult.climbTime / 60)}:{String(climbResult.climbTime % 60).padStart(2, '0')} min
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: `rgba(255,255,255,${o.textMuted})` }}>Zielhöhe</span>
-                <span style={{ color: '#fff', fontWeight: 600, fontFamily: 'monospace' }}>
-                  {Math.round(climbResult.bestPoint.altitude * 3.28084)} ft
-                </span>
-              </div>
-
-              {/* Koordinaten des berechneten Punktes */}
-              <div style={{
-                marginTop: '4px', padding: '10px',
-                background: 'rgba(34,197,94,0.1)', borderRadius: '6px',
-                border: '1px solid rgba(34,197,94,0.2)'
-              }}>
-                <div style={{ color: `rgba(255,255,255,${o.textMuted})`, fontSize: '9px', marginBottom: '6px' }}>
-                  Neue Ziel-Position
-                </div>
-                {/* Höhe prominent */}
-                <div style={{
-                  fontFamily: 'monospace', fontSize: '20px', fontWeight: 700,
-                  color: '#22c55e', letterSpacing: '0.5px'
-                }}>
-                  {Math.round(climbResult.bestPoint.altitude * 3.28084)} ft
-                  <span style={{ fontSize: '11px', opacity: 0.5, marginLeft: '6px', fontWeight: 400 }}>
-                    ({Math.round(climbResult.bestPoint.altitude)} m)
-                  </span>
-                </div>
-                {/* Koordinaten im eingestellten Format - ohne Zone, prominent */}
-                <div style={{
-                  fontFamily: 'monospace', fontSize: '18px', fontWeight: 700,
-                  color: '#fff', marginTop: '6px', letterSpacing: '0.5px'
-                }}>
-                  {(() => {
-                    const fmt = settings.coordinateFormat
-                    if (fmt.startsWith('mgrs')) {
-                      const coord = formatCoordinate(climbResult.bestPoint.lat, climbResult.bestPoint.lon, fmt, effectiveUtmZone)
-                      // Zone und 100km-Quadrant entfernen, nur Easting/Northing anzeigen
-                      return coord.replace(/^\d{1,2}[C-X]\s+[A-Z]{2}\s+/, '')
-                    }
-                    if (fmt === 'utm') {
-                      const coord = formatCoordinate(climbResult.bestPoint.lat, climbResult.bestPoint.lon, fmt, effectiveUtmZone)
-                      // Zone entfernen (z.B. "34U 351614E 5533774N" → "351614E 5533774N")
-                      return coord.replace(/^\d{1,2}[C-X]\s+/, '')
-                    }
-                    return formatCoordinate(climbResult.bestPoint.lat, climbResult.bestPoint.lon, fmt, effectiveUtmZone)
-                  })()}
-                </div>
-              </div>
-
-              {/* Ziel versetzen Button */}
-              <button
-                onClick={() => {
-                  if (!climbResult || !selectedGoal) return
-                  const bp = climbResult.bestPoint
-
-                  // Ausgewählten Goal auf berechnete Position versetzen
-                  const updatedGoal: Goal = {
-                    ...selectedGoal,
-                    position: {
-                      ...selectedGoal.position,
-                      latitude: bp.lat,
-                      longitude: bp.lon,
-                      altitude: bp.altitude,
-                      timestamp: new Date()
-                    }
-                  }
-
-                  // Task finden der diesen Goal enthält und Goal darin aktualisieren
-                  const parentTask = tasks.find(t => t.goals.some(g => g.id === selectedGoal.id))
-                  if (parentTask) {
-                    const updated: Task = {
-                      ...parentTask,
-                      goals: parentTask.goals.map(g => g.id === selectedGoal.id ? updatedGoal : g)
-                    }
-                    updateTask(updated)
-                  }
-
-                  // Aktualisierten Goal auswählen
-                  setSelectedGoal(updatedGoal)
-                }}
-                style={{
-                  marginTop: '4px', width: '100%', padding: '8px',
-                  borderRadius: '6px', border: 'none',
-                  background: '#22c55e',
-                  color: 'white',
-                  fontSize: '11px', fontWeight: 700, cursor: 'pointer'
-                }}
-              >
-                Ziel versetzen ({goalDistance !== null ? `${Math.round(goalDistance)} m` : '--'})
-              </button>
-
-              {/* Löschen Button */}
-              <button
-                onClick={() => { setClimbResultLocal(null); setClimbPointResult(null); setClimbCountdownStart(null) }}
-                style={{
-                  marginTop: '4px', width: '100%', padding: '6px',
-                  borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
-                  background: 'transparent', color: `rgba(255,255,255,${o.textMuted})`,
-                  fontSize: '10px', cursor: 'pointer'
-                }}
-              >
-                Ergebnis löschen
-              </button>
-            </div>
-          )}
-
-          {/* Kein Ergebnis */}
-          {climbResult === null && gpsData && selectedGoal && filteredWindLayers.length > 0 && (
-            <div style={{
-              fontSize: '10px', color: `rgba(255,255,255,${o.textDim})`,
-              marginTop: '6px', textAlign: 'center', fontStyle: 'italic'
-            }}>
-              Klicke "Berechnen" um den optimalen Punkt zu finden.
-            </div>
-          )}
-        </div>
+          style={toolPanelStyle(settings.climbPanelScale ?? 1, 'rgba(6, 182, 212, 0.3)', false)}
+        />
       )}
 
-      {/* Land Run Rechner Panel - eigenständiges schwebendes Fenster */}
+
+      {/* Land Run Rechner Panel */}
       {showLandRunPanel && (
-        <div
-          onMouseDown={handleToolMouseDown}
-          onTouchStart={handleToolTouchStart}
-          style={{
-            ...toolPanelStyle(settings.lrnPanelScale ?? 1, 'rgba(34, 197, 94, 0.3)', !!lrnResult),
-            minWidth: '240px',
-            maxWidth: '280px',
-            maxHeight: '80vh',
-            overflowY: 'auto' as const,
-          }}
-        >
+        <div onMouseDown={handleToolMouseDown} onTouchStart={handleToolTouchStart}
+          style={{ ...toolPanelStyle(settings.lrnPanelScale ?? 1, 'rgba(34, 197, 94, 0.3)', !!lrnResult), minWidth: '240px', maxWidth: '270px', maxHeight: '80vh', overflowY: 'auto' as const }}>
+
           {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: '#22c55e' }}>
-              △ Land Run
-            </div>
-            <button
-              onClick={() => {
-                setActiveToolPanel(null)
-                setLrnResult(null)
-                setLandRunResult(null)
-              }}
-              style={{
-                background: 'none', border: 'none', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
-                cursor: 'pointer', fontSize: '16px', padding: '2px 6px'
-              }}
-            >×</button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#22c55e' }}>△ Land Run</span>
+            <button onClick={() => { setActiveToolPanel(null); setLrnResult(null); setLandRunResult(null) }}
+              style={{ background: 'none', border: 'none', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, cursor: 'pointer', fontSize: '15px', padding: '0 2px' }}>✕</button>
           </div>
 
-          {/* Limit-Modus Auswahl */}
-          <div style={{ marginBottom: '8px' }}>
-            <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase', marginBottom: '4px' }}>
-              Limit-Modus
-            </div>
-            <div style={{ display: 'flex', gap: '3px' }}>
-              {([
-                { key: 'leg1' as const, label: 'Leg 1' },
-                { key: 'leg1+leg2' as const, label: 'L1+L2' },
-                { key: 'total' as const, label: 'Gesamt' }
-              ]).map(m => (
-                <button
-                  key={m.key}
-                  onClick={() => setLrnLimitMode(m.key)}
-                  style={{
-                    flex: 1, padding: '5px 0', borderRadius: '5px',
-                    border: 'none', fontSize: '10px', fontWeight: 600,
-                    cursor: 'pointer',
-                    background: lrnLimitMode === m.key ? '#22c55e' : `rgba(255,255,255,${o.bgSoft})`,
-                    color: lrnLimitMode === m.key ? 'white' : `rgba(255,255,255,${o.textMuted})`
-                  }}
-                >{m.label}</button>
-              ))}
-            </div>
+          {/* Modus + Einheit in einer Zeile */}
+          <div style={{ display: 'flex', gap: '3px', marginBottom: '6px' }}>
+            {([{ key: 'leg1' as const, label: 'Leg 1' }, { key: 'leg1+leg2' as const, label: 'L1+L2' }, { key: 'total' as const, label: 'Gesamt' }]).map(m => (
+              <button key={m.key} onClick={() => setLrnLimitMode(m.key)}
+                style={{ flex: 1, padding: '4px 0', borderRadius: '4px', border: 'none', fontSize: '9px', fontWeight: 600, cursor: 'pointer',
+                  background: lrnLimitMode === m.key ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
+                  color: lrnLimitMode === m.key ? 'white' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>{m.label}</button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '3px', marginBottom: '8px' }}>
+            {([{ key: 'min' as const, label: 'Min' }, { key: 'km' as const, label: 'km' }]).map(u => (
+              <button key={u.key} onClick={() => setLrnLimitUnit(u.key)}
+                style={{ flex: 1, padding: '4px 0', borderRadius: '4px', border: 'none', fontSize: '9px', fontWeight: 600, cursor: 'pointer',
+                  background: lrnLimitUnit === u.key ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
+                  color: lrnLimitUnit === u.key ? 'white' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>{u.label}</button>
+            ))}
           </div>
 
-          {/* Einheit Auswahl */}
-          <div style={{ marginBottom: '10px' }}>
-            <div style={{ display: 'flex', gap: '3px' }}>
-              {([
-                { key: 'min' as const, label: 'Minuten' },
-                { key: 'km' as const, label: 'Kilometer' }
-              ]).map(u => (
-                <button
-                  key={u.key}
-                  onClick={() => setLrnLimitUnit(u.key)}
-                  style={{
-                    flex: 1, padding: '5px 0', borderRadius: '5px',
-                    border: 'none', fontSize: '10px', fontWeight: 600,
-                    cursor: 'pointer',
-                    background: lrnLimitUnit === u.key ? '#22c55e' : `rgba(255,255,255,${o.bgSoft})`,
-                    color: lrnLimitUnit === u.key ? 'white' : `rgba(255,255,255,${o.textMuted})`
-                  }}
-                >{u.label}</button>
-              ))}
-            </div>
-          </div>
-
-          {/* Leg 1 Limit Slider */}
+          {/* Slider(s) */}
           {(lrnLimitMode === 'leg1' || lrnLimitMode === 'leg1+leg2') && (
-            <div style={{ marginBottom: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
-                  {lrnLimitMode === 'leg1' ? 'Leg-Dauer (A→B = B→C)' : 'Leg 1 (A→B)'}
-                </span>
-                <span style={{ fontSize: '13px', color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>
-                  {lrnLeg1Value} {lrnLimitUnit === 'min' ? 'Min' : 'km'}
-                </span>
+            <div style={{ marginBottom: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '2px' }}>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>{lrnLimitMode === 'leg1' ? 'Leg (A→B = B→C)' : 'Leg 1 (A→B)'}</span>
+                <span style={{ color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>{lrnLeg1Value} {lrnLimitUnit === 'min' ? 'Min' : 'km'}</span>
               </div>
-              <input
-                type="range"
-                min={lrnLimitUnit === 'min' ? 3 : 1}
-                max={lrnLimitUnit === 'min' ? 60 : 30}
-                step="1"
-                value={lrnLeg1Value}
-                onChange={e => setLrnLeg1Value(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }}
-              />
+              <input type="range" min={lrnLimitUnit === 'min' ? 3 : 1} max={lrnLimitUnit === 'min' ? 60 : 30} step="1" value={lrnLeg1Value}
+                onChange={e => setLrnLeg1Value(Number(e.target.value))} style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }} />
             </div>
           )}
-
-          {/* Leg 2 Limit Slider (nur bei leg1+leg2) */}
           {lrnLimitMode === 'leg1+leg2' && (
-            <div style={{ marginBottom: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
-                  Leg 2 (B→C)
-                </span>
-                <span style={{ fontSize: '13px', color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>
-                  {lrnLeg2Value} {lrnLimitUnit === 'min' ? 'Min' : 'km'}
-                </span>
+            <div style={{ marginBottom: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '2px' }}>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Leg 2 (B→C)</span>
+                <span style={{ color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>{lrnLeg2Value} {lrnLimitUnit === 'min' ? 'Min' : 'km'}</span>
               </div>
-              <input
-                type="range"
-                min={lrnLimitUnit === 'min' ? 3 : 1}
-                max={lrnLimitUnit === 'min' ? 60 : 30}
-                step="1"
-                value={lrnLeg2Value}
-                onChange={e => setLrnLeg2Value(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }}
-              />
+              <input type="range" min={lrnLimitUnit === 'min' ? 3 : 1} max={lrnLimitUnit === 'min' ? 60 : 30} step="1" value={lrnLeg2Value}
+                onChange={e => setLrnLeg2Value(Number(e.target.value))} style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }} />
             </div>
           )}
-
-          {/* Gesamt-Limit Slider (nur bei total) */}
           {lrnLimitMode === 'total' && (
-            <div style={{ marginBottom: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
-                  Gesamt (A→C)
-                </span>
-                <span style={{ fontSize: '13px', color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>
-                  {lrnTotalValue} {lrnLimitUnit === 'min' ? 'Min' : 'km'}
-                </span>
+            <div style={{ marginBottom: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '2px' }}>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Gesamt (A→C)</span>
+                <span style={{ color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>{lrnTotalValue} {lrnLimitUnit === 'min' ? 'Min' : 'km'}</span>
               </div>
-              <input
-                type="range"
-                min={lrnLimitUnit === 'min' ? 5 : 2}
-                max={lrnLimitUnit === 'min' ? 120 : 60}
-                step="1"
-                value={lrnTotalValue}
-                onChange={e => setLrnTotalValue(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }}
-              />
+              <input type="range" min={lrnLimitUnit === 'min' ? 5 : 2} max={lrnLimitUnit === 'min' ? 120 : 60} step="1" value={lrnTotalValue}
+                onChange={e => setLrnTotalValue(Number(e.target.value))} style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }} />
             </div>
           )}
 
-          {/* Höhenbegrenzung */}
-          <div style={{ marginBottom: '10px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', marginBottom: lrnAltLimit ? '8px' : '0' }}>
-              <input
-                type="checkbox"
-                checked={lrnAltLimit}
-                onChange={e => setLrnAltLimit(e.target.checked)}
-                style={{ accentColor: '#22c55e', cursor: 'pointer' }}
-              />
-              <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textSec})` }}>Höhenbegrenzung</span>
+          {/* Höhenbegrenzung + Steigrate kompakt */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', flex: 1 }}>
+              <input type="checkbox" checked={lrnAltLimit} onChange={e => setLrnAltLimit(e.target.checked)} style={{ accentColor: '#22c55e', cursor: 'pointer' }} />
+              <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textSec})` }}>Höhe</span>
             </label>
             {lrnAltLimit && (
-              <>
-                <div style={{ display: 'flex', gap: '3px', marginBottom: '6px' }}>
-                  <button
-                    onClick={() => setLrnAltLimitMode('ceiling')}
-                    style={{
-                      flex: 1, padding: '4px 0', borderRadius: '5px',
-                      border: 'none', fontSize: '10px', fontWeight: 600, cursor: 'pointer',
-                      background: lrnAltLimitMode === 'ceiling' ? '#22c55e' : `rgba(255,255,255,${o.bgSoft})`,
-                      color: lrnAltLimitMode === 'ceiling' ? 'white' : `rgba(255,255,255,${o.textMuted})`
-                    }}
-                  >Obergrenze</button>
-                  <button
-                    onClick={() => setLrnAltLimitMode('floor')}
-                    style={{
-                      flex: 1, padding: '4px 0', borderRadius: '5px',
-                      border: 'none', fontSize: '10px', fontWeight: 600, cursor: 'pointer',
-                      background: lrnAltLimitMode === 'floor' ? '#22c55e' : `rgba(255,255,255,${o.bgSoft})`,
-                      color: lrnAltLimitMode === 'floor' ? 'white' : `rgba(255,255,255,${o.textMuted})`
-                    }}
-                  >Von Boden bis</button>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <input
-                    type="number"
-                    value={lrnAltLimitValue}
-                    onChange={e => setLrnAltLimitValue(Number(e.target.value))}
-                    style={{
-                      flex: 1, padding: '6px 8px',
-                      background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(34,197,94,0.3)',
-                      borderRadius: '5px', color: '#22c55e', fontSize: '13px',
-                      fontWeight: 700, fontFamily: 'monospace', textAlign: 'center'
-                    }}
-                  />
-                  <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textMuted})` }}>ft</span>
-                </div>
-              </>
+              <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+                <button onClick={() => setLrnAltLimitMode(lrnAltLimitMode === 'ceiling' ? 'floor' : 'ceiling')}
+                  style={{ padding: '2px 5px', borderRadius: '3px', border: 'none', fontSize: '8px', fontWeight: 600, cursor: 'pointer', background: '#22c55e', color: 'white' }}>
+                  {lrnAltLimitMode === 'ceiling' ? 'MAX' : 'MIN'}
+                </button>
+                <input type="number" value={lrnAltLimitValue} onChange={e => setLrnAltLimitValue(Number(e.target.value))}
+                  style={{ width: '55px', padding: '3px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '3px', color: '#22c55e', fontSize: '11px', fontWeight: 700, fontFamily: 'monospace', textAlign: 'center' }} />
+                <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textDim})` }}>ft</span>
+              </div>
             )}
           </div>
 
-          {/* Steigrate Slider */}
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
-                Steig-/Sinkrate
-              </span>
-              <span style={{ fontSize: '13px', color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>
-                {lrnClimbRate.toFixed(1)} m/s
-              </span>
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '2px' }}>
+              <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>VARIO</span>
+              <span style={{ color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>{lrnClimbRate.toFixed(1)} m/s</span>
             </div>
-            <input
-              type="range"
-              min="5"
-              max="50"
-              value={Math.round(lrnClimbRate * 10)}
-              onChange={e => setLrnClimbRate(Number(e.target.value) / 10)}
-              style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }}
-            />
+            <input type="range" min="5" max="50" value={Math.round(lrnClimbRate * 10)} onChange={e => setLrnClimbRate(Number(e.target.value) / 10)}
+              style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }} />
           </div>
 
-          {/* Berechnen Button */}
+          {/* Berechnen */}
           <button
             onClick={() => {
               if (!gpsData || filteredWindLayers.length < 2 || lrnCalculating) return
               const currentAlt = baroData?.pressureAltitude || gpsData.altitude || 0
               const bounds = activeCompetitionMap?.bounds || null
-              const lrnLimits: LandRunLimits = {
-                mode: lrnLimitMode,
-                unit: lrnLimitUnit,
-                leg1Value: lrnLeg1Value,
-                leg2Value: lrnLeg2Value,
-                totalValue: lrnTotalValue
-              }
+              const lrnLimits: LandRunLimits = { mode: lrnLimitMode, unit: lrnLimitUnit, leg1Value: lrnLeg1Value, leg2Value: lrnLeg2Value, totalValue: lrnTotalValue }
               setLrnCalculating(true)
-              // Windschichten nach Höhenbegrenzung filtern (auf Basis der quellgefilterten Layers)
               let lrnWindLayers = filteredWindLayers
               if (lrnAltLimit) {
-                const limitAltM = lrnAltLimitValue / 3.28084 // ft → m
-                if (lrnAltLimitMode === 'ceiling') {
-                  lrnWindLayers = filteredWindLayers.filter(l => l.altitude <= limitAltM)
-                } else {
-                  lrnWindLayers = filteredWindLayers.filter(l => l.altitude >= limitAltM)
-                }
+                const limitAltM = lrnAltLimitValue / 3.28084
+                lrnWindLayers = lrnAltLimitMode === 'ceiling' ? filteredWindLayers.filter(l => l.altitude <= limitAltM) : filteredWindLayers.filter(l => l.altitude >= limitAltM)
               }
-              if (lrnWindLayers.length < 2) {
-                setLrnResult(null)
-                setLandRunResult(null)
-                setLrnCalculating(false)
-                return
-              }
-              // setTimeout damit React erst den "Berechne..." State rendern kann
+              if (lrnWindLayers.length < 2) { setLrnResult(null); setLandRunResult(null); setLrnCalculating(false); return }
               setTimeout(() => {
-                const result = calculateLandRun(
-                  gpsData.latitude, gpsData.longitude, currentAlt,
-                  lrnClimbRate,
-                  lrnWindLayers,
-                  lrnLimits,
-                  bounds ? { north: bounds.north, south: bounds.south, east: bounds.east, west: bounds.west } : null
-                )
-                setLrnResult(result)
-                setLrnSelectedAlt(-1)
-                if (result) {
-                  setLandRunResult({
-                    pointA: result.best.pointA,
-                    pointB: result.best.pointB,
-                    pointC: result.best.pointC,
-                    pathAB: result.best.pathAB,
-                    pathBC: result.best.pathBC,
-                    approachPath: result.best.approachPath,
-                    triangleArea: result.best.triangleArea
-                  })
-                } else {
-                  setLandRunResult(null)
-                }
+                const result = calculateLandRun(gpsData.latitude, gpsData.longitude, currentAlt, lrnClimbRate, lrnWindLayers, lrnLimits,
+                  bounds ? { north: bounds.north, south: bounds.south, east: bounds.east, west: bounds.west } : null)
+                setLrnResult(result); setLrnSelectedAlt(-1)
+                if (result) { setLandRunResult({ pointA: result.best.pointA, pointB: result.best.pointB, pointC: result.best.pointC, pathAB: result.best.pathAB, pathBC: result.best.pathBC, approachPath: result.best.approachPath, triangleArea: result.best.triangleArea }) }
+                else { setLandRunResult(null) }
                 setLrnCalculating(false)
               }, 50)
             }}
             disabled={!gpsData || filteredWindLayers.length < 2 || lrnCalculating}
-            style={{
-              width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
-              background: (!gpsData || filteredWindLayers.length < 2 || lrnCalculating)
-                ? `rgba(255,255,255,${o.on ? 0.08 : 0.03})` : '#22c55e',
-              color: (!gpsData || filteredWindLayers.length < 2 || lrnCalculating) ? `rgba(255,255,255,${o.on ? 0.4 : 0.25})` : 'white',
-              fontSize: '12px', fontWeight: 700,
-              cursor: (!gpsData || filteredWindLayers.length < 2 || lrnCalculating) ? 'not-allowed' : 'pointer',
-              opacity: (!gpsData || filteredWindLayers.length < 2 || lrnCalculating) ? 0.5 : 1,
-              marginBottom: '10px'
-            }}
-          >
+            style={{ width: '100%', padding: '8px', borderRadius: '6px', border: 'none', marginBottom: '6px',
+              background: (!gpsData || filteredWindLayers.length < 2 || lrnCalculating) ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.06 : 0.03})` : '#22c55e',
+              color: (!gpsData || filteredWindLayers.length < 2 || lrnCalculating) ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.3 : 0.2})` : 'white',
+              fontSize: '11px', fontWeight: 700, cursor: (!gpsData || filteredWindLayers.length < 2 || lrnCalculating) ? 'not-allowed' : 'pointer' }}>
             {lrnCalculating ? 'Berechne...' : 'Berechnen'}
           </button>
 
-              {/* Fehlende Voraussetzungen */}
-              {!gpsData && (
-                <div style={{ fontSize: '10px', color: '#ef4444', textAlign: 'center' }}>
-                  Kein GPS Signal
+          {!gpsData && <div style={{ fontSize: '9px', color: '#ef4444', textAlign: 'center' }}>Kein GPS</div>}
+          {gpsData && filteredWindLayers.length < 2 && <div style={{ fontSize: '9px', color: '#ef4444', textAlign: 'center' }}>Mind. 2 Windschichten</div>}
+
+          {/* Ergebnis */}
+          {lrnResult && (() => {
+            const selected = lrnSelectedAlt === -1 ? lrnResult.best : lrnResult.alternatives[lrnSelectedAlt]
+            if (!selected) return null
+            const altUnit = settings.altitudeUnit === 'meters' ? 'm' : 'ft'
+            const fmtAlt = (m: number) => settings.altitudeUnit === 'feet' ? Math.round(m * 3.28084) : Math.round(m)
+            const fmtArea = (a: number) => a >= 10000 ? `${(a / 1000000).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km²` : `${a} m²`
+
+            return (
+              <>
+                {/* Fläche */}
+                <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(34,197,94,0.08)', borderRadius: '6px', border: '1px solid rgba(34,197,94,0.2)', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '8px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '2px' }}>{lrnSelectedAlt === -1 ? 'BESTE OPTION' : `ALTERNATIVE ${lrnSelectedAlt + 1}`}</div>
+                  <div style={{ fontSize: '24px', fontWeight: 800, color: '#22c55e', fontFamily: 'monospace' }}>{fmtArea(selected.triangleArea)}</div>
                 </div>
-              )}
-              {gpsData && filteredWindLayers.length < 2 && (
-                <div style={{ fontSize: '10px', color: '#ef4444', textAlign: 'center' }}>
-                  Mind. 2 Windschichten nötig
-                </div>
-              )}
-              {!activeCompetitionMap && (
-                <div style={{ fontSize: '10px', color: '#f59e0b', textAlign: 'center', marginTop: '4px' }}>
-                  Keine Wettkampfkarte aktiv - keine Begrenzung
-                </div>
-              )}
 
-              {/* Ergebnis */}
-              {lrnResult && (() => {
-                const selected = lrnSelectedAlt === -1
-                  ? lrnResult.best
-                  : lrnResult.alternatives[lrnSelectedAlt]
-                if (!selected) return null
-
-                const altUnit = settings.altitudeUnit === 'meters' ? 'm' : 'ft'
-                const fmtAlt = (m: number) => settings.altitudeUnit === 'feet'
-                  ? Math.round(m * 3.28084)
-                  : Math.round(m)
-
-                return (
-                  <div>
-                    {/* Beste Option */}
-                    <div style={{
-                      background: 'rgba(34, 197, 94, 0.08)',
-                      borderRadius: '8px', padding: '10px', marginBottom: '8px',
-                      border: '1px solid rgba(34, 197, 94, 0.2)'
-                    }}>
-                      <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '6px' }}>
-                        {lrnSelectedAlt === -1 ? 'Beste Option' : `Alternative ${lrnSelectedAlt + 1}`}
-                      </div>
-
-                      {/* Fläche */}
-                      <div style={{ fontSize: '20px', fontWeight: 700, color: '#22c55e', marginBottom: '6px' }}>
-                        {selected.triangleArea >= 10000
-                          ? `${(selected.triangleArea / 1000000).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km²`
-                          : `${selected.triangleArea} m²`
-                        }
-                      </div>
-
-                      {/* Legs */}
-                      <div style={{
-                        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px',
-                        fontSize: '11px', color: `rgba(255,255,255,${o.textSec})`
-                      }}>
-                        <div>
-                          <span style={{ color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, fontSize: '9px' }}>LEG 1 (A→B)</span><br/>
-                          {fmtAlt(selected.leg1Altitude)} {altUnit} MSL<br/>
-                          {selected.leg1Wind.direction}° / {selected.leg1Wind.speedKmh} km/h<br/>
-                          <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
-                            {Math.round(selected.leg1Time / 60)} Min / {(selected.leg1Distance / 1000).toFixed(1)} km
-                          </span>
-                        </div>
-                        <div>
-                          <span style={{ color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, fontSize: '9px' }}>LEG 2 (B→C)</span><br/>
-                          {fmtAlt(selected.leg2Altitude)} {altUnit} MSL<br/>
-                          {selected.leg2Wind.direction}° / {selected.leg2Wind.speedKmh} km/h<br/>
-                          <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
-                            {Math.round(selected.leg2Time / 60)} Min / {(selected.leg2Distance / 1000).toFixed(1)} km
-                          </span>
-                        </div>
-                      </div>
-
-                      <div style={{
-                        marginTop: '6px', fontSize: '11px', color: `rgba(255,255,255,${o.textMuted})`,
-                        display: 'flex', justifyContent: 'space-between'
-                      }}>
-                        <span>Winkel: {selected.angleDifference}°</span>
-                        <span>Gesamt: {Math.round(selected.totalTime / 60)} Min</span>
-                      </div>
-
-                      {/* Anflug-Info */}
-                      {selected.approachTime > 0 && (
-                        <div style={{
-                          marginTop: '6px', padding: '4px 6px', borderRadius: '4px',
-                          background: 'rgba(59, 130, 246, 0.1)',
-                          fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`
-                        }}>
-                          Anflug: ~{Math.round(selected.approachTime / 60)} Min zum Startpunkt
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Ziel verschieben Button - nur wenn ein Ziel ausgewählt ist */}
-                    {selectedGoal && (
-                      <button
-                        onClick={() => {
-                          if (!selected) return
-                          const activeTask = tasks.find(t => t.isActive && t.goals.some(g => g.id === selectedGoal?.id))
-                          if (activeTask && selectedGoal) {
-                            const updatedGoals = activeTask.goals.map(g =>
-                              g.id === selectedGoal.id
-                                ? {
-                                    ...g,
-                                    position: {
-                                      ...g.position,
-                                      latitude: selected.pointA.lat,
-                                      longitude: selected.pointA.lon
-                                    }
-                                  }
-                                : g
-                            )
-                            updateTask({ ...activeTask, goals: updatedGoals })
-                            setSelectedGoal({
-                              ...selectedGoal,
-                              position: {
-                                ...selectedGoal.position,
-                                latitude: selected.pointA.lat,
-                                longitude: selected.pointA.lon
-                              }
-                            })
-                          }
-                        }}
-                        style={{
-                          width: '100%', padding: '8px', borderRadius: '6px', border: 'none',
-                          background: 'rgba(59, 130, 246, 0.15)',
-                          color: '#3b82f6',
-                          fontSize: '11px', fontWeight: 600,
-                          cursor: 'pointer', marginBottom: '8px'
-                        }}
-                      >
-                        Ziel auf LRN-Startpunkt verschieben
-                      </button>
-                    )}
-
-                    {/* Alternativen */}
-                    {lrnResult.alternatives.length > 0 && (
-                      <div>
-                        <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '4px' }}>
-                          Alternativen
-                        </div>
-                        {lrnResult.alternatives.map((alt, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => {
-                              setLrnSelectedAlt(lrnSelectedAlt === idx ? -1 : idx)
-                              const opt = lrnSelectedAlt === idx ? lrnResult.best : alt
-                              setLandRunResult({
-                                pointA: opt.pointA,
-                                pointB: opt.pointB,
-                                pointC: opt.pointC,
-                                pathAB: opt.pathAB,
-                                pathBC: opt.pathBC,
-                                approachPath: opt.approachPath,
-                                triangleArea: opt.triangleArea
-                              })
-                            }}
-                            style={{
-                              width: '100%', padding: '6px 8px', marginBottom: '3px',
-                              borderRadius: '6px', border: 'none',
-                              background: lrnSelectedAlt === idx
-                                ? 'rgba(34, 197, 94, 0.15)'
-                                : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
-                              color: lrnSelectedAlt === idx ? '#22c55e' : `rgba(255,255,255,${o.textMuted})`,
-                              fontSize: '10px', cursor: 'pointer', textAlign: 'left',
-                              display: 'flex', justifyContent: 'space-between'
-                            }}
-                          >
-                            <span>{fmtAlt(alt.leg1Altitude)} → {fmtAlt(alt.leg2Altitude)} {altUnit}</span>
-                            <span style={{ fontWeight: 600 }}>
-                              {alt.triangleArea >= 10000
-                                ? `${(alt.triangleArea / 1000000).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km²`
-                                : `${alt.triangleArea} m²`
-                              }
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                {/* Legs kompakt */}
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+                  <div style={{ flex: 1, padding: '4px', background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.04 : 0.02})`, borderRadius: '4px', fontSize: '10px' }}>
+                    <div style={{ fontSize: '8px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, fontWeight: 600 }}>LEG 1 (A→B)</div>
+                    <div style={{ color: o.textColor, fontWeight: 700, fontFamily: 'monospace' }}>{fmtAlt(selected.leg1Altitude)} {altUnit}</div>
+                    <div style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textDim})` }}>{selected.leg1Wind.direction}° · {selected.leg1Wind.speedKmh} km/h</div>
+                    <div style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textDim})` }}>{Math.round(selected.leg1Time / 60)}min · {(selected.leg1Distance / 1000).toFixed(1)}km</div>
                   </div>
-                )
-              })()}
+                  <div style={{ flex: 1, padding: '4px', background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.04 : 0.02})`, borderRadius: '4px', fontSize: '10px' }}>
+                    <div style={{ fontSize: '8px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, fontWeight: 600 }}>LEG 2 (B→C)</div>
+                    <div style={{ color: o.textColor, fontWeight: 700, fontFamily: 'monospace' }}>{fmtAlt(selected.leg2Altitude)} {altUnit}</div>
+                    <div style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textDim})` }}>{selected.leg2Wind.direction}° · {selected.leg2Wind.speedKmh} km/h</div>
+                    <div style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textDim})` }}>{Math.round(selected.leg2Time / 60)}min · {(selected.leg2Distance / 1000).toFixed(1)}km</div>
+                  </div>
+                </div>
+
+                {/* Info-Zeile */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '6px', padding: '0 2px' }}>
+                  <span>Winkel: {selected.angleDifference}°</span>
+                  <span>Gesamt: {Math.round(selected.totalTime / 60)} Min</span>
+                  {selected.approachTime > 0 && <span>Anflug: ~{Math.round(selected.approachTime / 60)}min</span>}
+                </div>
+
+                {/* Ziel verschieben */}
+                {selectedGoal && (
+                  <button onClick={() => {
+                    const activeTask = tasks.find(t => t.isActive && t.goals.some(g => g.id === selectedGoal?.id))
+                    if (activeTask && selectedGoal) {
+                      updateTask({ ...activeTask, goals: activeTask.goals.map(g => g.id === selectedGoal.id ? { ...g, position: { ...g.position, latitude: selected.pointA.lat, longitude: selected.pointA.lon } } : g) })
+                      setSelectedGoal({ ...selectedGoal, position: { ...selectedGoal.position, latitude: selected.pointA.lat, longitude: selected.pointA.lon } })
+                    }
+                  }}
+                  style={{ width: '100%', padding: '6px', borderRadius: '4px', border: 'none', background: 'rgba(59,130,246,0.12)', color: '#3b82f6', fontSize: '10px', fontWeight: 600, cursor: 'pointer', marginBottom: '6px' }}>
+                    Ziel auf Startpunkt
+                  </button>
+                )}
+
+                {/* Alternativen */}
+                {lrnResult.alternatives.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '3px' }}>Alternativen</div>
+                    {lrnResult.alternatives.map((alt, idx) => (
+                      <button key={idx}
+                        onClick={() => {
+                          setLrnSelectedAlt(lrnSelectedAlt === idx ? -1 : idx)
+                          const opt = lrnSelectedAlt === idx ? lrnResult.best : alt
+                          setLandRunResult({ pointA: opt.pointA, pointB: opt.pointB, pointC: opt.pointC, pathAB: opt.pathAB, pathBC: opt.pathBC, approachPath: opt.approachPath, triangleArea: opt.triangleArea })
+                        }}
+                        style={{ width: '100%', padding: '4px 6px', marginBottom: '2px', borderRadius: '4px', border: 'none', fontSize: '9px', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between',
+                          background: lrnSelectedAlt === idx ? 'rgba(34,197,94,0.12)' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.06 : 0.02})`,
+                          color: lrnSelectedAlt === idx ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>
+                        <span>{fmtAlt(alt.leg1Altitude)} → {fmtAlt(alt.leg2Altitude)} {altUnit}</span>
+                        <span style={{ fontWeight: 600 }}>{fmtArea(alt.triangleArea)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
       )}
 
@@ -3417,14 +2799,14 @@ export function NavigationPanel() {
             ...subPanelPosition,
             top: position.y,
             zIndex: 1001,
-            background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+            background: o.panelGradient,
             borderRadius: '16px',
             padding: '16px',
             minWidth: '260px',
             maxWidth: '320px',
             maxHeight: '400px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: o.panelShadow,
+            border: o.panelBorder,
             transform: `scale(${scale})`,
             transformOrigin: subPanelOnRight ? 'top left' : 'top right'
           }}
@@ -3436,7 +2818,7 @@ export function NavigationPanel() {
             alignItems: 'center',
             marginBottom: '12px',
             paddingBottom: '12px',
-            borderBottom: '1px solid rgba(255,255,255,0.1)'
+            borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)'
           }}>
             <div style={{
               fontSize: '14px',
@@ -3450,7 +2832,7 @@ export function NavigationPanel() {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+                color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
                 fontSize: '18px',
                 cursor: 'pointer',
                 padding: '4px 8px'
@@ -3464,7 +2846,7 @@ export function NavigationPanel() {
           {markers.length === 0 ? (
             <div style={{
               textAlign: 'center',
-              color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+              color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
               fontSize: '12px',
               padding: '20px 0'
             }}>
@@ -3537,14 +2919,14 @@ export function NavigationPanel() {
                       <div style={{
                         fontSize: '13px',
                         fontWeight: 600,
-                        color: 'white',
+                        color: o.textColor,
                         fontFamily: 'monospace'
                       }}>
                         {easting} / {northing}
                       </div>
                       <div style={{
                         fontSize: '10px',
-                        color: `rgba(255,255,255,${o.textMuted})`,
+                        color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
                         marginTop: '2px'
                       }}>
                         {time} • {altitudeValue}{altitudeUnit} MSL
@@ -3558,9 +2940,9 @@ export function NavigationPanel() {
                         removeMarker(marker.id)
                       }}
                       style={{
-                        background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                        background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
                         border: 'none',
-                        color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+                        color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
                         fontSize: '14px',
                         cursor: 'pointer',
                         padding: '4px 8px',
@@ -3635,7 +3017,7 @@ export function NavigationPanel() {
                 setAngleResult(null)
               }}
               style={{
-                background: 'none', border: 'none', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+                background: 'none', border: 'none', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
                 cursor: 'pointer', fontSize: '16px', padding: '2px 6px'
               }}
             >×</button>
@@ -3644,7 +3026,7 @@ export function NavigationPanel() {
           {/* Punkt A Koordinaten (optional) */}
           <div style={{ marginBottom: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ fontSize: '8px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Pkt A</span>
+              <span style={{ fontSize: '8px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Pkt A</span>
               <input
                 type="text"
                 value={angPointAEast}
@@ -3660,12 +3042,12 @@ export function NavigationPanel() {
                 placeholder={settings.coordinateFormat === 'mgrs4' ? '1234' : settings.coordinateFormat === 'mgrs6' ? '123456' : settings.coordinateFormat === 'utm' ? 'East' : '12345'}
                 maxLength={settings.coordinateFormat === 'utm' ? 7 : (settings.coordinateFormat === 'mgrs4' ? 4 : settings.coordinateFormat === 'mgrs6' ? 6 : 5)}
                 style={{
-                  width: '70px', background: `rgba(255,255,255,${o.bgSoft})`, border: '1px solid rgba(168,85,247,0.15)',
+                  width: '70px', background: `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`, border: '1px solid rgba(168,85,247,0.15)',
                   borderRadius: '3px', color: angPointALatLon ? '#22c55e' : '#a855f7', padding: '2px 4px', fontSize: '11px',
                   fontFamily: 'monospace', textAlign: 'center', outline: 'none'
                 }}
               />
-              <span style={{ color: `rgba(255,255,255,${o.on ? 0.35 : 0.2})`, fontSize: '9px' }}>/</span>
+              <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.35 : 0.2})`, fontSize: '9px' }}>/</span>
               <input
                 type="text"
                 value={angPointANorth}
@@ -3681,7 +3063,7 @@ export function NavigationPanel() {
                 placeholder={settings.coordinateFormat === 'mgrs4' ? '5678' : settings.coordinateFormat === 'mgrs6' ? '567890' : settings.coordinateFormat === 'utm' ? 'North' : '56789'}
                 maxLength={settings.coordinateFormat === 'utm' ? 7 : (settings.coordinateFormat === 'mgrs4' ? 4 : settings.coordinateFormat === 'mgrs6' ? 6 : 5)}
                 style={{
-                  width: '70px', background: `rgba(255,255,255,${o.bgSoft})`, border: '1px solid rgba(168,85,247,0.15)',
+                  width: '70px', background: `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`, border: '1px solid rgba(168,85,247,0.15)',
                   borderRadius: '3px', color: angPointALatLon ? '#22c55e' : '#a855f7', padding: '2px 4px', fontSize: '11px',
                   fontFamily: 'monospace', textAlign: 'center', outline: 'none'
                 }}
@@ -3689,7 +3071,7 @@ export function NavigationPanel() {
               {(angPointAEast || angPointANorth) && (
                 <button
                   onClick={() => { setAngPointAEast(''); setAngPointANorth(''); setAngPointALatLon(null) }}
-                  style={{ background: 'none', border: 'none', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})`, cursor: 'pointer', fontSize: '10px', padding: '0 2px', lineHeight: 1 }}
+                  style={{ background: 'none', border: 'none', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})`, cursor: 'pointer', fontSize: '10px', padding: '0 2px', lineHeight: 1 }}
                 >×</button>
               )}
             </div>
@@ -3703,7 +3085,7 @@ export function NavigationPanel() {
           {/* Richtung (setDirection) = Leg 1 */}
           <div style={{ marginBottom: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, textTransform: 'uppercase' }}>
                 Leg 1 Richtung (vorgegeben)
               </span>
               <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3724,7 +3106,7 @@ export function NavigationPanel() {
           {/* Steig-/Sinkrate */}
           <div style={{ marginBottom: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, textTransform: 'uppercase' }}>
                 Steig-/Sinkrate
               </span>
               <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3744,7 +3126,7 @@ export function NavigationPanel() {
 
           {/* Limit-Modus: km oder Minuten */}
           <div style={{ marginBottom: '8px' }}>
-            <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase', marginBottom: '4px' }}>
+            <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, textTransform: 'uppercase', marginBottom: '4px' }}>
               B Limit
             </div>
             <div style={{ display: 'flex', gap: '3px', marginBottom: '6px' }}>
@@ -3759,8 +3141,8 @@ export function NavigationPanel() {
                     flex: 1, padding: '5px 0', borderRadius: '5px',
                     border: 'none', fontSize: '10px', fontWeight: 600,
                     cursor: 'pointer',
-                    background: angLimitMode === u.key ? '#a855f7' : `rgba(255,255,255,${o.bgSoft})`,
-                    color: angLimitMode === u.key ? 'white' : `rgba(255,255,255,${o.textMuted})`
+                    background: angLimitMode === u.key ? '#a855f7' : `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
+                    color: angLimitMode === u.key ? 'white' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})`
                   }}
                 >{u.label}</button>
               ))}
@@ -3772,7 +3154,7 @@ export function NavigationPanel() {
               {/* Min Distanz A→B */}
               <div style={{ marginBottom: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, textTransform: 'uppercase' }}>
                     Min Distanz (A→B)
                   </span>
                   <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3797,7 +3179,7 @@ export function NavigationPanel() {
               {/* Max Distanz A→B */}
               <div style={{ marginBottom: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, textTransform: 'uppercase' }}>
                     Max Distanz (A→B)
                   </span>
                   <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3824,7 +3206,7 @@ export function NavigationPanel() {
               {/* Min Zeit A→B */}
               <div style={{ marginBottom: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, textTransform: 'uppercase' }}>
                     Min Zeit (A→B)
                   </span>
                   <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3848,7 +3230,7 @@ export function NavigationPanel() {
               {/* Max Zeit A→B */}
               <div style={{ marginBottom: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textMuted})`, textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, textTransform: 'uppercase' }}>
                     Max Zeit (A→B)
                   </span>
                   <span style={{ fontSize: '13px', color: '#a855f7', fontWeight: 700, fontFamily: 'monospace' }}>
@@ -3917,8 +3299,8 @@ export function NavigationPanel() {
             style={{
               width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
               background: ((!gpsData && !angPointALatLon) || filteredWindLayers.length < 2 || angCalculating)
-                ? `rgba(255,255,255,${o.on ? 0.08 : 0.03})` : '#a855f7',
-              color: ((!gpsData && !angPointALatLon) || filteredWindLayers.length < 2 || angCalculating) ? `rgba(255,255,255,${o.on ? 0.4 : 0.25})` : 'white',
+                ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})` : '#a855f7',
+              color: ((!gpsData && !angPointALatLon) || filteredWindLayers.length < 2 || angCalculating) ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.4 : 0.25})` : 'white',
               fontSize: '12px', fontWeight: 700,
               cursor: ((!gpsData && !angPointALatLon) || filteredWindLayers.length < 2 || angCalculating) ? 'not-allowed' : 'pointer',
               opacity: ((!gpsData && !angPointALatLon) || filteredWindLayers.length < 2 || angCalculating) ? 0.5 : 1,
@@ -3965,7 +3347,7 @@ export function NavigationPanel() {
                   borderRadius: '8px', padding: '10px', marginBottom: '8px',
                   border: '1px solid rgba(168, 85, 247, 0.2)'
                 }}>
-                  <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '6px' }}>
+                  <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '6px' }}>
                     {angSelectedAlt === -1 ? 'Beste Option' : `Alternative ${angSelectedAlt + 1}`}
                   </div>
 
@@ -3975,14 +3357,14 @@ export function NavigationPanel() {
                   </div>
 
                   {/* Bearing Info */}
-                  <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`, marginBottom: '8px' }}>
+                  <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.92 : 0.6})`, marginBottom: '8px' }}>
                     Leg 2 Bearing: {selected.bearingAtoB}° | A→B: {(selected.distanceAB / 1000).toFixed(1)} km
                   </div>
 
                   {/* Leg 1 = vorgegebene Richtung (nur Info) */}
                   <div style={{
                     borderLeft: '2px solid rgba(168,85,247,0.5)', paddingLeft: '6px',
-                    fontSize: '11px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '6px'
+                    fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '6px'
                   }}>
                     <span style={{ color: '#a855f7', fontSize: '9px', fontWeight: 700 }}>LEG 1 (vorgegeben) = {angSetDir}°</span>
                   </div>
@@ -3990,14 +3372,14 @@ export function NavigationPanel() {
                   {/* Leg 2 = Empfehlung */}
                   <div style={{
                     borderLeft: '2px solid rgba(34,197,94,0.5)', paddingLeft: '6px',
-                    fontSize: '11px', color: `rgba(255,255,255,${o.textSec})`, marginBottom: '8px'
+                    fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`, marginBottom: '8px'
                   }}>
                     <span style={{ color: '#22c55e', fontSize: '9px', fontWeight: 700 }}>LEG 2 = {selected.bearingAtoB}°</span><br/>
                     {fmtAlt(selected.leg2Altitude)} {altUnit} MSL<br/>
-                    <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
+                    <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})` }}>
                       Wind: {selected.leg2Wind.direction}° / {selected.leg2Wind.speedKmh} km/h
                     </span><br/>
-                    <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
+                    <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})` }}>
                       {Math.round(selected.leg2Time / 60)} Min | {(selected.distanceAB / 1000).toFixed(1)} km
                     </span>
                   </div>
@@ -4017,7 +3399,7 @@ export function NavigationPanel() {
                 {/* Alternativen */}
                 {angResult.alternatives.length > 0 && (
                   <div>
-                    <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '4px' }}>
+                    <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginBottom: '4px' }}>
                       Alternativen
                     </div>
                     {angResult.alternatives.map((alt, idx) => (
@@ -4041,8 +3423,8 @@ export function NavigationPanel() {
                           borderRadius: '6px', border: 'none',
                           background: angSelectedAlt === idx
                             ? 'rgba(168, 85, 247, 0.15)'
-                            : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
-                          color: angSelectedAlt === idx ? '#a855f7' : `rgba(255,255,255,${o.textMuted})`,
+                            : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`,
+                          color: angSelectedAlt === idx ? '#a855f7' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
                           fontSize: '10px', cursor: 'pointer', textAlign: 'left',
                           display: 'flex', justifyContent: 'space-between'
                         }}

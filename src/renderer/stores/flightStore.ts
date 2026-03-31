@@ -339,6 +339,20 @@ interface FlightState {
     distanceToGoal: number
   } | null
 
+  // Kegel-Linien für PDG Cone Navigator (Links/Rechts Ränder auf der Karte)
+  coneLines: {
+    left: { lat: number; lon: number }[]
+    right: { lat: number; lon: number }[]
+    center: { lat: number; lon: number }[]
+  } | null
+
+  // PDG Cone Navigator — Deklaration im Store damit sie Panel-Schließen überlebt
+  coneDeclared: {
+    lat: number; lon: number; altitude: number
+    turnLayer: any  // TurnLayer
+  } | null
+  coneResult: any | null  // ConeResult
+
   // Land Run Rechner Ergebnis (für Karten-Darstellung)
   landRunResult: {
     pointA: { lat: number; lon: number }
@@ -419,6 +433,9 @@ interface FlightState {
   updateDropCalculator: () => void
 
   setClimbPointResult: (result: FlightState['climbPointResult']) => void
+  setConeLines: (lines: FlightState['coneLines']) => void
+  setConeDeclared: (decl: FlightState['coneDeclared']) => void
+  setConeResult: (result: FlightState['coneResult']) => void
   setLandRunResult: (result: FlightState['landRunResult']) => void
   setAngleResult: (result: FlightState['angleResult']) => void
   setActiveToolPanel: (panel: FlightState['activeToolPanel']) => void
@@ -580,6 +597,8 @@ const defaultSettings: AppSettings = {
   navLineEnabled: true,
   navLineShowCourse: false,
   navPanelPosition: { x: 16, y: 16 },
+  navCustomTextColors: [] as string[],
+  navCustomBgColors: [] as string[],
   navPanelFields: [
     // Höhen-Gruppe
     { id: 'alt', type: 'altitude', label: 'ALT', enabled: true, color: '#ffffff', fontSize: 'medium' },
@@ -645,7 +664,7 @@ const defaultSettings: AppSettings = {
   trackRecordingMode: 'distance',
   trackRecordingTimeInterval: 5,
   trackRecordingDistanceInterval: 1,
-  trackPointMarkers: true,
+  trackPointMarkers: false,
   trackLineColor: '#1a73e8',
   trackLineWidth: 3,
   // Grid Settings
@@ -797,6 +816,9 @@ export const useFlightStore = create<FlightState>()(
 
       // Steigpunkt-Rechner
       climbPointResult: null,
+      coneLines: null,
+      coneDeclared: null,
+      coneResult: null,
 
       // Land Run Rechner
       landRunResult: null,
@@ -1100,6 +1122,9 @@ export const useFlightStore = create<FlightState>()(
 
   // Mouse Position Action
   setClimbPointResult: (result) => set({ climbPointResult: result }),
+      setConeLines: (lines) => set({ coneLines: lines }),
+      setConeDeclared: (decl) => set({ coneDeclared: decl }),
+      setConeResult: (result) => set({ coneResult: result }),
   setLandRunResult: (result) => set({ landRunResult: result }),
   setAngleResult: (result) => set({ angleResult: result }),
   setActiveToolPanel: (panel) => set({ activeToolPanel: panel }),

@@ -123,6 +123,12 @@ body {
   height: 34px;
 }
 
+html.outdoor-mode .app-footer {
+  background: linear-gradient(0deg, #f0f0f0 0%, #ffffff 100%);
+  border-top: 1px solid rgba(0,0,0,0.12);
+  color: #111827;
+}
+
 /* Karte */
 .map-container {
   width: 100%;
@@ -801,38 +807,25 @@ html.outdoor-mode {
   --border-color: #4b5563;
 }
 
-/* ─── Panel-Container: Höherer Kontrast für Hintergrund + Rand ─── */
-html.outdoor-mode .nav-panel,
-html.outdoor-mode .flight-winds-panel,
-html.outdoor-mode .briefing-panel,
-html.outdoor-mode .drawing-panel,
-html.outdoor-mode .altitude-profile-panel,
-html.outdoor-mode .task-settings-panel,
-html.outdoor-mode .stopwatch-panel,
-html.outdoor-mode .measure-tool-panel,
-html.outdoor-mode .windrose-panel,
-html.outdoor-mode .task-edit-panel,
-html.outdoor-mode .live-team-panel {
-  background: linear-gradient(180deg, #2d3a4f 0%, #1a2538 100%) !important;
-  border-color: rgba(255, 255, 255, 0.25) !important;
+html.outdoor-mode * {
+  font-weight: 750 !important;
+  -webkit-font-smoothing: auto;
 }
 
-/* ─── Header: Kontrast erhöhen ─── */
-html.outdoor-mode header {
-  background: linear-gradient(180deg, #2d3a4f 0%, #1a2538 100%) !important;
-  border-bottom-color: rgba(255, 255, 255, 0.25) !important;
-}
+/* ─── Outdoor-Modus: Weiße Panels mit dunkler Schrift ─── */
+/* Panel-Hintergrund und Rand werden jetzt über getOutdoor() inline gesetzt.
+   CSS nur noch für Ergänzungen die inline nicht abgedeckt sind. */
 
-/* ─── StatusBar: Text aufhellen ─── */
+/* ─── StatusBar: Dunkler Text im Outdoor-Modus ─── */
 html.outdoor-mode .status-bar {
-  color: rgba(255, 255, 255, 0.92) !important;
+  color: #111827 !important;
 }
 
 html.outdoor-mode .status-bar span {
   color: inherit !important;
 }
 
-/* ─── Input-Felder in Panels ─── */
+/* ─── Input-Felder in Panels: Dunkler Text auf hellem Hintergrund ─── */
 html.outdoor-mode .nav-panel input,
 html.outdoor-mode .nav-panel select,
 html.outdoor-mode .nav-panel textarea,
@@ -847,19 +840,19 @@ html.outdoor-mode .task-edit-panel input,
 html.outdoor-mode .task-edit-panel select,
 html.outdoor-mode .live-team-panel input,
 html.outdoor-mode .live-team-panel select {
-  background: rgba(255, 255, 255, 0.12) !important;
-  color: rgba(255, 255, 255, 0.95) !important;
-  border-color: rgba(255, 255, 255, 0.2) !important;
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #111827 !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
 }
 
-/* ─── Scrollbar in Panels sichtbarer ─── */
+/* ─── Scrollbar dunkler im Outdoor-Modus ─── */
 html.outdoor-mode .nav-panel::-webkit-scrollbar-thumb,
 html.outdoor-mode .flight-winds-panel::-webkit-scrollbar-thumb,
 html.outdoor-mode .briefing-panel::-webkit-scrollbar-thumb,
 html.outdoor-mode .task-settings-panel::-webkit-scrollbar-thumb,
 html.outdoor-mode .task-edit-panel::-webkit-scrollbar-thumb,
 html.outdoor-mode .live-team-panel::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.25) !important;
+  background: rgba(0, 0, 0, 0.2) !important;
 }
 
 /* ─── Leaflet Popups kontrastreicher ─── */

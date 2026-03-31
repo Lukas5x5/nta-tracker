@@ -111,6 +111,18 @@ contextBridge.exposeInMainWorld('ntaAPI', {
       ipcRenderer.invoke('files:loadBackup', fileName)
   },
 
+  // Lokale Fahrten-Verwaltung (pro Meisterschaft)
+  flights: {
+    save: (options: { championshipId: string; flightId: string; fileName: string; content: string }): Promise<{ success: boolean; path?: string; error?: string }> =>
+      ipcRenderer.invoke('flights:save', options),
+    list: (championshipId: string): Promise<Array<{ id: string; name: string; created_at: string; hasTrack: boolean; isAptProfile: boolean; size: number }>> =>
+      ipcRenderer.invoke('flights:list', championshipId),
+    load: (options: { championshipId: string; flightId: string }): Promise<{ success: boolean; data?: any; error?: string }> =>
+      ipcRenderer.invoke('flights:load', options),
+    delete: (options: { championshipId: string; flightId: string }): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('flights:delete', options)
+  },
+
   // Karten Management (OZF Format)
   maps: {
     import: (): Promise<MapInfo | null> =>

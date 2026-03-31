@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react'
 import { useFlightStore } from '../stores/flightStore'
+import { getOutdoor } from '../utils/outdoorStyles'
 import { usePanelDrag } from '../hooks/usePanelDrag'
 import {
   parseTrajectoryFile, trajectoryFormatName, TRAJECTORY_COLORS,
@@ -16,6 +17,7 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
     importedTrajectories, addTrajectories, removeTrajectory,
     toggleTrajectoryVisibility, clearAllTrajectories, settings
   } = useFlightStore()
+  const o = getOutdoor(settings.outdoorMode)
 
   // File input
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -92,7 +94,7 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
         background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
         borderRadius: '12px',
         boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
-        border: '1px solid rgba(255,255,255,0.1)',
+        border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
         zIndex: 10000,
         display: 'flex',
         flexDirection: 'column',
@@ -108,7 +110,7 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
       {/* Header */}
       <div style={{
         padding: '14px 16px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -118,11 +120,11 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
           </svg>
-          <span style={{ fontWeight: 600, fontSize: '15px', color: 'white' }}>Trajektorien</span>
+          <span style={{ fontWeight: 600, fontSize: '15px', color: o.textColor }}>Trajektorien</span>
           {importedTrajectories.length > 0 && (
             <span style={{
               background: '#a855f7',
-              color: 'white',
+              color: o.textColor,
               padding: '3px 8px',
               borderRadius: '10px',
               fontSize: '11px',
@@ -137,8 +139,8 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
           onClick={onClose}
           style={{
             background: 'rgba(0,0,0,0.2)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            color: 'white',
+            border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
+            color: o.textColor,
             cursor: 'pointer',
             width: '28px',
             height: '28px',
@@ -165,7 +167,7 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
       {/* Import Section */}
       <div className="no-drag" style={{
         padding: '12px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
         background: 'transparent'
       }}>
         {!importResult ? (
@@ -177,8 +179,8 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
                 padding: '12px',
                 fontSize: '13px',
                 background: 'rgba(0,0,0,0.2)',
-                color: 'white',
-                border: '2px dashed rgba(255,255,255,0.1)',
+                color: o.textColor,
+                border: '2px dashed rgba(${o.c},${o.c},${o.c},0.1)',
                 borderRadius: '8px',
                 cursor: 'pointer',
                 fontWeight: 600
@@ -186,7 +188,7 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
             >
               Datei importieren (GPX/KML)...
             </button>
-            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginTop: '6px' }}>
+            <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginTop: '6px' }}>
               .gpx, .kml (Windy.com Trajektorien)
             </div>
           </div>
@@ -202,10 +204,10 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
               borderRadius: '6px'
             }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'white' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: o.textColor }}>
                   {importFilename}
                 </div>
-                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
+                <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)` }}>
                   {trajectoryFormatName(importResult.format)} - {importResult.trajectories.length} Trajektorien
                 </div>
               </div>
@@ -261,7 +263,7 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
                   padding: '10px',
                   fontSize: '13px',
                   background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-                  color: 'white',
+                  color: o.textColor,
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer',
@@ -285,7 +287,7 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
           <div style={{
             textAlign: 'center',
             padding: '30px 20px',
-            color: 'rgba(255,255,255,0.5)',
+            color: `rgba(${o.c},${o.c},${o.c},0.5)`,
             fontSize: '13px'
           }}>
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" style={{ margin: '0 auto 12px', opacity: 0.3 }}>
@@ -324,17 +326,17 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
                   <div style={{
                     fontSize: '11px',
                     fontWeight: 600,
-                    color: 'white',
+                    color: o.textColor,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap'
                   }}>
                     {traj.altitudeLevel
-                      ? <>{Math.round(traj.altitudeLevel * 3.28084)}ft <span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.5)' }}>({traj.altitudeLevel}m)</span></>
+                      ? <>{Math.round(traj.altitudeLevel * 3.28084)}ft <span style={{ fontWeight: 400, color: `rgba(${o.c},${o.c},${o.c},0.5)` }}>({traj.altitudeLevel}m)</span></>
                       : traj.name
                     }
                   </div>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>
+                  <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)` }}>
                     {traj.name} · {traj.points.length} Pkt · {traj.sourceFormat.toUpperCase()}
                   </div>
                 </div>
@@ -345,7 +347,7 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
                   style={{
                     background: 'transparent',
                     border: 'none',
-                    color: traj.visible ? 'white' : 'rgba(255,255,255,0.5)',
+                    color: traj.visible ? 'white' : `rgba(${o.c},${o.c},${o.c},0.5)`,
                     cursor: 'pointer',
                     padding: '4px',
                     fontSize: '14px',
@@ -396,7 +398,7 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
       {importedTrajectories.length > 0 && (
         <div className="no-drag" style={{
           padding: '12px',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
+          borderTop: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
           background: 'transparent',
           display: 'flex',
           gap: '8px'
@@ -408,8 +410,8 @@ export function TrajectoryPanel({ isOpen, onClose }: TrajectoryPanelProps) {
               padding: '10px',
               fontSize: '12px',
               background: 'rgba(0,0,0,0.2)',
-              color: 'white',
-              border: '1px solid rgba(255,255,255,0.1)',
+              color: o.textColor,
+              border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
               borderRadius: '8px',
               cursor: 'pointer',
               fontWeight: 600

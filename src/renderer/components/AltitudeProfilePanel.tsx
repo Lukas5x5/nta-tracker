@@ -587,22 +587,28 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
     }
 
     try {
-      const { error } = await supabase.from('championship_flights')
-        .insert({
-          championship_id: selectedChampId,
-          name: profileName,
-          flight_data: aptData
-        })
+      const flightId = crypto.randomUUID()
+      const flightData = { ...aptData, _meta: { name: profileName, created_at: new Date().toISOString() } }
 
-      if (error) {
-        setSaveSuccess('Fehler: ' + error.message)
+      if (window.ntaAPI?.flights?.save) {
+        const result = await window.ntaAPI.flights.save({
+          championshipId: selectedChampId,
+          flightId,
+          fileName: profileName,
+          content: JSON.stringify(flightData)
+        })
+        if (!result.success) {
+          setSaveSuccess('Fehler: ' + (result.error || 'Unbekannt'))
+        } else {
+          const champName = championships.find(c => c.id === selectedChampId)?.name || ''
+          setSaveSuccess(`Lokal gespeichert in "${champName}"`)
+          setShowSaveDialog(false)
+        }
       } else {
-        const champName = championships.find(c => c.id === selectedChampId)?.name || ''
-        setSaveSuccess(`Gespeichert in "${champName}"`)
-        setShowSaveDialog(false)
+        setSaveSuccess('Fehler: App neu starten')
       }
-    } catch {
-      setSaveSuccess('Verbindungsfehler')
+    } catch (err: any) {
+      setSaveSuccess('Fehler: ' + err.message)
     }
     setSaving(false)
   }
@@ -730,8 +736,8 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
       const y = svgY(alt)
       lines.push(
         <line key={`h-${alt}`} x1={PADDING.left} y1={y} x2={SVG_WIDTH - PADDING.right} y2={y}
-          stroke="rgba(255,255,255,0.06)" strokeWidth="1" />,
-        <text key={`ht-${alt}`} x={PADDING.left - 5} y={y + 3} fill="rgba(255,255,255,0.35)"
+          stroke="rgba(${o.c},${o.c},${o.c},0.06)" strokeWidth="1" />,
+        <text key={`ht-${alt}`} x={PADDING.left - 5} y={y + 3} fill="rgba(${o.c},${o.c},${o.c},0.35)"
           fontSize="9" textAnchor="end">{alt}</text>
       )
     }
@@ -740,8 +746,8 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
       const x = svgX(t)
       lines.push(
         <line key={`v-${t}`} x1={x} y1={PADDING.top} x2={x} y2={SVG_HEIGHT - PADDING.bottom}
-          stroke="rgba(255,255,255,0.06)" strokeWidth="1" />,
-        <text key={`vt-${t}`} x={x} y={SVG_HEIGHT - PADDING.bottom + 14} fill="rgba(255,255,255,0.35)"
+          stroke="rgba(${o.c},${o.c},${o.c},0.06)" strokeWidth="1" />,
+        <text key={`vt-${t}`} x={x} y={SVG_HEIGHT - PADDING.bottom + 14} fill="rgba(${o.c},${o.c},${o.c},0.35)"
           fontSize="9" textAnchor="middle">{t}m</text>
       )
     }
@@ -786,9 +792,9 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
   }
   const btnGhost: React.CSSProperties = {
     ...btnBase,
-    background: `rgba(255,255,255,${o.bgSoft})`,
-    border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
-    color: `rgba(255,255,255,${o.on ? 0.92 : 0.6})`,
+    background: `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
+    border: `1px solid rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
+    color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.92 : 0.6})`,
   }
 
   return (
@@ -805,7 +811,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
         width: '460px',
         background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
         borderRadius: '12px',
-        border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+        border: `1px solid rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
         padding: '16px',
         zIndex: 2000,
         backdropFilter: 'none',
@@ -822,14 +828,14 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         marginBottom: '12px', paddingBottom: '10px',
-        borderBottom: `1px solid rgba(255,255,255,${o.bgSoft})`,
+        borderBottom: `1px solid rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{
             fontSize: '13px', fontWeight: 700, color: '#22c55e',
             background: 'rgba(34,197,94,0.12)', padding: '3px 8px', borderRadius: '6px',
           }}>APT</span>
-          <span style={{ fontSize: '12px', color: `rgba(255,255,255,${o.textMuted})` }}>Altitude Profile Task</span>
+          <span style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Altitude Profile Task</span>
           {isRunning && (
             <span style={{
               fontSize: '10px', fontWeight: 600, color: '#22c55e',
@@ -845,8 +851,8 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
               style={{
                 ...btnGhost,
                 padding: '4px 10px', fontSize: '10px',
-                color: isPaused ? '#eab308' : `rgba(255,255,255,${o.textMuted})`,
-                border: isPaused ? '1px solid rgba(234,179,8,0.3)' : `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                color: isPaused ? '#eab308' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
+                border: isPaused ? '1px solid rgba(234,179,8,0.3)' : `1px solid rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
               }}
             >
               {isPaused ? 'RESUME' : 'PAUSE'}
@@ -855,8 +861,8 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
           <button
             onClick={onClose}
             style={{
-              background: `rgba(255,255,255,${o.bgSoft})`, border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
-              borderRadius: '6px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+              background: `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`, border: `1px solid rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
+              borderRadius: '6px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
               cursor: 'pointer', fontSize: '14px', padding: '2px 8px', lineHeight: 1,
             }}
           >
@@ -877,7 +883,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
               {renderGrid()}
               {layerBPoints && <polygon points={layerBPoints} fill="rgba(34,197,94,0.04)" stroke="none" />}
               {layerAPoints && <polygon points={layerAPoints} fill="rgba(34,197,94,0.08)" stroke="none" />}
-              <polyline points={profileLine} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinejoin="round" strokeDasharray="4,2" />
+              <polyline points={profileLine} fill="none" stroke="rgba(${o.c},${o.c},${o.c},0.5)" strokeWidth="1.5" strokeLinejoin="round" strokeDasharray="4,2" />
               <line
                 x1={PADDING.left} y1={svgY(profilePoints[0].altitudeFt)}
                 x2={SVG_WIDTH - PADDING.right} y2={svgY(profilePoints[0].altitudeFt)}
@@ -927,7 +933,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
                   }
                 </div>
               )}
-              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textDim})`, marginTop: '8px' }}>
+              <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textDim})`, marginTop: '8px' }}>
                 {hasStartRate
                   ? 'Hoehe + Rate halten! Bei Abweichung wird der Countdown zurueckgesetzt.'
                   : 'Hoehe halten! Bei Abweichung wird der Countdown zurueckgesetzt.'
@@ -955,7 +961,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
 
                     <div style={{
                       display: 'flex', justifyContent: 'center', gap: '24px', marginBottom: '12px',
-                      fontSize: '12px', color: `rgba(255,255,255,${o.textMuted})`,
+                      fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
                     }}>
                       <span>IST: <b style={{ color: '#fff', fontSize: '14px' }}>{Math.round(currentAlt)} ft</b></span>
                       <span>SOLL: <b style={{ color: '#22c55e', fontSize: '14px' }}>{Math.round(startAlt)} ft</b></span>
@@ -978,7 +984,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
                         border: `1px solid ${needsClimb ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
                         borderRadius: '8px',
                       }}>
-                        <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                           Startrate (Profil beginnt {profileStartRateFtMin > 0 ? 'steigend' : 'sinkend'})
                         </div>
                         <div style={{
@@ -991,11 +997,11 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
                             ? rateToDisplay(Math.abs(profileStartRateFtMin)).toFixed(1)
                             : Math.round(Math.abs(profileStartRateFtMin))
                           }
-                          <span style={{ fontSize: '12px', marginLeft: '4px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})` }}>
+                          <span style={{ fontSize: '12px', marginLeft: '4px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})` }}>
                             {rateUnit}
                           </span>
                         </div>
-                        <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})`, marginTop: '4px' }}>
+                        <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})`, marginTop: '4px' }}>
                           Bei Starthoehe mit dieser Rate {profileStartRateFtMin > 0 ? 'steigen' : 'sinken'} - Countdown startet automatisch
                         </div>
                       </div>
@@ -1003,8 +1009,8 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
 
                     {!hasStartRate && (
                       <div style={{
-                        fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})`,
-                        padding: '6px 10px', background: `rgba(255,255,255,${o.on ? 0.08 : 0.03})`, borderRadius: '6px',
+                        fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})`,
+                        padding: '6px 10px', background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`, borderRadius: '6px',
                       }}>
                         Profil beginnt level - auf +/-{layerAFt} ft genau ausrichten
                       </div>
@@ -1045,7 +1051,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
 
           {/* Profil-Punkte */}
           <div style={{
-            fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '6px',
+            fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginBottom: '6px',
             textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600,
           }}>
             Profil-Punkte
@@ -1074,12 +1080,12 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
                       onChange={(e) => updatePoint(i, 'timeMinutes', parseFloat(e.target.value) || 0)}
                       step={0.5}
                       style={{
-                        width: '50px', background: `rgba(255,255,255,${o.bgSoft})`, border: `1px solid rgba(255,255,255,${o.border})`,
+                        width: '50px', background: `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`, border: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
                         borderRadius: '6px', color: '#fff', padding: '5px 6px', fontSize: '12px', textAlign: 'right',
                         outline: 'none',
                       }}
                     />
-                    <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})` }}>min</span>
+                    <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})` }}>min</span>
                   </>
                 )}
                 <input
@@ -1088,12 +1094,12 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
                   onChange={(e) => updatePoint(i, 'altitudeFt', parseFloat(e.target.value) || 0)}
                   step={50}
                   style={{
-                    width: '70px', background: `rgba(255,255,255,${o.bgSoft})`, border: `1px solid rgba(255,255,255,${o.border})`,
+                    width: '70px', background: `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`, border: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
                     borderRadius: '6px', color: '#fff', padding: '5px 6px', fontSize: '12px', textAlign: 'right',
                     outline: 'none',
                   }}
                 />
-                <span style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})` }}>ft</span>
+                <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})` }}>ft</span>
                 {i > 0 && profilePoints.length > 2 && (
                   <button
                     onClick={() => removePoint(i)}
@@ -1120,7 +1126,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
           {/* Layer-Konfiguration */}
           <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '4px', fontWeight: 600 }}>LAYER A (+/-ft)</div>
+              <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginBottom: '4px', fontWeight: 600 }}>LAYER A (+/-ft)</div>
               <input
                 type="number"
                 value={layerAFt}
@@ -1134,7 +1140,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
               />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '4px', fontWeight: 600 }}>LAYER B (+/-ft)</div>
+              <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginBottom: '4px', fontWeight: 600 }}>LAYER B (+/-ft)</div>
               <input
                 type="number"
                 value={layerBFt}
@@ -1192,14 +1198,14 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
             {renderGrid()}
             {layerBPoints && <polygon points={layerBPoints} fill="rgba(234,179,8,0.04)" stroke="none" />}
             {layerAPoints && <polygon points={layerAPoints} fill="rgba(34,197,94,0.06)" stroke="none" />}
-            <polyline points={profileLine} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinejoin="round" strokeDasharray="4,2" />
+            <polyline points={profileLine} fill="none" stroke="rgba(${o.c},${o.c},${o.c},0.5)" strokeWidth="1.5" strokeLinejoin="round" strokeDasharray="4,2" />
             {renderPilotTrack()}
             {isRunning && elapsedMinutes <= totalDuration && (
               <>
                 <line
                   x1={svgX(elapsedMinutes)} y1={PADDING.top}
                   x2={svgX(elapsedMinutes)} y2={SVG_HEIGHT - PADDING.bottom}
-                  stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeDasharray="2,2"
+                  stroke="rgba(${o.c},${o.c},${o.c},0.2)" strokeWidth="1" strokeDasharray="2,2"
                 />
                 <circle
                   cx={svgX(elapsedMinutes)}
@@ -1218,7 +1224,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
                       cy={svgY(target)}
                       r="3"
                       fill="none"
-                      stroke="rgba(255,255,255,0.4)"
+                      stroke="rgba(${o.c},${o.c},${o.c},0.4)"
                       strokeWidth="1"
                     />
                   )
@@ -1238,7 +1244,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
               border: `1px solid ${deviationColor}25`,
               padding: '8px', textAlign: 'center',
             }}>
-              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Abweichung</div>
+              <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Abweichung</div>
               <div style={{
                 fontSize: '22px', fontWeight: 700, color: deviationColor,
                 fontVariantNumeric: 'tabular-nums', lineHeight: 1.1,
@@ -1254,11 +1260,11 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
 
             {/* Layer + Rate */}
             <div style={{
-              background: `rgba(255,255,255,${o.on ? 0.08 : 0.03})`, borderRadius: '8px',
-              border: `1px solid rgba(255,255,255,${o.bgSoft})`,
+              background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`, borderRadius: '8px',
+              border: `1px solid rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
               padding: '8px', textAlign: 'center',
             }}>
-              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Layer</div>
+              <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Layer</div>
               <div style={{
                 fontSize: '18px', fontWeight: 700, color: deviationColor,
                 lineHeight: 1.1,
@@ -1302,7 +1308,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
                               <span style={{ marginLeft: '2px' }}>{rateUnit}</span>
                             </>
                           )}
-                          <span style={{ color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})`, marginLeft: '3px' }}>
+                          <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})`, marginLeft: '3px' }}>
                             in {lookahead.upcoming.inSeconds}s
                           </span>
                         </div>
@@ -1324,7 +1330,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
                           <span style={{ marginLeft: '2px' }}>{rateUnit}</span>
                         </>
                       )}
-                      <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.textDim})`, marginLeft: '3px' }}>
+                      <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textDim})`, marginLeft: '3px' }}>
                         in {lookahead.upcoming ? `${lookahead.upcoming.inSeconds}s` : formatTime(lookahead.inMinutes)}
                       </span>
                     </div>
@@ -1342,18 +1348,18 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
 
             {/* Zeit */}
             <div style={{
-              background: `rgba(255,255,255,${o.on ? 0.08 : 0.03})`, borderRadius: '8px',
-              border: `1px solid rgba(255,255,255,${o.bgSoft})`,
+              background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`, borderRadius: '8px',
+              border: `1px solid rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
               padding: '8px', textAlign: 'center',
             }}>
-              <div style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Zeit</div>
+              <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Zeit</div>
               <div style={{
                 fontSize: '18px', fontWeight: 700, color: '#fff',
                 fontVariantNumeric: 'tabular-nums', lineHeight: 1.1,
               }}>
                 {formatTime(elapsedMinutes)}
               </div>
-              <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})`, marginTop: '2px' }}>
+              <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})`, marginTop: '2px' }}>
                 / {formatTime(totalDuration)}
               </div>
             </div>
@@ -1363,11 +1369,11 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
           {isRunning && (
             <div style={{
               display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '8px',
-              fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+              fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
               padding: '6px', background: 'rgba(0,0,0,0.15)', borderRadius: '6px',
             }}>
               <span>IST: <b style={{ color: '#fff', fontSize: '13px' }}>{Math.round(getCurrentAltFt())} ft</b></span>
-              <span>SOLL: <b style={{ color: `rgba(255,255,255,${o.textSec})`, fontSize: '13px' }}>
+              <span>SOLL: <b style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`, fontSize: '13px' }}>
                 {Math.round(interpolateProfile(elapsedMinutes, profilePoints) ?? 0)} ft
               </b></span>
             </div>
@@ -1379,7 +1385,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
               marginTop: '10px', padding: '12px',
               background: 'rgba(0,0,0,0.15)',
               borderRadius: '8px',
-              border: `1px solid rgba(255,255,255,${o.bgSoft})`,
+              border: `1px solid rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
             }}>
               {(() => {
                 const layerACnt = history.filter(h => h.layer === 'A').length
@@ -1417,7 +1423,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
                     Meisterschaft waehlen
                   </div>
                   {loadingChamps ? (
-                    <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`, textAlign: 'center', padding: '8px' }}>
+                    <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, textAlign: 'center', padding: '8px' }}>
                       Laden...
                     </div>
                   ) : championships.length === 0 ? (
@@ -1431,7 +1437,7 @@ export function AltitudeProfilePanel({ onClose }: AltitudeProfilePanelProps) {
                         onChange={(e) => setSelectedChampId(e.target.value)}
                         style={{
                           width: '100%', padding: '8px 10px', marginBottom: '8px',
-                          background: 'rgba(0,0,0,0.3)', border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+                          background: 'rgba(0,0,0,0.3)', border: `1px solid rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
                           borderRadius: '6px', color: '#fff', fontSize: '12px', outline: 'none',
                         }}
                       >

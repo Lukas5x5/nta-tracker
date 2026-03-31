@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useFlightStore } from '../stores/flightStore'
+import { getOutdoor } from '../utils/outdoorStyles'
 import { useAuthStore } from '../stores/authStore'
 import { supabase } from '../lib/supabase'
 import { latLonToUTM, utmToLatLon, UTMWGS84 } from '../utils/coordinatesWGS84'
@@ -39,6 +40,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
     addCompetitionMap,
     toggleActiveMap
   } = useFlightStore()
+  const o = getOutdoor(settings.outdoorMode)
   const { user } = useAuthStore()
 
   // Kartenname für Speichern
@@ -763,22 +765,22 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
     right: 16,
     bottom: 10,
     width: 380,
-    background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
-    border: '1px solid rgba(255,255,255,0.1)',
+    background: o.panelGradient,
+    border: o.panelBorder,
     borderRadius: 8,
     padding: 16,
     zIndex: 2000,
-    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+    boxShadow: o.panelShadow,
     overflowY: 'auto'
   }
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
     padding: '8px 10px',
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.1)',
+    background: `rgba(${o.c},${o.c},${o.c},0.05)`,
+    border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
     borderRadius: 4,
-    color: '#fff',
+    color: o.textColor,
     fontSize: 13,
     fontFamily: 'monospace'
   }
@@ -803,7 +805,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
     <div style={panelStyle}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h3 style={{ margin: 0, color: '#fff', fontSize: 15, fontWeight: 600 }}>
+        <h3 style={{ margin: 0, color: o.textColor, fontSize: 15, fontWeight: 600 }}>
           Wettkampfbereich
         </h3>
         <button
@@ -812,7 +814,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
             ...buttonStyle,
             padding: '4px 8px',
             background: 'transparent',
-            color: 'rgba(255,255,255,0.5)'
+            color: `rgba(${o.c},${o.c},${o.c},0.5)`
           }}
         >
           ✕
@@ -829,7 +831,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
           }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 10, color: `rgba(${o.c},${o.c},${o.c},0.5)`, display: 'block', marginBottom: 4 }}>
                   Zone (1-60)
                 </label>
                 <select
@@ -847,7 +849,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
                 </select>
               </div>
               <div style={{ flex: 1.5 }}>
-                <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 10, color: `rgba(${o.c},${o.c},${o.c},0.5)`, display: 'block', marginBottom: 4 }}>
                   Band (Breitengrad)
                 </label>
                 <select
@@ -870,16 +872,16 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
             <div style={{
               marginTop: 8,
               padding: '6px 8px',
-              background: 'rgba(255,255,255,0.05)',
+              background: `rgba(${o.c},${o.c},${o.c},0.05)`,
               borderRadius: 4,
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
             }}>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
+              <span style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.6)` }}>
                 UTM: <strong style={{ color: '#3b82f6' }}>{utmZone}{latitudeBand}</strong>
               </span>
-              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
+              <span style={{ fontSize: 10, color: `rgba(${o.c},${o.c},${o.c},0.4)` }}>
                 {hemisphere === 'N' ? 'Nordhalbkugel' : 'Südhalbkugel'}
               </span>
             </div>
@@ -920,8 +922,8 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
           style={{
             ...buttonStyle,
             flex: 1,
-            background: mode === 'input' ? '#3b82f6' : 'rgba(255,255,255,0.1)',
-            color: mode === 'input' ? '#fff' : 'rgba(255,255,255,0.6)'
+            background: mode === 'input' ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.1)`,
+            color: mode === 'input' ? '#fff' : `rgba(${o.c},${o.c},${o.c},0.6)`
           }}
         >
           UTM Eingabe
@@ -934,8 +936,8 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
           style={{
             ...buttonStyle,
             flex: 1,
-            background: mode === 'select' ? '#22c55e' : 'rgba(255,255,255,0.1)',
-            color: mode === 'select' ? '#fff' : 'rgba(255,255,255,0.6)'
+            background: mode === 'select' ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},0.1)`,
+            color: mode === 'select' ? '#fff' : `rgba(${o.c},${o.c},${o.c},0.6)`
           }}
         >
           Auf Karte wählen
@@ -955,7 +957,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
           <div style={{ color: CORNER_COLORS[selectingCorner], fontWeight: 600, marginBottom: 4 }}>
             Punkt {selectingCorner + 1}: {CORNER_NAMES[selectingCorner]}
           </div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
+          <div style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.6)` }}>
             Klicke auf die Karte um den Punkt zu setzen
           </div>
         </div>
@@ -969,7 +971,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
             style={{
               marginBottom: 12,
               padding: 12,
-              background: 'rgba(255,255,255,0.03)',
+              background: `rgba(${o.c},${o.c},${o.c},0.03)`,
               borderRadius: 6,
               borderLeft: `3px solid ${CORNER_COLORS[index]}`
             }}
@@ -985,7 +987,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <div>
-                <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 10, color: `rgba(${o.c},${o.c},${o.c},0.5)`, display: 'block', marginBottom: 4 }}>
                   Easting (E)
                 </label>
                 <input
@@ -998,7 +1000,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 10, color: `rgba(${o.c},${o.c},${o.c},0.5)`, display: 'block', marginBottom: 4 }}>
                   Northing (N)
                 </label>
                 <input
@@ -1014,7 +1016,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
 
             {/* Lat/Lon Anzeige */}
             {corner.lat !== 0 && corner.lon !== 0 && (
-              <div style={{ marginTop: 6, fontSize: 10, color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}>
+              <div style={{ marginTop: 6, fontSize: 10, color: `rgba(${o.c},${o.c},${o.c},0.4)`, fontFamily: 'monospace' }}>
                 {corner.lat.toFixed(6)}°, {corner.lon.toFixed(6)}°
               </div>
             )}
@@ -1024,7 +1026,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
 
       {/* Kartentyp Auswahl */}
       <div style={{ marginBottom: 12 }}>
-        <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', display: 'block', marginBottom: 8 }}>
+        <label style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.6)`, display: 'block', marginBottom: 8 }}>
           Kartentyp
         </label>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1044,10 +1046,10 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
               style={{
                 flex: 1,
                 padding: '8px',
-                background: tileProvider === id ? '#3b82f6' : 'rgba(255,255,255,0.05)',
-                border: tileProvider === id ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
+                background: tileProvider === id ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                border: tileProvider === id ? '1px solid #3b82f6' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                 borderRadius: 6,
-                color: tileProvider === id ? '#fff' : 'rgba(255,255,255,0.7)',
+                color: tileProvider === id ? '#fff' : `rgba(${o.c},${o.c},${o.c},0.7)`,
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -1063,7 +1065,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
 
       {/* Kartenqualität Auswahl */}
       <div style={{ marginBottom: 16 }}>
-        <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', display: 'block', marginBottom: 8 }}>
+        <label style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.6)`, display: 'block', marginBottom: 8 }}>
           Kartenqualität
         </label>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1077,10 +1079,10 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
               style={{
                 flex: 1,
                 padding: '10px 8px',
-                background: maxZoom === max ? '#3b82f6' : 'rgba(255,255,255,0.05)',
-                border: maxZoom === max ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
+                background: maxZoom === max ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                border: maxZoom === max ? '1px solid #3b82f6' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                 borderRadius: 6,
-                color: maxZoom === max ? '#fff' : 'rgba(255,255,255,0.7)',
+                color: maxZoom === max ? '#fff' : `rgba(${o.c},${o.c},${o.c},0.7)`,
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -1105,11 +1107,11 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
           marginBottom: 16
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>Anzahl Kacheln:</span>
+            <span style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.6)` }}>Anzahl Kacheln:</span>
             <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 600 }}>{tileEstimate.count.toLocaleString()}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>Geschätzte Größe:</span>
+            <span style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.6)` }}>Geschätzte Größe:</span>
             <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 600 }}>{formatBytes(tileEstimate.estimatedSize)}</span>
           </div>
         </div>
@@ -1125,14 +1127,14 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
           marginBottom: 16
         }}>
           {/* Phase Anzeige */}
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: 8, fontWeight: 600 }}>
+          <div style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.7)`, marginBottom: 8, fontWeight: 600 }}>
             {isReprojecting ? '📦 Erstelle UTM-Karte...' : '📥 Lade Kacheln herunter...'}
           </div>
 
           {/* Fortschritt */}
           {!isReprojecting && downloadProgress && (
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>Fortschritt:</span>
+              <span style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.6)` }}>Fortschritt:</span>
               <span style={{ fontSize: 12, color: '#3b82f6', fontWeight: 600 }}>
                 {downloadProgress.downloaded + downloadProgress.cached} / {downloadProgress.total}
               </span>
@@ -1142,7 +1144,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
           {/* Progress Bar */}
           <div style={{
             height: 6,
-            background: 'rgba(255,255,255,0.1)',
+            background: `rgba(${o.c},${o.c},${o.c},0.1)`,
             borderRadius: 3,
             overflow: 'hidden',
             marginBottom: 8
@@ -1162,7 +1164,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Status Text */}
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}>
+          <div style={{ fontSize: 10, color: `rgba(${o.c},${o.c},${o.c},0.4)`, fontFamily: 'monospace' }}>
             {isReprojecting && reprojectProgress
               ? reprojectProgress.message
               : downloadProgress?.currentTile || ''}
@@ -1196,7 +1198,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
             {downloadResult.success ? '✓ Download abgeschlossen!' : '✕ Download fehlgeschlagen'}
           </div>
           {downloadResult.success && (
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
+            <div style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.6)` }}>
               {downloadResult.tilesDownloaded} neu heruntergeladen, {downloadResult.tilesCached} bereits im Cache
               {downloadResult.tilesFailed > 0 && `, ${downloadResult.tilesFailed} fehlgeschlagen`}
             </div>
@@ -1226,8 +1228,8 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
                   style={{
                     ...buttonStyle,
                     flex: 1,
-                    background: allPointsValid ? '#22c55e' : 'rgba(255,255,255,0.1)',
-                    color: allPointsValid ? '#fff' : 'rgba(255,255,255,0.3)',
+                    background: allPointsValid ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},0.1)`,
+                    color: allPointsValid ? '#fff' : `rgba(${o.c},${o.c},${o.c},0.3)`,
                     cursor: allPointsValid ? 'pointer' : 'not-allowed'
                   }}
                 >
@@ -1261,7 +1263,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
               borderRadius: 4,
               marginTop: 12
             }}>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: 8, fontWeight: 600 }}>
+              <div style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.7)`, marginBottom: 8, fontWeight: 600 }}>
                 {mbtilesProgress.phase === 'reading' ? 'Lese MBTiles Datei...' :
                  mbtilesProgress.phase === 'done' ? 'Import abgeschlossen' :
                  'Importiere Kacheln...'}
@@ -1270,7 +1272,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
               {mbtilesProgress.total > 0 && (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>Fortschritt:</span>
+                    <span style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.6)` }}>Fortschritt:</span>
                     <span style={{ fontSize: 12, color: '#f59e0b', fontWeight: 600 }}>
                       {mbtilesProgress.imported + mbtilesProgress.skipped} / {mbtilesProgress.total}
                     </span>
@@ -1279,7 +1281,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
                   {/* Progress Bar */}
                   <div style={{
                     height: 6,
-                    background: 'rgba(255,255,255,0.1)',
+                    background: `rgba(${o.c},${o.c},${o.c},0.1)`,
                     borderRadius: 3,
                     overflow: 'hidden',
                     marginBottom: 8
@@ -1294,7 +1296,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
                 </>
               )}
 
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}>
+              <div style={{ fontSize: 10, color: `rgba(${o.c},${o.c},${o.c},0.4)`, fontFamily: 'monospace' }}>
                 {mbtilesProgress.currentTile}
               </div>
 
@@ -1325,7 +1327,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
                   borderRadius: 4,
                   marginBottom: 12,
                   fontSize: 10,
-                  color: 'rgba(255,255,255,0.7)'
+                  color: `rgba(${o.c},${o.c},${o.c},0.7)`
                 }}>
                   <div style={{ color: '#22c55e', fontWeight: 600 }}>
                     ✓ UTM-Karte erstellt (Zone {utmZone})
@@ -1334,7 +1336,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
               )}
 
               {/* Kartenname */}
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: 4 }}>
+              <label style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.7)`, display: 'block', marginBottom: 4 }}>
                 Kartenname:
               </label>
               <input
@@ -1346,7 +1348,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
               />
 
               {/* Meisterschaft auswählen */}
-              <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: 4 }}>
+              <label style={{ fontSize: 11, color: `rgba(${o.c},${o.c},${o.c},0.7)`, display: 'block', marginBottom: 4 }}>
                 Zu Meisterschaft hinzufügen:
               </label>
 
@@ -1370,8 +1372,8 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
                       ...buttonStyle,
                       width: '100%',
                       marginBottom: 12,
-                      background: 'rgba(255,255,255,0.1)',
-                      color: 'rgba(255,255,255,0.7)',
+                      background: `rgba(${o.c},${o.c},${o.c},0.1)`,
+                      color: `rgba(${o.c},${o.c},${o.c},0.7)`,
                       fontSize: 11
                     }}
                   >
@@ -1396,8 +1398,8 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
                       ...buttonStyle,
                       width: '100%',
                       marginBottom: 12,
-                      background: 'rgba(255,255,255,0.1)',
-                      color: 'rgba(255,255,255,0.5)',
+                      background: `rgba(${o.c},${o.c},${o.c},0.1)`,
+                      color: `rgba(${o.c},${o.c},${o.c},0.5)`,
                       fontSize: 11
                     }}
                   >
@@ -1415,10 +1417,10 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
                   width: '100%',
                   background: (mapName.trim() && (selectedChampionshipId || newChampionshipName.trim()) && !savingToChampionship)
                     ? '#a855f7'
-                    : 'rgba(255,255,255,0.1)',
+                    : `rgba(${o.c},${o.c},${o.c},0.1)`,
                   color: (mapName.trim() && (selectedChampionshipId || newChampionshipName.trim()) && !savingToChampionship)
                     ? '#fff'
-                    : 'rgba(255,255,255,0.3)',
+                    : `rgba(${o.c},${o.c},${o.c},0.3)`,
                   cursor: (mapName.trim() && (selectedChampionshipId || newChampionshipName.trim()) && !savingToChampionship)
                     ? 'pointer'
                     : 'not-allowed'
@@ -1436,7 +1438,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
             background: 'rgba(245,158,11,0.1)',
             borderRadius: 4,
             fontSize: 10,
-            color: 'rgba(255,255,255,0.5)'
+            color: `rgba(${o.c},${o.c},${o.c},0.5)`
           }}>
             Die Karten werden lokal gespeichert und sind auch offline verfügbar.
             Nach dem Download kannst du die Karte benennen und einer Meisterschaft zuordnen.
@@ -1455,7 +1457,7 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
         }}>
           <div
             style={{
-              background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+              background: o.panelGradient,
               borderRadius: '16px',
               border: '1px solid rgba(34, 197, 94, 0.3)',
               padding: '24px',
@@ -1484,12 +1486,12 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
             </div>
 
             {/* Title */}
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: o.textColor, marginBottom: '8px' }}>
               Karte gespeichert!
             </div>
 
             {/* Info */}
-            <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '20px', lineHeight: 1.5 }}>
+            <div style={{ fontSize: '13px', color: `rgba(${o.c},${o.c},${o.c},0.6)`, marginBottom: '20px', lineHeight: 1.5 }}>
               Die Karte wurde erfolgreich gespeichert.<br />
               Möchtest du sie jetzt anzeigen?
             </div>
@@ -1504,10 +1506,10 @@ export function CompetitionAreaPanel({ onClose }: { onClose: () => void }) {
                 style={{
                   flex: 1,
                   padding: '12px',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: `rgba(${o.c},${o.c},${o.c},0.1)`,
                   border: 'none',
                   borderRadius: '8px',
-                  color: 'rgba(255,255,255,0.7)',
+                  color: `rgba(${o.c},${o.c},${o.c},0.7)`,
                   fontSize: '13px',
                   fontWeight: 600,
                   cursor: 'pointer'

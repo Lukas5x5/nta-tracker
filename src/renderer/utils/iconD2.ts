@@ -1,7 +1,7 @@
 import { WindLayer, WindSource } from '../../shared/types'
 
-// Drucklevel für Ballonflug bis ~10.000ft (700hPa ≈ 3010m ≈ 9880ft)
-const PRESSURE_LEVELS = [1000, 975, 950, 925, 900, 850, 800, 700] as const
+// Drucklevel für Ballonflug – alle 25hPa-Schritte bis 500hPa (~5500m / ~18000ft)
+const PRESSURE_LEVELS = [1000, 975, 950, 925, 900, 875, 850, 825, 800, 775, 750, 725, 700, 650, 600, 550, 500] as const
 
 type PressureLevel = typeof PRESSURE_LEVELS[number]
 
@@ -143,9 +143,9 @@ export async function fetchIconD2Wind(
       })
     }
 
-    // Nur Schichten von Boden bis ~10.000ft MSL behalten
+    // Nur Schichten von Boden bis ~18.000ft MSL behalten
     const groundElev = data.elevation || 0
-    const maxAltitude = groundElev + 3048 // 10.000ft über Grund
+    const maxAltitude = groundElev + 5500 // ~18.000ft über Grund
     result.layers = result.layers.filter(l => l.altitude >= groundElev && l.altitude <= maxAltitude)
 
     // Nach Höhe sortieren

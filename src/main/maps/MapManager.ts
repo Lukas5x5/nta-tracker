@@ -1139,7 +1139,7 @@ export class MapManager {
     const result = await dialog.showOpenDialog({
       title: 'OZF Karte importieren',
       filters: [
-        { name: 'OziExplorer Karten', extensions: ['ozf2', 'ozf3', 'ozfx3'] },
+        { name: 'OziExplorer Karten', extensions: ['ozf2', 'ozf3', 'ozfx3', 'ozf4', 'map'] },
         { name: 'Alle Dateien', extensions: ['*'] }
       ],
       properties: ['openFile']
@@ -1166,15 +1166,21 @@ export class MapManager {
       const mapDir = path.join(this.mapsDir, loadedMap.id)
       fs.mkdirSync(mapDir, { recursive: true })
 
-      // OZF Datei kopieren
-      const newOzfPath = path.join(mapDir, path.basename(ozfPath))
-      fs.copyFileSync(ozfPath, newOzfPath)
-      loadedMap.ozfPath = newOzfPath
+      // OZF Datei kopieren (wenn vorhanden und nicht identisch mit Input)
+      if (loadedMap.ozfPath && loadedMap.ozfPath !== loadedMap.mapPath) {
+        const newOzfPath = path.join(mapDir, path.basename(loadedMap.ozfPath))
+        if (fs.existsSync(loadedMap.ozfPath) && loadedMap.ozfPath !== newOzfPath) {
+          fs.copyFileSync(loadedMap.ozfPath, newOzfPath)
+        }
+        loadedMap.ozfPath = newOzfPath
+      }
 
       // MAP Datei kopieren
       if (loadedMap.mapPath) {
         const newMapPath = path.join(mapDir, path.basename(loadedMap.mapPath))
-        fs.copyFileSync(loadedMap.mapPath, newMapPath)
+        if (fs.existsSync(loadedMap.mapPath) && loadedMap.mapPath !== newMapPath) {
+          fs.copyFileSync(loadedMap.mapPath, newMapPath)
+        }
         loadedMap.mapPath = newMapPath
       }
 

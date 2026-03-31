@@ -1169,7 +1169,7 @@ export function readOZFHeader(ozfPath: string): OZFHeader | null {
  */
 export function findMapFile(ozfPath: string): string | null {
   const dir = path.dirname(ozfPath)
-  const baseName = path.basename(ozfPath).replace(/\.ozf[x23]?$/i, '')
+  const baseName = path.basename(ozfPath).replace(/\.ozf[x234]?$/i, '').replace(/\.map$/i, '')
 
   // Mögliche .map Dateinamen
   const candidates = [
@@ -1191,32 +1191,68 @@ export function findMapFile(ozfPath: string): string | null {
 /**
  * Lade eine komplette Karte (OZF + MAP)
  */
-export function loadMap(ozfPath: string): LoadedMap | null {
-  // OZF Header lesen
-  const header = readOZFHeader(ozfPath)
-  if (!header) {
-    console.error('Konnte OZF Header nicht lesen')
+export function loadMap(inputPath: string): LoadedMap | null {
+  const ext = path.extname(inputPath).toLowerCase()
+  const isMapFile = ext === '.map'
+  const isOzf4 = ext === '.ozf4'
+
+  let ozfPath = inputPath
+  let mapPath: string | null = null
+  let header: { width: number; height: number } | null = null
+
+  if (isMapFile) {
+    // .map Datei direkt importiert → suche zugehörige OZF
+    mapPath = inputPath
+    // Suche OZF-Datei im selben Ordner
+    const dir = path.dirname(inputPath)
+    const baseName = path.basename(inputPath, '.map')
+    for (const ext of ['.ozf4', '.ozf2', '.ozf3', '.ozfx3']) {
+      const candidate = path.join(dir, baseName + ext)
+      if (fs.existsSync(candidate)) { ozfPath = candidate; break }
+      const candidateUpper = path.join(dir, baseName + ext.toUpperCase())
+      if (fs.existsSync(candidateUpper)) { ozfPath = candidateUpper; break }
+    }
+  } else {
+    // OZF-Datei importiert → suche zugehörige .map
+    mapPath = findMapFile(inputPath)
+  }
+
+  if (!mapPath) {
+    console.error('Keine .map Kalibrierungsdatei gefunden für:', inputPath)
     return null
   }
 
-  // MAP Datei finden
-  const mapPath = findMapFile(ozfPath)
-  if (!mapPath) {
-    console.error('Keine .map Kalibrierungsdatei gefunden für:', ozfPath)
-    return null
+  // OZF Header lesen (nicht bei OZF4 – verschlüsselt)
+  if (!isOzf4 && !isMapFile) {
+    header = readOZFHeader(ozfPath)
+    if (!header) {
+      console.error('Konnte OZF Header nicht lesen')
+      return null
+    }
   }
 
   // Kalibrierung parsen
   const calibration = parseMapFile(mapPath)
-  calibration.imageWidth = header.width
-  calibration.imageHeight = header.height
+  if (header) {
+    calibration.imageWidth = header.width
+    calibration.imageHeight = header.height
+  } else {
+    // Für OZF4/.map: Bildgröße aus MMPXY-Punkten schätzen
+    if (calibration.cornerPoints) {
+      // Nutze Kalibrierungspunkte für Bildgröße
+      const maxX = Math.max(...calibration.calibrationPoints.filter(p => p.pixelX > 0).map(p => p.pixelX))
+      const maxY = Math.max(...calibration.calibrationPoints.filter(p => p.pixelY > 0).map(p => p.pixelY))
+      calibration.imageWidth = maxX > 0 ? maxX + 236 : 14000
+      calibration.imageHeight = maxY > 0 ? maxY + 236 : 9500
+    }
+  }
 
-  // Verwende Hash des Pfads als ID - so bleibt der Tile-Cache persistent
-  const mapHash = cryptoNode.createHash('md5').update(ozfPath.toLowerCase()).digest('hex').substring(0, 16)
+  // Verwende Hash des Pfads als ID
+  const mapHash = cryptoNode.createHash('md5').update(inputPath.toLowerCase()).digest('hex').substring(0, 16)
 
   return {
     id: mapHash,
-    name: calibration.title || path.basename(ozfPath, path.extname(ozfPath)),
+    name: calibration.title || path.basename(inputPath, path.extname(inputPath)),
     calibration,
     ozfPath,
     mapPath,

@@ -226,7 +226,7 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
   const btnStyle = (active: boolean, color: string): React.CSSProperties => ({
     flex: 1, padding: '10px', border: 'none', borderRadius: '8px', cursor: 'pointer',
     fontWeight: 700, fontSize: '12px', color: 'white',
-    background: active ? `linear-gradient(135deg, ${color} 0%, ${color}dd 100%)` : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`
+    background: active ? `linear-gradient(135deg, ${color} 0%, ${color}dd 100%)` : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`
   })
 
   return (
@@ -237,10 +237,10 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
         left: `${position.x}px`,
         top: `${position.y}px`,
         width: '220px',
-        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+        background: o.panelGradient,
         borderRadius: '12px',
-        boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
-        border: `1px solid rgba(255,255,255,${o.borderStrong})`,
+        boxShadow: o.panelShadow,
+        border: `1px solid rgba(${o.c},${o.c},${o.c},${o.borderStrong})`,
         zIndex: 10000,
         overflow: 'hidden',
         cursor: isDragging ? 'grabbing' : 'grab',
@@ -252,7 +252,7 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
       {/* Header mit Tabs */}
       <div style={{
         padding: '8px 10px',
-        borderBottom: `1px solid rgba(255,255,255,${o.border})`,
+        borderBottom: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
@@ -266,7 +266,7 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
                 padding: '4px 8px', fontSize: '10px',
                 fontWeight: activeTab === tab ? 700 : 500,
                 background: activeTab === tab ? '#3b82f6' : 'transparent',
-                color: activeTab === tab ? 'white' : `rgba(255,255,255,${o.textMuted})`,
+                color: activeTab === tab ? 'white' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
                 border: 'none', borderRadius: '6px', cursor: 'pointer'
               }}
             >
@@ -277,7 +277,7 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
         <button
           onClick={onClose}
           style={{
-            background: `rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+            background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
             border: 'none', color: 'white', cursor: 'pointer',
             width: '22px', height: '22px', borderRadius: '6px',
             fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -313,9 +313,9 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
             <button onClick={() => { setIsRunning(false); setTime(0); setLaps([]) }} style={btnStyle(false, '')}>↺</button>
           </div>
           {laps.length > 0 && (
-            <div style={{ maxHeight: '120px', overflow: 'auto', borderTop: `1px solid rgba(255,255,255,${o.border})`, padding: '8px 12px' }}>
+            <div style={{ maxHeight: '120px', overflow: 'auto', borderTop: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`, padding: '8px 12px' }}>
               {laps.map((lap, index) => (
-                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '11px', color: `rgba(255,255,255,${o.textSec})`, borderBottom: index < laps.length - 1 ? `1px solid rgba(255,255,255,${o.bgSoft})` : 'none' }}>
+                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`, borderBottom: index < laps.length - 1 ? `1px solid rgba(${o.c},${o.c},${o.c},${o.bgSoft})` : 'none' }}>
                   <span>Runde {laps.length - index}</span>
                   <span style={{ fontFamily: 'monospace', color: '#3b82f6' }}>{formatTime(lap)}</span>
                 </div>
@@ -338,7 +338,7 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
                 }}>
                   ALARM!
                 </div>
-                <div style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textMuted})`, marginTop: '4px' }}>Timer abgelaufen</div>
+                <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginTop: '4px' }}>Timer abgelaufen</div>
                 <button
                   onClick={() => setTimerAlarmActive(false)}
                   style={{ marginTop: '8px', padding: '8px 20px', background: '#ef4444', border: 'none', borderRadius: '8px', color: 'white', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
@@ -360,7 +360,7 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
             ) : (
               /* Timer-Eingabe */
               <div>
-                <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '8px' }}>ZEIT EINSTELLEN</div>
+                <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '8px' }}>ZEIT EINSTELLEN</div>
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                   <input
                     type="number" min="0" max="99" placeholder="Min"
@@ -368,19 +368,19 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
                     onChange={(e) => setTimerInputMin(e.target.value.replace(/\D/g, '').slice(0, 2))}
                     style={{
                       width: '50px', padding: '8px', textAlign: 'center',
-                      background: 'rgba(0,0,0,0.3)', border: `1px solid rgba(255,255,255,${o.border})`,
+                      background: 'rgba(0,0,0,0.3)', border: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
                       borderRadius: '8px', color: 'white', fontSize: '18px', fontFamily: 'monospace',
                       fontWeight: 700, outline: 'none'
                     }}
                   />
-                  <span style={{ fontSize: '20px', color: `rgba(255,255,255,${o.textMuted})`, fontWeight: 700 }}>:</span>
+                  <span style={{ fontSize: '20px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, fontWeight: 700 }}>:</span>
                   <input
                     type="number" min="0" max="59" placeholder="Sek"
                     value={timerInputSec}
                     onChange={(e) => setTimerInputSec(e.target.value.replace(/\D/g, '').slice(0, 2))}
                     style={{
                       width: '50px', padding: '8px', textAlign: 'center',
-                      background: 'rgba(0,0,0,0.3)', border: `1px solid rgba(255,255,255,${o.border})`,
+                      background: 'rgba(0,0,0,0.3)', border: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
                       borderRadius: '8px', color: 'white', fontSize: '18px', fontFamily: 'monospace',
                       fontWeight: 700, outline: 'none'
                     }}
@@ -436,9 +436,9 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
                   onClick={() => { setTimerTime(min * 60000); setTimerRunning(true) }}
                   style={{
                     flex: 1, padding: '6px', fontSize: '9px', fontWeight: 600,
-                    background: `rgba(255,255,255,${o.on ? 0.12 : 0.06})`,
-                    border: `1px solid rgba(255,255,255,${o.border})`,
-                    borderRadius: '6px', color: `rgba(255,255,255,${o.textSec})`, cursor: 'pointer'
+                    background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.12 : 0.06})`,
+                    border: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
+                    borderRadius: '6px', color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`, cursor: 'pointer'
                   }}
                 >
                   {min}m
@@ -462,7 +462,7 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
                 }}>
                   WECKER!
                 </div>
-                <div style={{ fontSize: '13px', color: `rgba(255,255,255,${o.textSec})`, marginTop: '4px' }}>{alarmTargetTime}</div>
+                <div style={{ fontSize: '13px', color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`, marginTop: '4px' }}>{alarmTargetTime}</div>
                 <button
                   onClick={() => { setAlarmTriggered(false); setAlarmTargetTime('') }}
                   style={{ marginTop: '8px', padding: '8px 20px', background: '#ef4444', border: 'none', borderRadius: '8px', color: 'white', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
@@ -473,13 +473,13 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
             ) : (
               <div>
                 {/* Aktuelle Uhrzeit */}
-                <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '4px' }}>AKTUELLE ZEIT</div>
-                <div style={{ fontSize: '24px', fontWeight: 700, fontFamily: 'monospace', color: `rgba(255,255,255,${o.textSec})`, marginBottom: '16px' }}>
+                <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '4px' }}>AKTUELLE ZEIT</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, fontFamily: 'monospace', color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`, marginBottom: '16px' }}>
                   {currentTime || '--:--'}
                 </div>
 
                 {/* Wecker-Zeit einstellen */}
-                <div style={{ fontSize: '10px', color: `rgba(255,255,255,${o.textMuted})`, marginBottom: '8px' }}>WECKZEIT</div>
+                <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`, marginBottom: '8px' }}>WECKZEIT</div>
                 <input
                   type="time"
                   value={alarmTargetTime}
@@ -487,7 +487,7 @@ export function Stopwatch({ isOpen, onClose }: StopwatchProps) {
                   disabled={alarmActive}
                   style={{
                     padding: '8px 12px', textAlign: 'center', width: '120px',
-                    background: 'rgba(0,0,0,0.3)', border: `1px solid rgba(255,255,255,${o.border})`,
+                    background: 'rgba(0,0,0,0.3)', border: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
                     borderRadius: '8px', color: alarmActive ? '#f59e0b' : 'white',
                     fontSize: '20px', fontFamily: 'monospace', fontWeight: 700, outline: 'none'
                   }}

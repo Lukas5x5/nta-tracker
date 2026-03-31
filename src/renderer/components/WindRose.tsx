@@ -123,7 +123,7 @@ export function WindRose({ windLayers, windSourceFilter, windDirectionMode, alti
     fontWeight: 700 as const,
     cursor: 'pointer' as const,
     background: active ? 'rgba(6, 182, 212, 0.25)' : 'transparent',
-    color: active ? '#06b6d4' : `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+    color: active ? '#06b6d4' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
     transition: 'all 0.15s'
   })
 
@@ -137,7 +137,7 @@ export function WindRose({ windLayers, windSourceFilter, windDirectionMode, alti
         background: 'rgba(10, 15, 30, 0.92)',
         borderRadius: '12px',
         padding: '8px',
-        border: `1px solid rgba(255,255,255,${o.borderStrong})`,
+        border: `1px solid rgba(${o.c},${o.c},${o.c},${o.borderStrong})`,
         boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
         userSelect: 'none',
         cursor: isDragging ? 'grabbing' : 'grab',
@@ -156,7 +156,7 @@ export function WindRose({ windLayers, windSourceFilter, windDirectionMode, alti
         marginBottom: '4px',
         padding: '0 2px'
       }}>
-        <div style={{ display: 'flex', gap: '2px', background: `rgba(255,255,255,${o.on ? 0.12 : 0.05})`, borderRadius: '6px', padding: '2px' }}>
+        <div style={{ display: 'flex', gap: '2px', background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.12 : 0.05})`, borderRadius: '6px', padding: '2px' }}>
           <button className="no-drag" onClick={() => { setViewMode('rose'); setHoveredIndex(null) }} style={tabStyle(viewMode === 'rose')}>
             Rose
           </button>
@@ -170,7 +170,7 @@ export function WindRose({ windLayers, windSourceFilter, windDirectionMode, alti
           style={{
             background: 'none',
             border: 'none',
-            color: `rgba(255,255,255,${o.textMuted})`,
+            color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
             cursor: 'pointer',
             fontSize: '16px',
             padding: '2px 6px',
@@ -185,22 +185,22 @@ export function WindRose({ windLayers, windSourceFilter, windDirectionMode, alti
       {viewMode === 'rose' && (
         <>
           <svg viewBox="0 0 220 220" width="220" height="220">
-            <circle cx={CX} cy={CY} r={MAX_RADIUS + 12} fill="rgba(0,0,0,0.3)" stroke={`rgba(255,255,255,${o.on ? 0.2 : 0.1})`} strokeWidth="1" />
+            <circle cx={CX} cy={CY} r={MAX_RADIUS + 12} fill="rgba(0,0,0,0.3)" stroke={`rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`} strokeWidth="1" />
 
             {speedRings.map(ring => (
               <React.Fragment key={ring.speed}>
-                <circle cx={CX} cy={CY} r={ring.radius} fill="none" stroke={`rgba(255,255,255,${o.on ? 0.2 : 0.1})`} strokeWidth="0.5" strokeDasharray="3,3" />
-                <text x={CX + ring.radius + 2} y={CY - 2} fill={`rgba(255,255,255,${o.on ? 0.4 : 0.25})`} fontSize="8" fontFamily="monospace">{ring.speed}</text>
+                <circle cx={CX} cy={CY} r={ring.radius} fill="none" stroke={`rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`} strokeWidth="0.5" strokeDasharray="3,3" />
+                <text x={CX + ring.radius + 2} y={CY - 2} fill={`rgba(${o.c},${o.c},${o.c},${o.on ? 0.4 : 0.25})`} fontSize="8" fontFamily="monospace">{ring.speed}</text>
               </React.Fragment>
             ))}
 
-            <line x1={CX} y1={CY - MAX_RADIUS - 8} x2={CX} y2={CY + MAX_RADIUS + 8} stroke={`rgba(255,255,255,${o.border})`} strokeWidth="0.5" />
-            <line x1={CX - MAX_RADIUS - 8} y1={CY} x2={CX + MAX_RADIUS + 8} y2={CY} stroke={`rgba(255,255,255,${o.border})`} strokeWidth="0.5" />
+            <line x1={CX} y1={CY - MAX_RADIUS - 8} x2={CX} y2={CY + MAX_RADIUS + 8} stroke={`rgba(${o.c},${o.c},${o.c},${o.border})`} strokeWidth="0.5" />
+            <line x1={CX - MAX_RADIUS - 8} y1={CY} x2={CX + MAX_RADIUS + 8} y2={CY} stroke={`rgba(${o.c},${o.c},${o.c},${o.border})`} strokeWidth="0.5" />
 
-            <text x={CX} y={CY - MAX_RADIUS - 12} textAnchor="middle" fill={`rgba(255,255,255,${o.on ? 0.95 : 0.8})`} fontSize="13" fontWeight="700">N</text>
-            <text x={CX + MAX_RADIUS + 14} y={CY + 4} textAnchor="middle" fill={`rgba(255,255,255,${o.textMuted})`} fontSize="11" fontWeight="600">O</text>
-            <text x={CX} y={CY + MAX_RADIUS + 20} textAnchor="middle" fill={`rgba(255,255,255,${o.textMuted})`} fontSize="11" fontWeight="600">S</text>
-            <text x={CX - MAX_RADIUS - 14} y={CY + 4} textAnchor="middle" fill={`rgba(255,255,255,${o.textMuted})`} fontSize="11" fontWeight="600">W</text>
+            <text x={CX} y={CY - MAX_RADIUS - 12} textAnchor="middle" fill={`rgba(${o.c},${o.c},${o.c},${o.on ? 0.95 : 0.8})`} fontSize="13" fontWeight="700">N</text>
+            <text x={CX + MAX_RADIUS + 14} y={CY + 4} textAnchor="middle" fill={`rgba(${o.c},${o.c},${o.c},${o.textMuted})`} fontSize="11" fontWeight="600">O</text>
+            <text x={CX} y={CY + MAX_RADIUS + 20} textAnchor="middle" fill={`rgba(${o.c},${o.c},${o.c},${o.textMuted})`} fontSize="11" fontWeight="600">S</text>
+            <text x={CX - MAX_RADIUS - 14} y={CY + 4} textAnchor="middle" fill={`rgba(${o.c},${o.c},${o.c},${o.textMuted})`} fontSize="11" fontWeight="600">W</text>
 
             {sortedLayers.map((layer, i) => {
               const spokeLength = (layer.speed / maxSpeed) * MAX_RADIUS
@@ -221,7 +221,7 @@ export function WindRose({ windLayers, windSourceFilter, windDirectionMode, alti
               )
             })}
 
-            <circle cx={CX} cy={CY} r="3" fill={`rgba(255,255,255,${o.on ? 0.92 : 0.6})`} />
+            <circle cx={CX} cy={CY} r="3" fill={`rgba(${o.c},${o.c},${o.c},${o.on ? 0.92 : 0.6})`} />
           </svg>
         </>
       )}
@@ -285,7 +285,7 @@ export function WindRose({ windLayers, windSourceFilter, windDirectionMode, alti
           <svg viewBox={`0 0 ${PROFILE_W} ${PROFILE_H}`} width={PROFILE_W} height={PROFILE_H}>
             {/* Hintergrund */}
             <rect x={PROFILE_PAD.left} y={PROFILE_PAD.top} width={PLOT_W} height={PLOT_H}
-              fill="rgba(0,0,0,0.3)" stroke={`rgba(255,255,255,${o.on ? 0.2 : 0.1})`} strokeWidth="0.5" />
+              fill="rgba(0,0,0,0.3)" stroke={`rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`} strokeWidth="0.5" />
 
             {/* Horizontale Gitterlinien (Höhenstufen) */}
             {(() => {
@@ -297,9 +297,9 @@ export function WindRose({ windLayers, windSourceFilter, windDirectionMode, alti
                 lines.push(
                   <React.Fragment key={`h-${a}`}>
                     <line x1={PROFILE_PAD.left} y1={y} x2={PROFILE_PAD.left + PLOT_W} y2={y}
-                      stroke={`rgba(255,255,255,${o.border})`} strokeWidth="0.5" />
+                      stroke={`rgba(${o.c},${o.c},${o.c},${o.border})`} strokeWidth="0.5" />
                     <text x={PROFILE_PAD.left - 4} y={y + 3} textAnchor="end"
-                      fill={`rgba(255,255,255,${o.textDim})`} fontSize="9" fontFamily="monospace">{label}</text>
+                      fill={`rgba(${o.c},${o.c},${o.c},${o.textDim})`} fontSize="9" fontFamily="monospace">{label}</text>
                   </React.Fragment>
                 )
               }
@@ -312,9 +312,9 @@ export function WindRose({ windLayers, windSourceFilter, windDirectionMode, alti
               return (
                 <React.Fragment key={`v-${i}`}>
                   <line x1={x} y1={PROFILE_PAD.top} x2={x} y2={PROFILE_PAD.top + PLOT_H}
-                    stroke={d.label === 'N' ? `rgba(255,255,255,${o.on ? 0.35 : 0.2})` : `rgba(255,255,255,${o.border})`} strokeWidth="0.5" />
+                    stroke={d.label === 'N' ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.35 : 0.2})` : `rgba(${o.c},${o.c},${o.c},${o.border})`} strokeWidth="0.5" />
                   <text x={x} y={PROFILE_H - 8} textAnchor="middle"
-                    fill={d.label === 'N' ? `rgba(255,255,255,${o.textSec})` : `rgba(255,255,255,${o.textDim})`}
+                    fill={d.label === 'N' ? `rgba(${o.c},${o.c},${o.c},${o.textSec})` : `rgba(${o.c},${o.c},${o.c},${o.textDim})`}
                     fontSize={d.label === 'N' ? '11' : '10'} fontWeight={d.label === 'N' ? '700' : '400'}
                     fontFamily="monospace">
                     {d.deg}°({d.label})
@@ -325,7 +325,7 @@ export function WindRose({ windLayers, windSourceFilter, windDirectionMode, alti
 
             {/* Y-Achse Label */}
             <text x={12} y={PROFILE_PAD.top + PLOT_H / 2}
-              textAnchor="middle" fill={`rgba(255,255,255,${o.on ? 0.5 : 0.3})`} fontSize="9" fontFamily="monospace"
+              textAnchor="middle" fill={`rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})`} fontSize="9" fontFamily="monospace"
               transform={`rotate(-90, 12, ${PROFILE_PAD.top + PLOT_H / 2})`}>
               {altitudeUnit === 'feet' ? 'Höhe (ft)' : 'Höhe (m)'}
             </text>
@@ -433,7 +433,7 @@ export function WindRose({ windLayers, windSourceFilter, windDirectionMode, alti
         gap: '4px',
         padding: '2px 4px 0'
       }}>
-        <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.text})`, fontFamily: 'monospace' }}>
+        <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.text})`, fontFamily: 'monospace' }}>
           {altitudeUnit === 'feet' ? `${Math.round(minAlt * 3.28084)}ft` : `${Math.round(minAlt)}m`}
         </span>
         <div style={{
@@ -442,7 +442,7 @@ export function WindRose({ windLayers, windSourceFilter, windDirectionMode, alti
           borderRadius: '2px',
           background: `linear-gradient(to right, ${getAltitudeColor(minAlt, minAlt, maxAlt)}, ${getAltitudeColor((minAlt + maxAlt) / 2, minAlt, maxAlt)}, ${getAltitudeColor(maxAlt, minAlt, maxAlt)})`
         }} />
-        <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.text})`, fontFamily: 'monospace' }}>
+        <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.text})`, fontFamily: 'monospace' }}>
           {altitudeUnit === 'feet' ? `${Math.round(maxAlt * 3.28084)}ft` : `${Math.round(maxAlt)}m`}
         </span>
       </div>

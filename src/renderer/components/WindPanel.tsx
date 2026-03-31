@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { useFlightStore } from '../stores/flightStore'
+import { getOutdoor } from '../utils/outdoorStyles'
 import { WindLayer, WindSource } from '../../shared/types'
 
 // Windstärke-Farbcodierung (Beaufort-Skala angepasst)
@@ -200,6 +201,9 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
     return `${Math.round(displayDeg)}°`
   }
 
+  // Outdoor-Modus
+  const o = getOutdoor(settings.outdoorMode)
+
   // Panel scale
   const scale = settings.windPanelScale ?? 1
 
@@ -213,10 +217,10 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
         left: `${panelPosition.x}px`,
         top: `${panelPosition.y}px`,
         width: '320px',
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+        background: o.panelGradient,
         borderRadius: '16px',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
-        border: '1px solid rgba(255,255,255,0.1)',
+        boxShadow: o.panelShadow,
+        border: o.panelBorder,
         zIndex: 9000,
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
@@ -231,7 +235,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
       {/* Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
@@ -240,10 +244,10 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
             <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/>
           </svg>
-          <span style={{ fontWeight: 700, color: 'white', fontSize: '14px' }}>Windprofil</span>
+          <span style={{ fontWeight: 700, color: o.textColor, fontSize: '14px' }}>Windprofil</span>
           <span style={{
             background: '#3b82f6',
-            color: 'white',
+            color: o.textColor,
             fontSize: '11px',
             fontWeight: 700,
             padding: '2px 8px',
@@ -255,9 +259,9 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
         <button
           onClick={onClose}
           style={{
-            background: 'rgba(255,255,255,0.1)',
+            background: `rgba(${o.c},${o.c},${o.c},0.1)`,
             border: 'none',
-            color: 'rgba(255,255,255,0.6)',
+            color: `rgba(${o.c},${o.c},${o.c},0.6)`,
             width: '28px',
             height: '28px',
             borderRadius: '8px',
@@ -283,10 +287,10 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
           style={{
             flex: 1,
             padding: '8px 16px',
-            background: activeTab === 'live' ? '#3b82f6' : 'rgba(255,255,255,0.05)',
-            border: activeTab === 'live' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+            background: activeTab === 'live' ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+            border: activeTab === 'live' ? 'none' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
             borderRadius: '8px',
-            color: 'white',
+            color: o.textColor,
             fontSize: '12px',
             fontWeight: 600,
             cursor: 'pointer'
@@ -299,10 +303,10 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
           style={{
             flex: 1,
             padding: '8px 16px',
-            background: activeTab === 'import' ? '#3b82f6' : 'rgba(255,255,255,0.05)',
-            border: activeTab === 'import' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+            background: activeTab === 'import' ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+            border: activeTab === 'import' ? 'none' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
             borderRadius: '8px',
-            color: 'white',
+            color: o.textColor,
             fontSize: '12px',
             fontWeight: 600,
             cursor: 'pointer'
@@ -321,7 +325,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
       }}>
         {/* Direction Mode */}
         <div>
-          <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '4px', textTransform: 'uppercase' }}>
             Richtung
           </div>
           <div style={{ display: 'flex', gap: '4px' }}>
@@ -330,10 +334,10 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
               style={{
                 flex: 1,
                 padding: '6px 12px',
-                background: directionMode === 'from' ? '#3b82f6' : 'rgba(255,255,255,0.05)',
-                border: directionMode === 'from' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                background: directionMode === 'from' ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                border: directionMode === 'from' ? 'none' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                 borderRadius: '6px',
-                color: 'white',
+                color: o.textColor,
                 fontSize: '11px',
                 fontWeight: 600,
                 cursor: 'pointer'
@@ -346,10 +350,10 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
               style={{
                 flex: 1,
                 padding: '6px 12px',
-                background: directionMode === 'to' ? '#3b82f6' : 'rgba(255,255,255,0.05)',
-                border: directionMode === 'to' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                background: directionMode === 'to' ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                border: directionMode === 'to' ? 'none' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                 borderRadius: '6px',
-                color: 'white',
+                color: o.textColor,
                 fontSize: '11px',
                 fontWeight: 600,
                 cursor: 'pointer'
@@ -363,7 +367,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
         {/* Altitude Unit */}
         <div style={{ display: 'flex', gap: '12px' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px', textTransform: 'uppercase' }}>
+            <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '4px', textTransform: 'uppercase' }}>
               Höhe
             </div>
             <div style={{ display: 'flex', gap: '4px' }}>
@@ -376,10 +380,10 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
                 style={{
                   flex: 1,
                   padding: '6px 12px',
-                  background: altitudeUnit === 'm' ? '#3b82f6' : 'rgba(255,255,255,0.05)',
-                  border: altitudeUnit === 'm' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                  background: altitudeUnit === 'm' ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                  border: altitudeUnit === 'm' ? 'none' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                   borderRadius: '6px',
-                  color: 'white',
+                  color: o.textColor,
                   fontSize: '11px',
                   fontWeight: 600,
                   cursor: 'pointer'
@@ -396,10 +400,10 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
                 style={{
                   flex: 1,
                   padding: '6px 12px',
-                  background: altitudeUnit === 'ft' ? '#3b82f6' : 'rgba(255,255,255,0.05)',
-                  border: altitudeUnit === 'ft' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                  background: altitudeUnit === 'ft' ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                  border: altitudeUnit === 'ft' ? 'none' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                   borderRadius: '6px',
-                  color: 'white',
+                  color: o.textColor,
                   fontSize: '11px',
                   fontWeight: 600,
                   cursor: 'pointer'
@@ -413,7 +417,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
 
         {/* Interval - basierend auf Einheit */}
         <div>
-          <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '4px', textTransform: 'uppercase' }}>
             Intervall ({altitudeUnit === 'ft' ? 'FT' : 'M'})
           </div>
           <div style={{ display: 'flex', gap: '4px' }}>
@@ -427,10 +431,10 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
                 style={{
                   flex: 1,
                   padding: '6px 12px',
-                  background: intervalSize === size ? '#3b82f6' : 'rgba(255,255,255,0.05)',
-                  border: intervalSize === size ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                  background: intervalSize === size ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                  border: intervalSize === size ? 'none' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                   borderRadius: '6px',
-                  color: 'white',
+                  color: o.textColor,
                   fontSize: '11px',
                   fontWeight: 600,
                   cursor: 'pointer'
@@ -457,7 +461,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
           <div style={{
             textAlign: 'center',
             padding: '24px 16px',
-            color: 'rgba(255,255,255,0.4)',
+            color: `rgba(${o.c},${o.c},${o.c},0.4)`,
             fontSize: '12px',
             width: '100%'
           }}>
@@ -482,7 +486,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
                 top: '-2px',
                 left: '14px',
                 fontSize: '8px',
-                color: 'rgba(255,255,255,0.5)',
+                color: `rgba(${o.c},${o.c},${o.c},0.5)`,
                 whiteSpace: 'nowrap'
               }}>
                 {altitudeUnit === 'ft' ? `${mToFt(maxAltitude)}ft` : `${Math.round(maxAltitude)}m`}
@@ -492,7 +496,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
                 bottom: '-2px',
                 left: '14px',
                 fontSize: '8px',
-                color: 'rgba(255,255,255,0.5)',
+                color: `rgba(${o.c},${o.c},${o.c},0.5)`,
                 whiteSpace: 'nowrap'
               }}>
                 {altitudeUnit === 'ft' ? `${mToFt(minAltitude)}ft` : `${Math.round(minAltitude)}m`}
@@ -524,7 +528,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
                         ? 'rgba(34, 197, 94, 0.25)'
                         : isNearCurrent
                           ? 'rgba(59, 130, 246, 0.2)'
-                          : `linear-gradient(90deg, ${altColor}33 0%, rgba(255,255,255,0.03) 100%)`,
+                          : `linear-gradient(90deg, ${altColor}33 0%, rgba(${o.c},${o.c},${o.c},0.03) 100%)`,
                       borderRadius: '8px',
                       border: isSelected
                         ? '1px solid rgba(34, 197, 94, 0.5)'
@@ -568,7 +572,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '2px',
-                      borderLeft: '1px solid rgba(255,255,255,0.1)',
+                      borderLeft: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                       paddingLeft: '8px',
                       marginLeft: '4px'
                     }}>
@@ -593,7 +597,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
                       <div style={{
                         flex: 1,
                         height: '12px',
-                        background: 'rgba(255,255,255,0.1)',
+                        background: `rgba(${o.c},${o.c},${o.c},0.1)`,
                         borderRadius: '6px',
                         overflow: 'hidden'
                       }}>
@@ -656,12 +660,12 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
       {sortedLayers.length > 0 && (
         <div style={{
           padding: '8px 12px',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
+          borderTop: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
           display: 'flex',
           alignItems: 'center',
           gap: '4px',
           fontSize: '9px',
-          color: 'rgba(255,255,255,0.5)'
+          color: `rgba(${o.c},${o.c},${o.c},0.5)`
         }}>
           <span>km/h:</span>
           <div style={{ display: 'flex', flex: 1, height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
@@ -685,12 +689,12 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
       {showAddForm && (
         <div style={{
           padding: '12px 16px',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
+          borderTop: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
           background: 'rgba(0,0,0,0.2)'
         }}>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '2px' }}>
+              <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '2px' }}>
                 {altitudeUnit === 'ft' ? 'HÖHE (FT)' : 'HÖHE (M)'}
               </div>
               <input
@@ -702,16 +706,16 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
                   width: '100%',
                   padding: '8px',
                   background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                   borderRadius: '6px',
-                  color: 'white',
+                  color: o.textColor,
                   fontSize: '13px',
                   fontWeight: 600
                 }}
               />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '2px' }}>RICHTUNG (°)</div>
+              <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '2px' }}>RICHTUNG (°)</div>
               <input
                 type="number"
                 placeholder="247"
@@ -723,16 +727,16 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
                   width: '100%',
                   padding: '8px',
                   background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                   borderRadius: '6px',
-                  color: 'white',
+                  color: o.textColor,
                   fontSize: '13px',
                   fontWeight: 600
                 }}
               />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginBottom: '2px' }}>KM/H</div>
+              <div style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '2px' }}>KM/H</div>
               <input
                 type="number"
                 placeholder="12"
@@ -743,9 +747,9 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
                   width: '100%',
                   padding: '8px',
                   background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                   borderRadius: '6px',
-                  color: 'white',
+                  color: o.textColor,
                   fontSize: '13px',
                   fontWeight: 600
                 }}
@@ -758,10 +762,10 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
               style={{
                 flex: 1,
                 padding: '8px',
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                background: `rgba(${o.c},${o.c},${o.c},0.05)`,
+                border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                 borderRadius: '6px',
-                color: 'rgba(255,255,255,0.7)',
+                color: `rgba(${o.c},${o.c},${o.c},0.7)`,
                 fontSize: '12px',
                 fontWeight: 600,
                 cursor: 'pointer'
@@ -777,7 +781,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
                 background: '#22c55e',
                 border: 'none',
                 borderRadius: '6px',
-                color: 'white',
+                color: o.textColor,
                 fontSize: '12px',
                 fontWeight: 600,
                 cursor: 'pointer'
@@ -792,7 +796,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
       {/* Footer Actions */}
       <div style={{
         padding: '12px 16px',
-        borderTop: '1px solid rgba(255,255,255,0.1)',
+        borderTop: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
         display: 'flex',
         gap: '8px'
       }}>
@@ -805,7 +809,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
               background: '#3b82f6',
               border: 'none',
               borderRadius: '8px',
-              color: 'white',
+              color: o.textColor,
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',

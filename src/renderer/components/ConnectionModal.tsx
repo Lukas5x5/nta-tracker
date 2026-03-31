@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useFlightStore } from '../stores/flightStore'
+import { getOutdoor } from '../utils/outdoorStyles'
 import { ConnectionStatus } from '../../shared/types'
 
 interface BluetoothDevice {
@@ -83,6 +84,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
     isConnected, connectionError, setConnectionStatus, setConnectionError, setGPSData, setBaroData,
     settings, updateSettings, gpsData
   } = useFlightStore()
+  const o = getOutdoor(settings.outdoorMode)
 
   // Zuletzt verbundenes BLS aus Settings
   const lastConnectedBLS = settings.lastConnectedBLS
@@ -278,17 +280,17 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
           width: showRawLog ? '500px' : '340px',
           maxHeight: '90vh',
           overflowY: 'auto',
-          background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+          background: o.panelGradient,
           borderRadius: '16px',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
-          border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: o.panelShadow,
+          border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
           transition: 'width 0.2s ease',
         }}
       >
         {/* Header */}
         <div style={{
           padding: '14px 16px',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
@@ -297,14 +299,14 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
               <path d="M14.24 12.01l2.32 2.32c.28-.72.44-1.51.44-2.33 0-.82-.16-1.59-.43-2.31l-2.33 2.32zm5.29-5.3l-1.26 1.26c.63 1.21.98 2.57.98 4.02s-.36 2.82-.98 4.02l1.2 1.2a9.936 9.936 0 001.54-5.31c-.01-1.89-.55-3.67-1.48-5.19zm-3.82 1L10 2H9v7.59L4.41 5 3 6.41 8.59 12 3 17.59 4.41 19 9 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM11 5.83l1.88 1.88L11 9.59V5.83zm1.88 10.46L11 18.17v-3.76l1.88 1.88z"/>
             </svg>
-            <span style={{ fontWeight: 700, color: 'white', fontSize: '15px' }}>BLS Sensor</span>
+            <span style={{ fontWeight: 700, color: o.textColor, fontSize: '15px' }}>BLS Sensor</span>
           </div>
           <button
             onClick={onClose}
             style={{
-              background: 'rgba(255,255,255,0.1)',
+              background: `rgba(${o.c},${o.c},${o.c},0.1)`,
               border: 'none',
-              color: 'rgba(255,255,255,0.6)',
+              color: `rgba(${o.c},${o.c},${o.c},0.6)`,
               width: '28px',
               height: '28px',
               borderRadius: '8px',
@@ -344,8 +346,8 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                   boxShadow: '0 0 8px #22c55e'
                 }} />
                 <div>
-                  <div style={{ fontWeight: 600, color: 'white', fontSize: '14px' }}>Verbunden</div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>
+                  <div style={{ fontWeight: 600, color: o.textColor, fontSize: '14px' }}>Verbunden</div>
+                  <div style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},0.5)` }}>
                     {settings.lastConnectedBLSName || 'Flytec Balloon Live Sensor'}
                   </div>
                 </div>
@@ -376,7 +378,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                     {gpsData ? 'GPS aktiv' : 'Warte auf GPS...'}
                   </div>
                   {gpsData && (
-                    <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>
+                    <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.5)` }}>
                       {gpsData.satellites} Satelliten • HDOP {gpsData.hdop?.toFixed(1) || '?'}
                     </div>
                   )}
@@ -404,7 +406,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                       <div style={{ fontWeight: 600, color: '#f59e0b', fontSize: '12px', marginBottom: '4px' }}>
                         Kein GPS-Signal
                       </div>
-                      <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.4 }}>
+                      <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.6)`, lineHeight: 1.4 }}>
                         Der BLS Sensor empfängt aktuell kein GPS-Signal. Bitte stelle sicher, dass der Sensor freie Sicht zum Himmel hat.
                       </div>
                     </div>
@@ -413,7 +415,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                       style={{
                         background: 'transparent',
                         border: 'none',
-                        color: 'rgba(255,255,255,0.4)',
+                        color: `rgba(${o.c},${o.c},${o.c},0.4)`,
                         cursor: 'pointer',
                         padding: '2px',
                         fontSize: '14px'
@@ -432,14 +434,14 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                   width: '100%',
                   padding: '8px 12px',
                   marginBottom: '12px',
-                  background: showDebug ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.03)',
-                  border: showDebug ? '1px solid rgba(59,130,246,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                  background: showDebug ? 'rgba(59,130,246,0.1)' : `rgba(${o.c},${o.c},${o.c},0.03)`,
+                  border: showDebug ? '1px solid rgba(59,130,246,0.3)' : '1px solid rgba(${o.c},${o.c},${o.c},0.08)',
                   borderRadius: '8px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  color: showDebug ? '#3b82f6' : 'rgba(255,255,255,0.5)',
+                  color: showDebug ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.5)`,
                   fontSize: '11px',
                   fontWeight: 600,
                 }}
@@ -458,7 +460,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                   fontFamily: 'monospace',
                   fontSize: '11px',
                   lineHeight: 1.8,
-                  color: 'rgba(255,255,255,0.7)'
+                  color: `rgba(${o.c},${o.c},${o.c},0.7)`
                 }}>
                   {/* Parser Type */}
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -477,12 +479,12 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                   {/* QNH */}
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>QNH:</span>
-                    <span style={{ color: debugStats.qnh !== 1013.25 ? '#22c55e' : 'rgba(255,255,255,0.4)' }}>
+                    <span style={{ color: debugStats.qnh !== 1013.25 ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},0.4)` }}>
                       {debugStats.qnh.toFixed(2)} hPa
                     </span>
                   </div>
 
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', margin: '6px 0' }} />
+                  <div style={{ borderTop: '1px solid rgba(${o.c},${o.c},${o.c},0.1)', margin: '6px 0' }} />
 
                   {/* NMEA Counts */}
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -498,7 +500,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                     <span>{debugStats.baroCount}</span>
                   </div>
 
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', margin: '6px 0' }} />
+                  <div style={{ borderTop: '1px solid rgba(${o.c},${o.c},${o.c},0.1)', margin: '6px 0' }} />
 
                   {/* GPS Rate */}
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -509,7 +511,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                         ? '#22c55e'
                         : debugStats.avgGGAInterval > 0
                         ? '#f59e0b'
-                        : 'rgba(255,255,255,0.4)'
+                        : `rgba(${o.c},${o.c},${o.c},0.4)`
                     }}>
                       {debugStats.avgGGAInterval > 0
                         ? `${Math.round(1000 / debugStats.avgGGAInterval * 10) / 10} Hz (${Math.round(debugStats.avgGGAInterval)}ms)`
@@ -520,7 +522,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                   {/* Last Sentence */}
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>Letzter Satz:</span>
-                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>{debugStats.lastSentence || '---'}</span>
+                    <span style={{ color: `rgba(${o.c},${o.c},${o.c},0.5)` }}>{debugStats.lastSentence || '---'}</span>
                   </div>
 
                   {/* Errors */}
@@ -548,20 +550,20 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                   )}
 
                   {/* Raw NMEA Log Toggle */}
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', margin: '8px 0' }} />
+                  <div style={{ borderTop: '1px solid rgba(${o.c},${o.c},${o.c},0.1)', margin: '8px 0' }} />
                   <button
                     onClick={() => setShowRawLog(!showRawLog)}
                     style={{
                       width: '100%',
                       padding: '6px 8px',
-                      background: showRawLog ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.05)',
-                      border: showRawLog ? '1px solid rgba(168,85,247,0.3)' : '1px solid rgba(255,255,255,0.1)',
+                      background: showRawLog ? 'rgba(168,85,247,0.15)' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                      border: showRawLog ? '1px solid rgba(168,85,247,0.3)' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                       borderRadius: '6px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      color: showRawLog ? '#a855f7' : 'rgba(255,255,255,0.5)',
+                      color: showRawLog ? '#a855f7' : `rgba(${o.c},${o.c},${o.c},0.5)`,
                       fontSize: '10px',
                       fontWeight: 600,
                       fontFamily: 'monospace',
@@ -585,14 +587,14 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                         fontSize: '9px',
                         fontFamily: 'monospace',
                         lineHeight: 1.6,
-                        color: 'rgba(255,255,255,0.6)',
+                        color: `rgba(${o.c},${o.c},${o.c},0.6)`,
                         whiteSpace: 'pre',
                         wordBreak: 'break-all',
                       }}
                     >
                       {debugStats.rawLog.map((line, i) => {
                         // Farbcodierung nach NMEA-Typ
-                        let color = 'rgba(255,255,255,0.5)'
+                        let color = `rgba(${o.c},${o.c},${o.c},0.5)`
                         if (line.includes('$GPGGA') || line.includes('$GNGGA')) color = '#22c55e'
                         else if (line.includes('$GPRMC') || line.includes('$GNRMC')) color = '#3b82f6'
                         else if (line.includes('$PFLAC')) color = '#f59e0b'
@@ -667,7 +669,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                       <div style={{ fontWeight: 600, color: '#ef4444', fontSize: '12px', marginBottom: '4px' }}>
                         Verbindungsfehler
                       </div>
-                      <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
+                      <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.6)` }}>
                         {connectionError}
                       </div>
                     </div>
@@ -676,7 +678,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                       style={{
                         background: 'transparent',
                         border: 'none',
-                        color: 'rgba(255,255,255,0.4)',
+                        color: `rgba(${o.c},${o.c},${o.c},0.4)`,
                         cursor: 'pointer',
                         padding: '2px',
                         fontSize: '14px'
@@ -738,7 +740,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                 <div style={{ marginBottom: '12px' }}>
                   <div style={{
                     fontSize: '10px',
-                    color: 'rgba(255,255,255,0.5)',
+                    color: `rgba(${o.c},${o.c},${o.c},0.5)`,
                     marginBottom: '6px',
                     textTransform: 'uppercase'
                   }}>
@@ -784,7 +786,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                     <div style={{ flex: 1, textAlign: 'left' }}>
                       <div style={{
                         fontWeight: 600,
-                        color: 'white',
+                        color: o.textColor,
                         fontSize: '14px'
                       }}>
                         {lastConnectedBLSName || 'BLS Sensor'}
@@ -812,7 +814,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                 {devices.length === 0 && !lastConnectedBLS ? (
                   <div style={{
                     textAlign: 'center',
-                    color: 'rgba(255,255,255,0.4)',
+                    color: `rgba(${o.c},${o.c},${o.c},0.4)`,
                     padding: '24px',
                     fontSize: '12px'
                   }}>
@@ -830,7 +832,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                 ) : devices.length === 0 ? (
                   <div style={{
                     textAlign: 'center',
-                    color: 'rgba(255,255,255,0.4)',
+                    color: `rgba(${o.c},${o.c},${o.c},0.4)`,
                     padding: '12px',
                     fontSize: '11px'
                   }}>
@@ -841,7 +843,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                     {devices.length > 0 && lastConnectedBLS && (
                       <div style={{
                         fontSize: '10px',
-                        color: 'rgba(255,255,255,0.5)',
+                        color: `rgba(${o.c},${o.c},${o.c},0.5)`,
                         marginBottom: '2px',
                         textTransform: 'uppercase'
                       }}>
@@ -859,8 +861,8 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                           style={{
                             width: '100%',
                             padding: '14px 16px',
-                            background: isLastConnected ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255,255,255,0.05)',
-                            border: isLastConnected ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(255,255,255,0.1)',
+                            background: isLastConnected ? 'rgba(34, 197, 94, 0.1)' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                            border: isLastConnected ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                             borderRadius: '10px',
                             cursor: connecting ? 'wait' : 'pointer',
                             display: 'flex',
@@ -875,8 +877,8 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                             }
                           }}
                           onMouseLeave={e => {
-                            e.currentTarget.style.background = isLastConnected ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255,255,255,0.05)'
-                            e.currentTarget.style.borderColor = isLastConnected ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.1)'
+                            e.currentTarget.style.background = isLastConnected ? 'rgba(34, 197, 94, 0.1)' : `rgba(${o.c},${o.c},${o.c},0.05)`
+                            e.currentTarget.style.borderColor = isLastConnected ? 'rgba(34, 197, 94, 0.3)' : `rgba(${o.c},${o.c},${o.c},0.1)`
                           }}
                         >
                           <div style={{
@@ -895,7 +897,7 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                           <div style={{ flex: 1, textAlign: 'left' }}>
                             <div style={{
                               fontWeight: 600,
-                              color: 'white',
+                              color: o.textColor,
                               fontSize: '14px',
                               display: 'flex',
                               alignItems: 'center',
@@ -915,12 +917,12 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
                             </div>
                             <div style={{
                               fontSize: '11px',
-                              color: isLastConnected ? '#22c55e' : 'rgba(255,255,255,0.4)'
+                              color: isLastConnected ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},0.4)`
                             }}>
                               {device.id} {isBLSDevice(device) && '• BLS kompatibel'}
                             </div>
                           </div>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isLastConnected ? '#22c55e' : 'rgba(255,255,255,0.3)'} strokeWidth="2">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isLastConnected ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},0.3)`} strokeWidth="2">
                             <polyline points="9 18 15 12 9 6" />
                           </svg>
                         </button>
@@ -936,13 +938,13 @@ export function ConnectionModal({ onClose }: { onClose: () => void }) {
           <div style={{
             marginTop: '16px',
             padding: '10px 12px',
-            background: 'rgba(255,255,255,0.03)',
+            background: `rgba(${o.c},${o.c},${o.c},0.03)`,
             borderRadius: '8px',
             fontSize: '11px',
-            color: 'rgba(255,255,255,0.5)',
+            color: `rgba(${o.c},${o.c},${o.c},0.5)`,
             lineHeight: 1.5
           }}>
-            <strong style={{ color: 'rgba(255,255,255,0.7)' }}>Hinweis:</strong> BLS Sensor muss eingeschaltet und mit dem PC gepairt sein.
+            <strong style={{ color: `rgba(${o.c},${o.c},${o.c},0.7)` }}>Hinweis:</strong> BLS Sensor muss eingeschaltet und mit dem PC gepairt sein.
           </div>
         </div>
 

@@ -1,6 +1,65 @@
 # Changelog
 
-## [Unveröffentlicht]
+## [1.2.5] - 2026-03-31
+
+### PDG/FON Cone Navigator – Komplett neu gebaut
+- PDG/FON Rechner komplett neu geschrieben – sucht die beste Drehschicht (größte Windstreuung) im eingegebenen Höhenfenster und berechnet den optimalen Deklarationspunkt
+- Höhenfenster: Nur Windschichten zwischen aktueller Höhe + Mindesthöhenänderung und Max-Höhe werden betrachtet. Ohne Max-Höhe werden alle verfügbaren Schichten verwendet
+- Drehschicht-Suche: Prüft 4 Nachbar-Schichten über und unter jeder Kandidaten-Höhe, nimmt die Schicht mit der größten Rechts/Links-Streuung. Korrektur-Schichten dürfen auch außerhalb des Höhenfensters liegen
+- Steuerungskegel auf der Karte: Halbtransparente Kegelfläche – gelb (Links-Korrektur) und blau (Rechts-Korrektur). Spitze = Deklarationspunkt, Öffnung = Richtung Pilot
+- Blaue Linie (Live-Pfad): Zeigt live wo der Pilot mit aktueller Vario-Rate auf Zielhöhe ankommt. Aktualisiert sich bei jedem GPS-Update. Verschwindet wenn Zielhöhe erreicht ist
+- Optimale Steigrate: Berechnet die benötigte Rate um an der Kegelmitte auf Zielhöhe zu sein (max 5 m/s). Deklarationspunkt wird so gesetzt dass die Rate realistisch bleibt
+- Alle Höhen auf 50ft gerundet für saubere Deklarationswerte
+- Warnung bei großen Höhensprüngen (>500ft) zwischen Mitte und Links/Rechts-Korrektur
+- Kursabweichung live angezeigt (°links/rechts vorbei, farbcodiert grün/gelb/rot)
+- Korrektur-Höhen (Links/Mitte/Rechts): Zeigt "—" wenn keine Korrektur in eine Richtung möglich ist
+- Panel-State bleibt bei Schließen/Öffnen erhalten (Deklaration, Kegel, Live-Pfad im globalen Store)
+- Kompaktes, aufgeräumtes UI – Zielhöhe groß und prominent, Koordinaten gut lesbar (nur Easting/Northing bei MGRS)
+
+### Wind
+- Wind Forecast (FC): Deutlich feinere Auflösung – 17 Drucklevel statt 8 (alle 25hPa von 1000 bis 500hPa). Deckt Höhen bis ~18.000ft ab mit Schichten ca. alle 250-300ft statt alle 500-1000ft
+- Wind-Panel: Klick auf Windschicht aktiviert direkt die Windlinie zum Zeichnen – kein extra Nadel-Button mehr nötig
+- Wind-Panel: Neuer "Zur aktuellen Höhe" Button – scrollt die Windschichten-Liste zur aktuellen Flughöhe
+- Wind-Panel: Windschicht-Farben im Outdoor-Modus abgedunkelt (filter: brightness) für bessere Lesbarkeit. Kurs-Farbe von Gelb auf dunkles Gold
+
+### Land Run
+- Land Run Rechner: UI komplett überarbeitet und aufgeräumt – kompaktere Darstellung, gleicher Stil wie PDG Panel. Modus/Einheit-Buttons, Slider, Höhenbegrenzung und Ergebnis deutlich platzsparender
+
+### Landeprognose
+- Landeprognose: Neue "Live Vario" Option – Checkbox aktiviert automatische Übernahme der aktuellen Sinkrate aus dem Variometer/BLS-Sensor. Slider verschwindet, Rate wird bei jedem GPS-Update live aktualisiert. Zeigt wo der Pilot mit der aktuellen Sinkrate landen wird
+
+### Track
+- Track-Punkte werden nach Recording-Stopp nicht mehr als Marker angezeigt. Stattdessen: Hover über die Track-Linie zeigt Popup im Marker-Drop-Stil mit Höhe, Geschwindigkeit, Heading, Uhrzeit, Grid-Koordinaten, UTM und WGS84
+- Unsichtbare dickere Hit-Area (20px) über dem Track für einfaches Hovern
+
+### Navigation Panel
+- Individuelle Farbauswahl für Text und Hintergrund pro Navi-Feld – Color Picker für beliebige Farben, Custom-Farben werden gespeichert und bei allen Feldern angezeigt. Löschbar per Klick auf das × am Farbfeld
+- Kurslinie Badge: Bei Linientyp "Beides" sitzt das Kurs-Badge nicht mehr auf dem Ziel sondern auf der halben "Zu"-Seite
+- Kurslinie Snapping: Snap-Radius von 10m auf 50m erhöht für einfacheres Positionieren auf Ziele
+
+### Task Edit Panel
+- Panel-Position wird beim Schließen gespeichert und beim nächsten Öffnen wiederhergestellt
+
+### Live Team
+- Team-Nachricht Popup: Klick auf den Toast öffnet direkt ein Antwort-Eingabefeld. Enter sendet, Escape schließt. Kein Umweg über das Live-Team Panel nötig
+
+### Outdoor-Modus – Komplett überarbeitet
+- Alle Panels: Weißer Hintergrund mit dunkler Schrift im Outdoor-Modus (NavigationPanel, Header, StatusBar, PDG/FON, Land Run, Stopwatch, MeasureTool, DrawingPanel, BriefingPanel, FlightWindsPanel, WindPanel, WindRose, AltitudeProfilePanel, TaskSettingsPanel, ChampionshipPanel, CompetitionAreaPanel, ConnectionModal, TasksheetImportPanel, TrajectoryPanel, PZDrawPanel, TaskEditPanel, GasPanel, LiveTeamPanel)
+- Outdoor-Modus Farben: Akzentfarben (Grün, Cyan, Orange, Blau) werden im Outdoor-Modus dunkler dargestellt für besseren Kontrast auf weißem Hintergrund
+- Alle Schriften im Outdoor-Modus fetter (font-weight: 750) für bessere Lesbarkeit bei Sonnenlicht
+- Footer-Leiste (StatusBar): Weißer Hintergrund mit dunkler Schrift. WGS84-Koordinaten aus der Footer-Leiste entfernt
+- CSS-Overrides für Panel-Hintergründe entfernt – alles über inline getOutdoor()-Werte gesteuert
+- Farbkanal-System: Neues `o.c` Property (255=weiß im Dark Mode, 0=schwarz im Outdoor) für automatische Textfarben-Anpassung
+
+### Live Tracker (Crew/Lite App)
+- Ballon-Cursor: Pilot-Marker als SVG-Heißluftballon mit farbiger Hülle, Glanz-Effekt, Seilen und Korb. Callsign wird auf der Hülle angezeigt, offline-Piloten halbtransparent
+- Track-Linie: Crew sieht den gesamten Flugweg des Piloten als farbige Polyline auf der Karte. Track-History wird bei jedem Positions-Update gesammelt (max 2000 Punkte pro Pilot)
+- Chat-Popup: Bei neuen Team-Nachrichten erscheint ein Toast mit Absender und Nachricht (8s sichtbar). Klick auf den Toast öffnet direkt den Chat zum Antworten
+- Unread-Badge: Roter Zähler am Chat-Button zeigt ungelesene Nachrichten, verschwindet beim Öffnen des Chats
+
+### Sonstiges
+- Fahrten werden komplett lokal gespeichert statt in Supabase – schneller, zuverlässiger, kein Internet nötig
+- OSM Tile-Server: URL-Pattern für Referer-Header erweitert für bessere Kompatibilität
 
 ## [1.2.4] - 2026-03-28
 - Meisterschaften: Lokale Backups laden – neuer Button "Lokale Backups laden" unterhalb der Fahrten-Liste. Zeigt alle lokal gespeicherten Backup-Dateien aus %APPDATA%\nta-balloon-navigator\backups\ mit Name, Datum und Größe an. Per Klick auf "Laden" wird das Backup direkt in die App geladen. Nützlich wenn Supabase-Verbindung nicht verfügbar ist oder Fahrten nicht angezeigt werden

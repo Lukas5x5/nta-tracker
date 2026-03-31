@@ -72,9 +72,13 @@ interface TrackerState {
   pilotTasks: PilotTask[]
   loadingTasks: boolean
 
+  // Track History (Positionen pro Pilot sammeln)
+  pilotTracks: Record<string, { lat: number; lon: number }[]>
+
   // Chat
   myMemberId: string | null
   messages: ChatMessage[]
+  unreadCount: number  // Ungelesene Nachrichten für Popup
 
   // Actions
   joinTeam: (joinCode: string) => Promise<boolean>
@@ -103,8 +107,11 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
   pilotTasks: [],
   loadingTasks: false,
 
+  pilotTracks: {},
+
   myMemberId: null,
   messages: [],
+  unreadCount: 0,
 
   joinTeam: async (joinCode: string) => {
     set({ isJoining: true, joinError: null, joinCode })
@@ -300,8 +307,10 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
       joinError: null,
       pilotTasks: [],
       loadingTasks: false,
+      pilotTracks: {},
       myMemberId: null,
-      messages: []
+      messages: [],
+      unreadCount: 0
     })
   },
 
@@ -486,15 +495,23 @@ function startRealtimeSubscriptions(teamId: string) {
             isOnline: true
           }
 
+          // Track-History aktualisieren
+          const tracks = { ...state.pilotTracks }
+          const memberId = pos.member_id
+          if (!tracks[memberId]) tracks[memberId] = []
+          tracks[memberId] = [...tracks[memberId], { lat: pos.latitude, lon: pos.longitude }]
+          // Max 2000 Punkte pro Pilot behalten
+          if (tracks[memberId].length > 2000) tracks[memberId] = tracks[memberId].slice(-2000)
+
           if (existingIndex >= 0) {
             const newPilots = [...state.pilots]
             newPilots[existingIndex] = {
               ...newPilots[existingIndex],
               ...updatedPilot
             }
-            return { pilots: newPilots }
+            return { pilots: newPilots, pilotTracks: tracks }
           } else {
-            return { pilots: [...state.pilots, updatedPilot] }
+            return { pilots: [...state.pilots, updatedPilot], pilotTracks: tracks }
           }
         })
       }
@@ -665,7 +682,8 @@ function startRealtimeSubscriptions(teamId: string) {
         }
 
         store.setState(state => ({
-          messages: [...state.messages, chatMsg]
+          messages: [...state.messages, chatMsg],
+          unreadCount: state.unreadCount + 1
         }))
       }
     )

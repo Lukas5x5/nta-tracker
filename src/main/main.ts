@@ -42,6 +42,16 @@ function createWindow() {
     }
   })
 
+  // Referer-Header für Tile-Server setzen (OSM Tile Usage Policy erfordert das)
+  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
+    { urls: ['*://*.tile.openstreetmap.org/*', '*://*.openstreetmap.org/*', '*://*.tile.opentopomap.org/*', '*://*.opentopomap.org/*'] },
+    (details: any, callback: any) => {
+      details.requestHeaders['Referer'] = 'https://nta-balloon-navigator.at/'
+      details.requestHeaders['User-Agent'] = 'NTA-Balloon-Navigator/1.2 (Electron; contact@nta-balloon-navigator.at)'
+      callback({ requestHeaders: details.requestHeaders })
+    }
+  )
+
   // Fenster erst zeigen wenn Inhalt bereit ist (verhindert weißes Flackern)
   mainWindow.once('ready-to-show', () => {
     mainWindow!.show()
@@ -319,9 +329,9 @@ function setupIpcHandlers() {
 
     // Dialog öffnen um .map Datei auszuwählen
     const result = await dialog.showOpenDialog({
-      title: 'OZI Kartendatei (.map) für Wettkampfbereich auswählen',
+      title: 'OZI Kartendatei für Wettkampfbereich auswählen',
       filters: [
-        { name: 'OziExplorer Map Files', extensions: ['map'] },
+        { name: 'OziExplorer Dateien', extensions: ['map', 'ozf4', 'ozf2', 'ozf3', 'ozfx3'] },
         { name: 'Alle Dateien', extensions: ['*'] }
       ],
       properties: ['openFile']
@@ -332,7 +342,24 @@ function setupIpcHandlers() {
     }
 
     try {
-      const content = fs.readFileSync(result.filePaths[0], 'utf-8')
+      let selectedPath = result.filePaths[0]
+
+      // Wenn OZF-Datei ausgewählt: Suche zugehörige .map Datei
+      if (/\.ozf[x234]?$/i.test(selectedPath)) {
+        const dir = path.dirname(selectedPath)
+        const baseName = path.basename(selectedPath).replace(/\.ozf[x234]?$/i, '')
+        const mapCandidates = [
+          path.join(dir, baseName + '.map'),
+          path.join(dir, baseName + '.MAP'),
+        ]
+        const foundMap = mapCandidates.find(c => fs.existsSync(c))
+        if (!foundMap) {
+          return { error: 'Keine .map Kalibrierungsdatei gefunden im selben Ordner. Bitte die .map Datei neben die OZF-Datei legen.' }
+        }
+        selectedPath = foundMap
+      }
+
+      const content = fs.readFileSync(selectedPath, 'utf-8')
       const lines = content.split(/\r?\n/)
 
       // MMPLL Punkte extrahieren (Lon, Lat)
@@ -1023,6 +1050,79 @@ function setupIpcHandlers() {
       const filePath = path.join(app.getPath('userData'), 'backups', fileName)
       const content = fs.readFileSync(filePath, 'utf-8')
       return { success: true, data: JSON.parse(content) }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // ─── Lokale Fahrten-Verwaltung (pro Meisterschaft) ───
+
+  // Fahrt speichern
+  ipcMain.handle('flights:save', async (_: any, options: {
+    championshipId: string
+    flightId: string
+    fileName: string
+    content: string
+  }) => {
+    try {
+      const fs = require('fs')
+      const flightsDir = path.join(app.getPath('userData'), 'flights', options.championshipId)
+      if (!fs.existsSync(flightsDir)) fs.mkdirSync(flightsDir, { recursive: true })
+      const filePath = path.join(flightsDir, `${options.flightId}.json`)
+      fs.writeFileSync(filePath, options.content, 'utf-8')
+      return { success: true, path: filePath }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Fahrten einer Meisterschaft auflisten
+  ipcMain.handle('flights:list', async (_: any, championshipId: string) => {
+    try {
+      const fs = require('fs')
+      const flightsDir = path.join(app.getPath('userData'), 'flights', championshipId)
+      if (!fs.existsSync(flightsDir)) return []
+      const files = fs.readdirSync(flightsDir).filter((f: string) => f.endsWith('.json'))
+      return files.map((f: string) => {
+        const filePath = path.join(flightsDir, f)
+        const stats = fs.statSync(filePath)
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8')
+          const data = JSON.parse(content)
+          return {
+            id: f.replace('.json', ''),
+            name: data._meta?.name || f.replace('.json', ''),
+            created_at: data._meta?.created_at || stats.mtime.toISOString(),
+            hasTrack: !!(data.track && data.track.length > 0),
+            isAptProfile: data.type === 'apt_profile',
+            size: stats.size
+          }
+        } catch {
+          return { id: f.replace('.json', ''), name: f.replace('.json', ''), created_at: stats.mtime.toISOString(), hasTrack: false, isAptProfile: false, size: stats.size }
+        }
+      }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    } catch { return [] }
+  })
+
+  // Einzelne Fahrt laden
+  ipcMain.handle('flights:load', async (_: any, options: { championshipId: string; flightId: string }) => {
+    try {
+      const fs = require('fs')
+      const filePath = path.join(app.getPath('userData'), 'flights', options.championshipId, `${options.flightId}.json`)
+      const content = fs.readFileSync(filePath, 'utf-8')
+      return { success: true, data: JSON.parse(content) }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Fahrt löschen
+  ipcMain.handle('flights:delete', async (_: any, options: { championshipId: string; flightId: string }) => {
+    try {
+      const fs = require('fs')
+      const filePath = path.join(app.getPath('userData'), 'flights', options.championshipId, `${options.flightId}.json`)
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+      return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }
     }

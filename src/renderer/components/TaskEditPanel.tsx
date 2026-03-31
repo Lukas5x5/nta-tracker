@@ -33,11 +33,14 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
   const [coordsEditMode, setCoordsEditMode] = useState(false)
   const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number; isTouch: boolean } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const positionRef = useRef(position)
+  positionRef.current = position
 
-  // Deaktiviere Drag-Modus wenn Panel geschlossen wird
+  // Deaktiviere Drag-Modus und speichere Position wenn Panel geschlossen wird
   useEffect(() => {
     return () => {
       setGoalDragMode(false)
+      updateSettings({ taskEditPanelPosition: positionRef.current })
     }
   }, [])
 
@@ -126,8 +129,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
     const handleEnd = () => {
       setIsDragging(false)
       dragRef.current = null
-      // Speichere Panel-Position
-      updateSettings({ taskEditPanelPosition: position })
+      // Position wird im Cleanup-Effect gespeichert
     }
 
     // Event listeners basierend auf Drag-Typ
@@ -254,7 +256,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
         minWidth: '320px',
         maxWidth: '380px',
         boxShadow: '0 10px 40px rgba(0,0,0,0.8)',
-        border: `1px solid rgba(255,255,255,${o.borderStrong})`,
+        border: `1px solid rgba(${o.c},${o.c},${o.c},${o.borderStrong})`,
         zIndex: 10000,
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
@@ -271,7 +273,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
         alignItems: 'center',
         marginBottom: '16px',
         paddingBottom: '12px',
-        borderBottom: `1px solid rgba(255,255,255,${o.border})`
+        borderBottom: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{
@@ -317,9 +319,9 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
         <button
           onClick={onClose}
           style={{
-            background: `rgba(255,255,255,${o.border})`,
+            background: `rgba(${o.c},${o.c},${o.c},${o.border})`,
             border: 'none',
-            color: 'white',
+            color: o.textColor,
             cursor: 'pointer',
             width: '28px',
             height: '28px',
@@ -344,7 +346,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
         }}>
           <label style={{
             fontSize: '11px',
-            color: `rgba(255,255,255,${o.textSec})`,
+            color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`,
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
             fontWeight: 600
@@ -355,10 +357,10 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
             onClick={() => setCoordsEditMode(!coordsEditMode)}
             style={{
               padding: '4px 8px',
-              background: coordsEditMode ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.1)',
-              border: coordsEditMode ? '1px solid rgba(245, 158, 11, 0.5)' : `1px solid rgba(255,255,255,${o.border})`,
+              background: coordsEditMode ? 'rgba(245, 158, 11, 0.2)' : `rgba(${o.c},${o.c},${o.c},0.1)`,
+              border: coordsEditMode ? '1px solid rgba(245, 158, 11, 0.5)' : `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
               borderRadius: '4px',
-              color: coordsEditMode ? '#f59e0b' : 'rgba(255,255,255,0.7)',
+              color: coordsEditMode ? '#f59e0b' : `rgba(${o.c},${o.c},${o.c},0.7)`,
               fontSize: '10px',
               fontWeight: 600,
               cursor: 'pointer'
@@ -380,7 +382,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
           }}>
             <div style={{
               fontSize: '10px',
-              color: `rgba(255,255,255,${o.textMuted})`,
+              color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
               marginBottom: '6px',
               fontWeight: 500
             }}>
@@ -464,7 +466,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
           }}>
             <div style={{
               fontSize: '10px',
-              color: `rgba(255,255,255,${o.textMuted})`,
+              color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
               marginBottom: '6px',
               fontWeight: 500
             }}>
@@ -554,7 +556,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
         <div>
           <label style={{
             fontSize: '10px',
-            color: `rgba(255,255,255,${o.textMuted})`,
+            color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
             display: 'block',
             marginBottom: '6px',
             textTransform: 'uppercase',
@@ -566,13 +568,13 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
             padding: '8px 10px',
             background: 'rgba(0,0,0,0.3)',
             borderRadius: '6px',
-            border: `1px solid rgba(255,255,255,${o.border})`,
+            border: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
             textAlign: 'center'
           }}>
             <span style={{
               fontSize: '14px',
               fontWeight: 700,
-              color: task.mmaRadius && task.mmaRadius > 0 ? 'white' : 'rgba(255,255,255,0.4)'
+              color: task.mmaRadius && task.mmaRadius > 0 ? o.textColor : `rgba(${o.c},${o.c},${o.c},0.4)`
             }}>
               {task.mmaRadius && task.mmaRadius > 0 ? `${task.mmaRadius}m` : '-'}
             </span>
@@ -583,7 +585,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
         <div>
           <label style={{
             fontSize: '10px',
-            color: `rgba(255,255,255,${o.textMuted})`,
+            color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
             display: 'block',
             marginBottom: '6px',
             textTransform: 'uppercase',
@@ -601,9 +603,9 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
               width: '100%',
               padding: '8px 10px',
               background: 'rgba(0,0,0,0.3)',
-              border: task.endsAt ? '1px solid rgba(59, 130, 246, 0.5)' : `1px solid rgba(255,255,255,${o.border})`,
+              border: task.endsAt ? '1px solid rgba(59, 130, 246, 0.5)' : `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
               borderRadius: '6px',
-              color: 'white',
+              color: o.textColor,
               fontSize: '14px',
               fontWeight: 600,
               fontFamily: 'monospace',
@@ -632,7 +634,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
             onChange={(e) => updateTask({ ...task, reminderEnabled: e.target.checked })}
             style={{ width: '14px', height: '14px', accentColor: '#f59e0b', cursor: 'pointer' }}
           />
-          <span style={{ fontSize: '11px', color: `rgba(255,255,255,${o.textSec})` }}>Erinnerung</span>
+          <span style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},${o.textSec})` }}>Erinnerung</span>
           <input
             type="number"
             min="1"
@@ -677,7 +679,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
         <div style={{ marginBottom: '12px' }}>
           <label style={{
             fontSize: '10px',
-            color: `rgba(255,255,255,${o.textMuted})`,
+            color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
             display: 'block',
             marginBottom: '6px',
             textTransform: 'uppercase',
@@ -689,8 +691,8 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
             padding: '10px',
             background: 'rgba(0,0,0,0.3)',
             borderRadius: '6px',
-            border: `1px solid rgba(255,255,255,${o.border})`,
-            color: `rgba(255,255,255,${o.textSec})`,
+            border: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
+            color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`,
             fontSize: '12px',
             lineHeight: 1.5
           }}>
@@ -703,9 +705,9 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
       <div style={{
         marginTop: '12px',
         padding: '10px',
-        background: goalDragMode ? 'rgba(245, 158, 11, 0.15)' : `rgba(255,255,255,${o.bgSoft})`,
+        background: goalDragMode ? 'rgba(245, 158, 11, 0.15)' : `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
         borderRadius: '6px',
-        border: `1px solid ${goalDragMode ? 'rgba(245, 158, 11, 0.5)' : 'rgba(255,255,255,0.1)'}`,
+        border: `1px solid ${goalDragMode ? 'rgba(245, 158, 11, 0.5)' : `rgba(${o.c},${o.c},${o.c},0.1)`}`,
         transition: 'all 0.2s'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -719,10 +721,10 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
               padding: '6px 10px',
               background: goalDragMode
                 ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-                : 'rgba(255,255,255,0.1)',
+                : `rgba(${o.c},${o.c},${o.c},0.1)`,
               border: 'none',
               borderRadius: '4px',
-              color: 'white',
+              color: o.textColor,
               fontSize: '11px',
               fontWeight: 600,
               cursor: 'pointer',
@@ -749,10 +751,10 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
                   padding: '5px 6px',
                   background: moveStepSize === step
                     ? '#10b981'
-                    : 'rgba(255,255,255,0.1)',
+                    : `rgba(${o.c},${o.c},${o.c},0.1)`,
                   border: 'none',
                   borderRadius: '4px',
-                  color: 'white',
+                  color: o.textColor,
                   fontSize: '10px',
                   fontWeight: 600,
                   cursor: 'pointer'
@@ -801,7 +803,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
                 >◀</button>
                 <div style={{
                   width: '36px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '9px', fontWeight: 700, color: `rgba(255,255,255,${o.text})`
+                  fontSize: '9px', fontWeight: 700, color: `rgba(${o.c},${o.c},${o.c},${o.text})`
                 }}>
                   {moveStepSize}m
                 </div>

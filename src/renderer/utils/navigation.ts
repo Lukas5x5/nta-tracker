@@ -277,9 +277,9 @@ interface WindLayerInput {
 
 /**
  * Ermittelt Wind für eine gegebene Höhe aus den gemessenen Windschichten.
- * Verwendet die nächstgelegene Schicht (diskret/stufenweise) statt Interpolation,
- * da ein Ballon Trägheit hat und nicht sofort den Wind einer neuen Schicht annimmt.
- * - Zwischen zwei Schichten: Wind der nächstgelegenen Schicht
+ * Lineare Interpolation zwischen Schichten für glatte Übergänge.
+ * Richtungs-Interpolation ist Wraparound-safe (350° → 10° geht über 0°).
+ * - Zwischen zwei Schichten: Linear interpoliert (Speed + Direction)
  * - Über der höchsten Schicht: Wind der höchsten Schicht
  * - Unter der niedrigsten Schicht: Wind der niedrigsten Schicht
  */
@@ -298,7 +298,7 @@ export function interpolateWind(
   if (altitude <= sorted[0].altitude) {
     return {
       direction: sorted[0].direction,
-      speedMs: sorted[0].speed / 3.6  // km/h → m/s
+      speedMs: sorted[0].speed / 3.6
     }
   }
 
@@ -311,23 +311,31 @@ export function interpolateWind(
     }
   }
 
-  // Zwischen zwei Schichten: Wind der nächstgelegenen Schicht verwenden
-  // (kein Interpolieren – Ballon hat Trägheit und nimmt nicht sofort
-  // den Wind einer neuen Schicht an)
+  // Zwischen zwei Schichten: linear interpolieren
   for (let i = 0; i < sorted.length - 1; i++) {
     const lower = sorted[i]
     const upper = sorted[i + 1]
     if (altitude >= lower.altitude && altitude <= upper.altitude) {
-      const midpoint = (lower.altitude + upper.altitude) / 2
-      const nearest = altitude <= midpoint ? lower : upper
+      // Interpolationsfaktor (0 = lower, 1 = upper)
+      const t = (altitude - lower.altitude) / (upper.altitude - lower.altitude)
+
+      // Speed: lineare Interpolation
+      const speedKmh = lower.speed + t * (upper.speed - lower.speed)
+
+      // Direction: kürzester Weg auf dem Kreis (Wraparound-safe)
+      let dDir = upper.direction - lower.direction
+      if (dDir > 180) dDir -= 360
+      if (dDir < -180) dDir += 360
+      const direction = (lower.direction + t * dDir + 360) % 360
+
       return {
-        direction: nearest.direction,
-        speedMs: nearest.speed / 3.6
+        direction,
+        speedMs: speedKmh / 3.6
       }
     }
   }
 
-  // Fallback (sollte nicht erreicht werden)
+  // Fallback
   return { direction: sorted[0].direction, speedMs: sorted[0].speed / 3.6 }
 }
 
@@ -691,7 +699,8 @@ export function calculateClimbPoint(
   goalLon: number,
   exactMode: boolean = false,
   leadTimeSec: number = 0,
-  rampUpSec: number = 30
+  rampUpSec: number = 30,
+  maxAltitudeM?: number  // Maximale Höhe in Metern (optional)
 ): ClimbPointResult | null {
   if (windLayers.length === 0 || climbRate === 0) return null
 
@@ -734,6 +743,8 @@ export function calculateClimbPoint(
   const climbStartLat = currentLat
   const climbStartLon = currentLon
 
+  console.log('[ClimbCalc] Start:', { startAlt: climbStartAlt, targetAltChangeM, minDistance, climbRate, maxAltitudeM, altLimit: maxAltitudeM && maxAltitudeM > 0 ? maxAltitudeM : 10000 })
+
   // ── Phase 2+3: Ramp-Up + Volle Rate ──
   while (totalTime < MAX_TIME) {
     climbTimeCounter++
@@ -750,8 +761,9 @@ export function calculateClimbPoint(
 
     currentAlt += effectiveRate * TIME_STEP
 
-    // Nicht unter 0m oder über 10000m
-    if (currentAlt < 0 || currentAlt > 10000) break
+    // Nicht unter 0m oder über Max-Höhe (default 10000m)
+    const altLimit = maxAltitudeM && maxAltitudeM > 0 ? maxAltitudeM : 10000
+    if (currentAlt < 0 || currentAlt > altLimit) break
 
     // Wind für aktuelle Höhe interpolieren
     const wind = interpolateWind(currentAlt, windLayers)
@@ -765,12 +777,14 @@ export function calculateClimbPoint(
       path.push({ lat: currentLat, lon: currentLon, altitude: currentAlt })
     }
 
-    // Mindestbedingungen prüfen (Höhenänderung ab Steig-Start)
+    // Bedingungen prüfen (Höhenänderung ab Steig-Start)
     const altChange = Math.abs(currentAlt - climbStartAlt)
     const horizontalDist = calculateDistance(climbStartLat, climbStartLon, currentLat, currentLon)
+    const meetsAlt = altChange >= targetAltChangeM
+    const meetsDist = horizontalDist >= minDistance
 
     if (exactMode) {
-      if (altChange >= targetAltChangeM && horizontalDist >= minDistance) {
+      if (meetsAlt && meetsDist) {
         bestPoint = {
           lat: currentLat,
           lon: currentLon,
@@ -783,7 +797,9 @@ export function calculateClimbPoint(
         break
       }
     } else {
-      if (altChange >= targetAltChangeM && horizontalDist >= minDistance) {
+      // Tracke besten Punkt sobald Mindesthöhe erreicht ist
+      // MinDistance ist Soft-Kriterium – wenn Höhe passt, suche trotzdem den besten Punkt
+      if (meetsAlt) {
         const distToGoal = calculateDistance(currentLat, currentLon, goalLat, goalLon)
         if (distToGoal < bestDist) {
           bestDist = distToGoal
@@ -805,7 +821,10 @@ export function calculateClimbPoint(
     }
   }
 
-  if (!bestPoint) return null
+  if (!bestPoint) {
+    console.log('[ClimbCalc] Kein Ergebnis! totalTime:', totalTime, 'finalAlt:', currentAlt, 'altChange:', Math.abs(currentAlt - climbStartAlt).toFixed(0) + 'm', 'targetChange:', targetAltChangeM.toFixed(0) + 'm')
+    return null
+  }
 
   const finalPath = path.slice(0, bestPathLength)
 
@@ -817,6 +836,440 @@ export function calculateClimbPoint(
     leadTime: leadTimeSec,
     totalTime: totalTime,
     path: finalPath
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PDG/FON Rechner V3 – Sensitivitätsbasierte Berechnung
+// 1. Simuliert alle Raten und findet mögliche Deklarationspunkte
+// 2. Sensitivitätsanalyse: Wie robust ist jeder Punkt bei Rate-Abweichung?
+// 3. Score: Niedrige Rate (40%) + Niedrige Sensitivität (40%) + Kurze Flugzeit (20%)
+// ═══════════════════════════════════════════════════════════════════
+
+export interface PdgFonResult {
+  bestRate: number  // Optimale Rate in m/s (positiv=steigen, negativ=sinken)
+  bestPoint: { lat: number; lon: number; altitude: number; timeSeconds: number }
+  distanceToGoal: number  // Meter
+  altitudeChange: number  // Meter (positiv=gestiegen)
+  flightTime: number  // Sekunden
+  sensitivity: number  // Meter Abweichung bei ±0.1 m/s Rate-Änderung
+  path: { lat: number; lon: number; altitude: number }[]
+  allResults: { rate: number; distanceToGoal: number; altitude: number; sensitivity: number; score: number }[]
+}
+
+export interface PdgFonCorrectionResult {
+  requiredRate: number  // m/s die JETZT nötig sind
+  distanceToGoal: number  // Aktuelle Distanz zum deklarierten Ziel
+  predictedMiss: number  // Meter Abweichung wenn aktuelle Rate beibehalten wird
+  estimatedArrivalAlt: number
+  timeToPoint: number
+  onTrack: boolean
+}
+
+/**
+ * PDG/FON V2: Berechnet die optimale Steig-/Sinkrate für ein Höhenfenster.
+ * Probiert verschiedene Raten durch und wählt die mit geringstem Abstand zum Ziel.
+ */
+export function calculatePdgFon(
+  startLat: number,
+  startLon: number,
+  startAltitude: number,  // Meter MSL
+  direction: 'up' | 'down',
+  minAltFt: number,  // Min. Höhenänderung in ft (z.B. 1000)
+  maxAltFt: number,  // Max. absolute Höhe in ft (z.B. 8000)
+  minDistance: number,  // Min. Horizontaldistanz in Metern
+  windLayers: WindLayerInput[],
+  goalLat: number,
+  goalLon: number
+): PdgFonResult | null {
+  if (windLayers.length === 0) return null
+
+  const TIME_STEP = 1
+  const MAX_TIME = 3600
+  const PATH_SAMPLE = 10
+  const RAMP_UP = 30  // 30s Beschleunigungsphase
+
+  // Höhenfenster berechnen
+  // minAltFt = RELATIVE Mindest-Höhenänderung (z.B. 1000ft = muss mind. 1000ft steigen/sinken)
+  // maxAltFt = ABSOLUTE Maximalhöhe (z.B. 8000ft = darf nicht über 8000ft steigen)
+  //   Wenn maxAltFt = 0 → kein Limit
+  //   Wenn maxAltFt < aktuelle Höhe bei "up" → maxAltFt wird ignoriert (ungültig)
+  const startAltFt = startAltitude * 3.28084
+  const minTargetFt = direction === 'up' ? startAltFt + minAltFt : startAltFt - minAltFt
+  const minTargetAltM = minTargetFt * 0.3048
+
+  // Max-Höhe: Nur verwenden wenn sinnvoll (höher als minTarget bei up, niedriger bei down)
+  let maxTargetAltM: number
+  if (maxAltFt > 0) {
+    if (direction === 'up' && maxAltFt > minTargetFt) {
+      maxTargetAltM = maxAltFt * 0.3048
+    } else if (direction === 'down' && maxAltFt < minTargetFt) {
+      maxTargetAltM = maxAltFt * 0.3048
+    } else {
+      // Max-Höhe ist ungültig (z.B. max 3000ft aber muss auf mind. 4200ft) → ignorieren
+      maxTargetAltM = direction === 'up' ? 10000 : 0
+      console.log('[PdgFon] Max-Höhe ignoriert (ungültig):', maxAltFt, 'ft, minTarget:', Math.round(minTargetFt), 'ft')
+    }
+  } else {
+    maxTargetAltM = direction === 'up' ? 10000 : 0
+  }
+
+  console.log('[PdgFon] Höhenfenster:', {
+    startAltFt: Math.round(startAltFt),
+    minTargetFt: Math.round(minTargetFt),
+    maxTargetFt: Math.round(maxTargetAltM * 3.28084),
+    direction, minDistance
+  })
+
+  // 3-stufige Präzisionssuche für maximale Genauigkeit
+  // Stufe 1: Grob (0.5er Schritte), Stufe 2: Fein (0.05), Stufe 3: Ultra-fein (0.01)
+  const ratesToTest: number[] = []
+  for (let r = 0.25; r <= 5.0; r += 0.5) {
+    ratesToTest.push(direction === 'up' ? r : -r)
+  }
+
+  let overallBest: PdgFonResult | null = null
+  const allResults: { rate: number; distanceToGoal: number; altitude: number; sensitivity: number; score: number }[] = []
+
+  const LEAD_TIME = 30  // 30 Sekunden Vorlaufzeit (Drift auf aktueller Höhe)
+
+  for (const rate of ratesToTest) {
+    const path: { lat: number; lon: number; altitude: number }[] = []
+    let lat = startLat
+    let lon = startLon
+    let alt = startAltitude
+    let bestDistForRate = Infinity
+    let bestPointForRate: PdgFonResult['bestPoint'] | null = null
+    let bestPathLen = 0
+
+    path.push({ lat, lon, altitude: alt })
+
+    // Phase 1: Vorlaufzeit – 30s Drift auf aktueller Höhe (kein Steigen/Sinken)
+    for (let t = 1; t <= LEAD_TIME; t++) {
+      const wind = interpolateWind(alt, windLayers)
+      const driftDir = (wind.direction + 180) % 360
+      const driftDist = wind.speedMs * TIME_STEP
+      const newPos = calculateDestination(lat, lon, driftDir, driftDist)
+      lat = newPos.lat
+      lon = newPos.lon
+      if (t % PATH_SAMPLE === 0) {
+        path.push({ lat, lon, altitude: alt })
+      }
+    }
+
+    // Phase 2+3: Ramp-Up (30s) + Volle Rate
+    for (let t = 1; t <= MAX_TIME - LEAD_TIME; t++) {
+      // Ramp-Up: 0 → volle Rate über 30 Sekunden
+      const effectiveRate = t <= RAMP_UP ? rate * (t / RAMP_UP) : rate
+
+      alt += effectiveRate * TIME_STEP
+
+      // Höhengrenzen prüfen – etwas über das Fenster hinaus simulieren für besten Punkt
+      if (direction === 'up' && alt > maxTargetAltM * 1.1) break
+      if (direction === 'down' && alt < maxTargetAltM * 0.9) break
+      if (alt < 0 || alt > 10000) break
+
+      // Wind-Drift
+      const wind = interpolateWind(alt, windLayers)
+      const driftDir = (wind.direction + 180) % 360
+      const driftDist = wind.speedMs * TIME_STEP
+      const newPos = calculateDestination(lat, lon, driftDir, driftDist)
+      lat = newPos.lat
+      lon = newPos.lon
+
+      const totalT = LEAD_TIME + t
+      if (totalT % PATH_SAMPLE === 0) {
+        path.push({ lat, lon, altitude: alt })
+      }
+
+      // Prüfe ob wir im gültigen Höhenfenster sind
+      const altM = alt
+      const inHeightWindow = direction === 'up'
+        ? (altM >= minTargetAltM && altM <= maxTargetAltM)
+        : (altM <= minTargetAltM && altM >= maxTargetAltM)
+
+      if (inHeightWindow) {
+        const horizontalDist = calculateDistance(startLat, startLon, lat, lon)
+        const distToGoal = calculateDistance(lat, lon, goalLat, goalLon)
+
+        // MinDistance ist hartes Kriterium
+        if (horizontalDist < minDistance) continue
+
+        // Höhen-Penalty: Je weiter von Min-Target entfernt, desto schlechter
+        // Pro 100m über Min-Target → 50m Penalty auf die Distanz
+        const altOvershoot = Math.abs(alt - minTargetAltM)
+        const heightPenalty = altOvershoot * 0.5
+        const effectiveDist = distToGoal + heightPenalty
+
+        if (effectiveDist < bestDistForRate) {
+          bestDistForRate = effectiveDist
+          bestPointForRate = { lat, lon, altitude: alt, timeSeconds: LEAD_TIME + t }
+          bestPathLen = path.length
+          if (t % PATH_SAMPLE !== 0) {
+            path.push({ lat, lon, altitude: alt })
+            bestPathLen = path.length
+          }
+        } else if (bestPointForRate && distToGoal > bestDistForRate * 1.5) {
+          break  // Wird nur schlimmer
+        }
+      }
+    }
+
+    if (bestPointForRate) {
+      const actualDist = calculateDistance(bestPointForRate.lat, bestPointForRate.lon, goalLat, goalLon)
+      const altChange = Math.abs(bestPointForRate.altitude - startAltitude)
+      allResults.push({ rate: Math.abs(rate), distanceToGoal: actualDist, altitude: bestPointForRate.altitude, sensitivity: 0, score: 0 })
+
+      const isBetter = !overallBest
+        || actualDist < overallBest.distanceToGoal * 0.85
+        || (actualDist < overallBest.distanceToGoal * 1.15 && altChange < Math.abs(overallBest.altitudeChange))
+
+      if (isBetter) {
+        overallBest = {
+          bestRate: rate,
+          bestPoint: bestPointForRate,
+          distanceToGoal: Math.round(actualDist),
+          altitudeChange: Math.round(bestPointForRate.altitude - startAltitude),
+          flightTime: bestPointForRate.timeSeconds,
+          sensitivity: 0,
+          path: path.slice(0, bestPathLen),
+          allResults: []
+        }
+      }
+    } else {
+      allResults.push({ rate: Math.abs(rate), distanceToGoal: Infinity, altitude: 0, sensitivity: 0, score: 0 })
+    }
+  }
+
+  // Stufe 2: Fein-Suche (±0.5 m/s um beste Rate in 0.05er Schritten)
+  if (overallBest) {
+    const baseRate = Math.abs(overallBest.bestRate)
+    const fineRates: number[] = []
+    for (let r = Math.max(0.1, baseRate - 0.5); r <= baseRate + 0.5; r += 0.05) {
+      fineRates.push(direction === 'up' ? r : -r)
+    }
+    // Gleiche Simulations-Logik wie oben, aber ohne allResults sammeln
+    for (const rate of fineRates) {
+      let lat = startLat, lon = startLon, alt = startAltitude
+      let bestDistForRate = Infinity
+      let bestPointForRate: PdgFonResult['bestPoint'] | null = null
+      // Vorlaufzeit
+      for (let t = 1; t <= LEAD_TIME; t++) {
+        const wind = interpolateWind(alt, windLayers)
+        const newPos = calculateDestination(lat, lon, (wind.direction + 180) % 360, wind.speedMs * TIME_STEP)
+        lat = newPos.lat; lon = newPos.lon
+      }
+      // Climb
+      for (let t = 1; t <= MAX_TIME - LEAD_TIME; t++) {
+        const effRate = t <= RAMP_UP ? rate * (t / RAMP_UP) : rate
+        alt += effRate * TIME_STEP
+        if (direction === 'up' && alt > maxTargetAltM * 1.1) break
+        if (direction === 'down' && alt < maxTargetAltM * 0.9) break
+        if (alt < 0 || alt > 10000) break
+        const wind = interpolateWind(alt, windLayers)
+        const newPos = calculateDestination(lat, lon, (wind.direction + 180) % 360, wind.speedMs * TIME_STEP)
+        lat = newPos.lat; lon = newPos.lon
+        const inWindow = direction === 'up' ? (alt >= minTargetAltM && alt <= maxTargetAltM) : (alt <= minTargetAltM && alt >= maxTargetAltM)
+        if (inWindow) {
+          const hDist = calculateDistance(startLat, startLon, lat, lon)
+          if (hDist < minDistance) continue
+          const d2g = calculateDistance(lat, lon, goalLat, goalLon)
+          if (d2g < bestDistForRate) { bestDistForRate = d2g; bestPointForRate = { lat, lon, altitude: alt, timeSeconds: LEAD_TIME + t } }
+          else if (bestPointForRate && d2g > bestDistForRate * 1.5) break
+        }
+      }
+      if (bestPointForRate && bestDistForRate < overallBest.distanceToGoal) {
+        overallBest = { ...overallBest, bestRate: rate, bestPoint: bestPointForRate, distanceToGoal: Math.round(bestDistForRate), altitudeChange: Math.round(bestPointForRate.altitude - startAltitude), flightTime: bestPointForRate.timeSeconds }
+      }
+    }
+  }
+
+  // Stufe 3: Ultra-fein (±0.1 m/s in 0.01er Schritten)
+  if (overallBest) {
+    const baseRate = Math.abs(overallBest.bestRate)
+    for (let r = Math.max(0.05, baseRate - 0.1); r <= baseRate + 0.1; r += 0.01) {
+      const rate = direction === 'up' ? r : -r
+      let lat = startLat, lon = startLon, alt = startAltitude
+      let bestDistForRate = Infinity
+      let bestPointForRate: PdgFonResult['bestPoint'] | null = null
+      for (let t = 1; t <= LEAD_TIME; t++) {
+        const wind = interpolateWind(alt, windLayers)
+        const newPos = calculateDestination(lat, lon, (wind.direction + 180) % 360, wind.speedMs * TIME_STEP)
+        lat = newPos.lat; lon = newPos.lon
+      }
+      for (let t = 1; t <= MAX_TIME - LEAD_TIME; t++) {
+        const effRate = t <= RAMP_UP ? rate * (t / RAMP_UP) : rate
+        alt += effRate * TIME_STEP
+        if (direction === 'up' && alt > maxTargetAltM * 1.1) break
+        if (direction === 'down' && alt < maxTargetAltM * 0.9) break
+        if (alt < 0 || alt > 10000) break
+        const wind = interpolateWind(alt, windLayers)
+        const newPos = calculateDestination(lat, lon, (wind.direction + 180) % 360, wind.speedMs * TIME_STEP)
+        lat = newPos.lat; lon = newPos.lon
+        const inWindow = direction === 'up' ? (alt >= minTargetAltM && alt <= maxTargetAltM) : (alt <= minTargetAltM && alt >= maxTargetAltM)
+        if (inWindow) {
+          const hDist = calculateDistance(startLat, startLon, lat, lon)
+          if (hDist < minDistance) continue
+          const d2g = calculateDistance(lat, lon, goalLat, goalLon)
+          if (d2g < bestDistForRate) { bestDistForRate = d2g; bestPointForRate = { lat, lon, altitude: alt, timeSeconds: LEAD_TIME + t } }
+          else if (bestPointForRate && d2g > bestDistForRate * 1.5) break
+        }
+      }
+      if (bestPointForRate && bestDistForRate < overallBest.distanceToGoal) {
+        overallBest = { ...overallBest, bestRate: rate, bestPoint: bestPointForRate, distanceToGoal: Math.round(bestDistForRate), altitudeChange: Math.round(bestPointForRate.altitude - startAltitude), flightTime: bestPointForRate.timeSeconds }
+      }
+    }
+
+    // Sensitivitätsanalyse: Wie weit verschiebt sich der Endpunkt bei ±0.1 m/s?
+    const sensRates = [overallBest.bestRate + 0.1, overallBest.bestRate - 0.1]
+    let maxSensShift = 0
+    for (const sensRate of sensRates) {
+      let lat = startLat, lon = startLon, alt = startAltitude
+      for (let t = 1; t <= LEAD_TIME; t++) {
+        const wind = interpolateWind(alt, windLayers)
+        const newPos = calculateDestination(lat, lon, (wind.direction + 180) % 360, wind.speedMs * TIME_STEP)
+        lat = newPos.lat; lon = newPos.lon
+      }
+      for (let t = 1; t <= overallBest.flightTime - LEAD_TIME; t++) {
+        const effRate = t <= RAMP_UP ? sensRate * (t / RAMP_UP) : sensRate
+        alt += effRate * TIME_STEP
+        if (alt < 0 || alt > 10000) break
+        const wind = interpolateWind(alt, windLayers)
+        const newPos = calculateDestination(lat, lon, (wind.direction + 180) % 360, wind.speedMs * TIME_STEP)
+        lat = newPos.lat; lon = newPos.lon
+      }
+      const shift = calculateDistance(lat, lon, overallBest.bestPoint.lat, overallBest.bestPoint.lon)
+      maxSensShift = Math.max(maxSensShift, shift)
+    }
+    overallBest.sensitivity = Math.round(maxSensShift)
+
+    // Score berechnen für allResults
+    const maxRate = 5.0
+    const maxSens = 500
+    for (const r of allResults) {
+      const rateScore = 1 - Math.abs(r.rate) / maxRate
+      const sensScore = 1 - Math.min(r.sensitivity, maxSens) / maxSens
+      const timeScore = r.distanceToGoal < Infinity ? 1 : 0
+      r.score = rateScore * 0.4 + sensScore * 0.4 + timeScore * 0.2
+    }
+
+    console.log(`[PdgFon] Sensitivität: ±0.1 m/s → ${overallBest.sensitivity}m Verschiebung`)
+
+    // Finale Pfad-Simulation für die beste Rate
+    const finalPath: { lat: number; lon: number; altitude: number }[] = []
+    let lat = startLat, lon = startLon, alt = startAltitude
+    finalPath.push({ lat, lon, altitude: alt })
+    for (let t = 1; t <= LEAD_TIME; t++) {
+      const wind = interpolateWind(alt, windLayers)
+      const newPos = calculateDestination(lat, lon, (wind.direction + 180) % 360, wind.speedMs * TIME_STEP)
+      lat = newPos.lat; lon = newPos.lon
+      if (t % PATH_SAMPLE === 0) finalPath.push({ lat, lon, altitude: alt })
+    }
+    for (let t = 1; t <= overallBest.flightTime - LEAD_TIME + 10; t++) {
+      const effRate = t <= RAMP_UP ? overallBest.bestRate * (t / RAMP_UP) : overallBest.bestRate
+      alt += effRate * TIME_STEP
+      if (alt < 0 || alt > 10000) break
+      const wind = interpolateWind(alt, windLayers)
+      const newPos = calculateDestination(lat, lon, (wind.direction + 180) % 360, wind.speedMs * TIME_STEP)
+      lat = newPos.lat; lon = newPos.lon
+      if ((LEAD_TIME + t) % PATH_SAMPLE === 0) finalPath.push({ lat, lon, altitude: alt })
+    }
+    overallBest.path = finalPath
+  }
+
+  if (overallBest) {
+    overallBest.allResults = allResults
+    console.log('[PdgFon] Beste Rate:', overallBest.bestRate.toFixed(2), 'm/s, Dist:', overallBest.distanceToGoal, 'm, Alt:', Math.round(overallBest.bestPoint.altitude * 3.28084), 'ft (3-stufige Suche)')
+  }
+
+  return overallBest
+}
+
+/**
+ * PDG/FON Live-Korrektur: Berechnet die Rate die JETZT nötig ist
+ * um ein deklariertes Ziel zu erreichen.
+ *
+ * Simuliert verschiedene Raten und findet die Rate die den Ballon
+ * am nächsten zum deklarierten Punkt bringt (unter Berücksichtigung von Wind).
+ */
+export function calculatePdgFonCorrection(
+  currentLat: number,
+  currentLon: number,
+  currentAlt: number,  // Meter MSL
+  currentSpeed: number,  // km/h
+  targetLat: number,
+  targetLon: number,
+  targetAlt: number,  // Meter MSL
+  windLayers: WindLayerInput[]
+): PdgFonCorrectionResult {
+  const horizontalDist = calculateDistance(currentLat, currentLon, targetLat, targetLon)
+  const altDiff = targetAlt - currentAlt
+  const direction = altDiff > 0 ? 'up' : 'down'
+
+  // 3-stufige Präzisionssuche (wie Hauptberechnung, aber ab aktueller Position)
+  // Hilfsfunktion: Simuliert eine Rate und gibt 3D-Distanz zum Ziel zurück
+  function simRate(rate: number): { dist: number; time: number } {
+    let lat = currentLat, lon = currentLon, alt = currentAlt
+    let best = Infinity, bestT = 0
+    for (let t = 1; t <= 1800; t++) {
+      alt += rate  // Sofort volle Rate (keine Ramp-Up, da Live-Korrektur)
+      if (alt < 0 || alt > 10000) break
+      const wind = interpolateWind(alt, windLayers)
+      const newPos = calculateDestination(lat, lon, (wind.direction + 180) % 360, wind.speedMs)
+      lat = newPos.lat; lon = newPos.lon
+      const hDist = calculateDistance(lat, lon, targetLat, targetLon)
+      const vDist = Math.abs(alt - targetAlt)
+      const d = Math.sqrt(hDist * hDist + vDist * vDist)
+      if (d < best) { best = d; bestT = t }
+      else if (d > best * 2) break
+    }
+    return { dist: best, time: bestT }
+  }
+
+  let bestRate = 0
+  let bestDist = Infinity
+  let bestTime = 0
+
+  if (windLayers.length > 0 && horizontalDist > 10) {
+    // Stufe 1: Grob (0.5er Schritte)
+    for (let r = 0.25; r <= 5.0; r += 0.5) {
+      const rate = direction === 'up' ? r : -r
+      const { dist, time } = simRate(rate)
+      if (dist < bestDist) { bestDist = dist; bestRate = rate; bestTime = time }
+    }
+    // Stufe 2: Fein (0.05er Schritte um beste Rate)
+    const base2 = Math.abs(bestRate)
+    for (let r = Math.max(0.1, base2 - 0.5); r <= base2 + 0.5; r += 0.05) {
+      const rate = direction === 'up' ? r : -r
+      const { dist, time } = simRate(rate)
+      if (dist < bestDist) { bestDist = dist; bestRate = rate; bestTime = time }
+    }
+    // Stufe 3: Ultra-fein (0.01er Schritte)
+    const base3 = Math.abs(bestRate)
+    for (let r = Math.max(0.05, base3 - 0.1); r <= base3 + 0.1; r += 0.01) {
+      const rate = direction === 'up' ? r : -r
+      const { dist, time } = simRate(rate)
+      if (dist < bestDist) { bestDist = dist; bestRate = rate; bestTime = time }
+    }
+  } else {
+    const speedMs = currentSpeed / 3.6
+    const timeToPoint = speedMs > 0.5 ? horizontalDist / speedMs : 600
+    bestRate = timeToPoint > 0 ? altDiff / timeToPoint : 0
+    bestTime = Math.round(timeToPoint)
+  }
+
+  const onTrack = Math.abs(bestRate) < 5 && horizontalDist > 10
+
+  // Predicted Miss: Wo lande ich wenn ich die berechnete Rate halte?
+  const predictedMiss = bestDist < Infinity ? Math.round(bestDist) : Math.round(horizontalDist)
+
+  return {
+    requiredRate: bestRate,
+    distanceToGoal: horizontalDist,
+    predictedMiss,
+    estimatedArrivalAlt: targetAlt,
+    timeToPoint: bestTime,
+    onTrack
   }
 }
 

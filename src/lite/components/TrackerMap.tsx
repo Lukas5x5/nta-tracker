@@ -64,9 +64,10 @@ export function TrackerMap() {
   const myLocationMarkerRef = useRef<L.Marker | null>(null)
   const myLocationCircleRef = useRef<L.Circle | null>(null)
   const initialFitDoneRef = useRef(false)
+  const trackLinesRef = useRef<Map<string, L.Polyline>>(new Map())
   const [windDialogTask, setWindDialogTask] = useState<PilotTask | null>(null)
 
-  const { pilots, selectedPilot, selectPilot, pilotTasks } = useTrackerStore()
+  const { pilots, selectedPilot, selectPilot, pilotTasks, pilotTracks } = useTrackerStore()
 
   // Globale Callbacks für Leaflet-Popup-Buttons registrieren
   useEffect(() => {
@@ -254,6 +255,41 @@ export function TrackerMap() {
       }
     }
   }, [pilots, selectPilot])
+
+  // Track-Linien zeichnen
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map) return
+
+    // Für jeden Piloten mit Track: Polyline zeichnen/aktualisieren
+    Object.entries(pilotTracks).forEach(([memberId, track]) => {
+      if (track.length < 2) return
+      const pilot = pilots.find(p => p.memberId === memberId)
+      const color = pilot?.color || '#3b82f6'
+      const positions: [number, number][] = track.map(p => [p.lat, p.lon])
+
+      const existing = trackLinesRef.current.get(memberId)
+      if (existing) {
+        existing.setLatLngs(positions)
+      } else {
+        const line = L.polyline(positions, {
+          color,
+          weight: 3,
+          opacity: 0.7,
+          interactive: false
+        }).addTo(map)
+        trackLinesRef.current.set(memberId, line)
+      }
+    })
+
+    // Entferne Track-Linien für Piloten die nicht mehr da sind
+    trackLinesRef.current.forEach((line, memberId) => {
+      if (!pilotTracks[memberId]) {
+        line.remove()
+        trackLinesRef.current.delete(memberId)
+      }
+    })
+  }, [pilotTracks, pilots])
 
   // Center on selected pilot (only when selection changes, not on position updates)
   useEffect(() => {
@@ -525,55 +561,51 @@ export function TrackerMap() {
 }
 
 function createPilotIcon(pilot: PilotPosition): L.DivIcon {
+  const opacity = pilot.isOnline ? 1 : 0.5
+  const color = pilot.color || '#8B0000'
   const iconHtml = `
     <div style="
       width: 40px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      height: 50px;
       position: relative;
+      opacity: ${opacity};
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
     ">
-      <div style="
-        width: 32px;
-        height: 32px;
-        background: ${pilot.color};
-        border: 3px solid #fff;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        opacity: ${pilot.isOnline ? 1 : 0.5};
+      <svg width="40" height="50" viewBox="0 0 40 50" style="
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform: rotate(${pilot.heading}deg);
+        transform-origin: 20px 25px;
       ">
-        <span style="
-          color: #fff;
-          font-size: 10px;
-          font-weight: 700;
-          text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-        ">${pilot.callsign.substring(0, 3)}</span>
-      </div>
+        <!-- Pfeil -->
+        <path d="M20 2 L32 38 L20 30 L8 38 Z" fill="${color}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>
+      <!-- Callsign unter dem Pfeil -->
       <div style="
         position: absolute;
-        top: -8px;
+        bottom: -2px;
         left: 50%;
-        transform: translateX(-50%) rotate(${pilot.heading}deg);
-        width: 0;
-        height: 0;
-        border-left: 6px solid transparent;
-        border-right: 6px solid transparent;
-        border-bottom: 10px solid ${pilot.color};
-        filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
-      "></div>
+        transform: translateX(-50%);
+        background: ${color};
+        color: #fff;
+        font-size: 9px;
+        font-weight: 800;
+        padding: 1px 4px;
+        border-radius: 3px;
+        white-space: nowrap;
+        border: 1px solid #fff;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+      ">${pilot.callsign.substring(0, 4)}</div>
     </div>
   `
 
   return L.divIcon({
     html: iconHtml,
     className: '',
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    popupAnchor: [0, -20]
+    iconSize: [40, 50],
+    iconAnchor: [20, 25],
+    popupAnchor: [0, -25]
   })
 }
 

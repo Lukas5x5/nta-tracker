@@ -74,6 +74,12 @@ declare global {
         listBackups: () => Promise<Array<{ name: string; fileName: string; path: string; date: string; size: number }>>
         loadBackup: (fileName: string) => Promise<{ success: boolean; data?: any; error?: string }>
       }
+      flights: {
+        save: (options: { championshipId: string; flightId: string; fileName: string; content: string }) => Promise<{ success: boolean; path?: string; error?: string }>
+        list: (championshipId: string) => Promise<Array<{ id: string; name: string; created_at: string; hasTrack: boolean; isAptProfile: boolean; size: number }>>
+        load: (options: { championshipId: string; flightId: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+        delete: (options: { championshipId: string; flightId: string }) => Promise<{ success: boolean; error?: string }>
+      }
       maps: {
         import: () => Promise<MapInfo | null>
         importWithImage: (mapPath: string, imagePath: string) => Promise<MapInfo | null>

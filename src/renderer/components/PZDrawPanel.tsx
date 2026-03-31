@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useFlightStore } from '../stores/flightStore'
+import { getOutdoor } from '../utils/outdoorStyles'
 
 // UTM zu WGS84 Konvertierung
 function utmToLatLng(zone: number, hemisphere: 'N' | 'S', easting: number, northing: number): { lat: number; lon: number } {
@@ -51,6 +52,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
     stopPzDrawMode,
     settings
   } = useFlightStore()
+  const o = getOutdoor(settings.outdoorMode)
 
   const [pzName, setPzName] = useState('')
   const [pzElevation, setPzElevation] = useState('')
@@ -152,7 +154,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
           style={{
             background: 'none',
             border: 'none',
-            color: 'rgba(255,255,255,0.5)',
+            color: `rgba(${o.c},${o.c},${o.c},0.5)`,
             cursor: 'pointer',
             padding: '4px'
           }}
@@ -173,7 +175,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
           padding: '10px 12px',
           marginBottom: '16px'
         }}>
-          <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+          <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.7)`, lineHeight: 1.5 }}>
             <strong style={{ color: '#f59e0b' }}>Anleitung:</strong><br />
             Klicke auf die Karte um Punkte zu setzen.<br />
             {pzDrawPoints.length < 1
@@ -191,7 +193,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
           padding: '10px 12px',
           marginBottom: '12px'
         }}>
-          <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '8px' }}>
+          <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '8px' }}>
             UTM Koordinaten eingeben
           </div>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' }}>
@@ -206,7 +208,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
                 width: '52px',
                 padding: '8px 6px',
                 background: 'rgba(0,0,0,0.3)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                 borderRadius: '6px',
                 color: '#f59e0b',
                 fontSize: '12px',
@@ -247,7 +249,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
                 minWidth: 0,
                 padding: '8px 6px',
                 background: 'rgba(0,0,0,0.3)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                 borderRadius: '6px',
                 color: '#fff',
                 fontSize: '11px',
@@ -267,7 +269,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
                 minWidth: 0,
                 padding: '8px 6px',
                 background: 'rgba(0,0,0,0.3)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                 borderRadius: '6px',
                 color: '#fff',
                 fontSize: '11px',
@@ -281,10 +283,10 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
               disabled={!utmEasting || !utmNorthing}
               style={{
                 padding: '8px 12px',
-                background: utmEasting && utmNorthing ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${utmEasting && utmNorthing ? 'rgba(245, 158, 11, 0.4)' : 'rgba(255,255,255,0.1)'}`,
+                background: utmEasting && utmNorthing ? 'rgba(245, 158, 11, 0.2)' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                border: `1px solid ${utmEasting && utmNorthing ? 'rgba(245, 158, 11, 0.4)' : `rgba(${o.c},${o.c},${o.c},0.1)`}`,
                 borderRadius: '6px',
-                color: utmEasting && utmNorthing ? '#f59e0b' : 'rgba(255,255,255,0.3)',
+                color: utmEasting && utmNorthing ? '#f59e0b' : `rgba(${o.c},${o.c},${o.c},0.3)`,
                 fontSize: '12px',
                 fontWeight: 600,
                 cursor: utmEasting && utmNorthing ? 'pointer' : 'not-allowed',
@@ -319,14 +321,14 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
           }}>
             {pzDrawPoints.length}
           </div>
-          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>
+          <div style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},0.5)` }}>
             {isSinglePoint ? 'Punkt (PZ)' : isPolygon ? 'Punkte (Polygon)' : 'Punkte gesetzt'}
           </div>
         </div>
 
         {/* Name Input */}
         <div style={{ marginBottom: '12px' }}>
-          <label style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '6px' }}>
+          <label style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, display: 'block', marginBottom: '6px' }}>
             Name
           </label>
           <input
@@ -338,7 +340,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
               width: '100%',
               padding: '10px 12px',
               background: 'rgba(0,0,0,0.3)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
               borderRadius: '6px',
               color: '#fff',
               fontSize: '13px',
@@ -350,7 +352,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
 
         {/* Höhe Input */}
         <div style={{ marginBottom: '12px' }}>
-          <label style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '6px' }}>
+          <label style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, display: 'block', marginBottom: '6px' }}>
             Maximale Höhe in ft (optional)
           </label>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -363,7 +365,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
                 flex: 1,
                 padding: '10px 12px',
                 background: 'rgba(0,0,0,0.3)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                 borderRadius: '6px',
                 color: '#fff',
                 fontSize: '13px',
@@ -386,7 +388,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
         {/* Radius Input - nur bei Einzelpunkt */}
         {isSinglePoint && (
           <div style={{ marginBottom: '12px' }}>
-            <label style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '6px' }}>
+            <label style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, display: 'block', marginBottom: '6px' }}>
               Radius in Meter (optional)
             </label>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -399,7 +401,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
                   flex: 1,
                   padding: '10px 12px',
                   background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
                   borderRadius: '6px',
                   color: '#fff',
                   fontSize: '13px',
@@ -423,7 +425,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
         {/* Polygon Form Toggle - nur bei 3+ Punkten */}
         {isPolygon && (
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '6px' }}>
+            <label style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, display: 'block', marginBottom: '6px' }}>
               Form
             </label>
             <div style={{ display: 'flex', gap: '6px' }}>
@@ -432,10 +434,10 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
                 style={{
                   flex: 1,
                   padding: '10px 12px',
-                  background: pzClosed ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${pzClosed ? 'rgba(34, 197, 94, 0.4)' : 'rgba(255,255,255,0.1)'}`,
+                  background: pzClosed ? 'rgba(34, 197, 94, 0.2)' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                  border: `1px solid ${pzClosed ? 'rgba(34, 197, 94, 0.4)' : `rgba(${o.c},${o.c},${o.c},0.1)`}`,
                   borderRadius: '6px',
-                  color: pzClosed ? '#22c55e' : 'rgba(255,255,255,0.5)',
+                  color: pzClosed ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},0.5)`,
                   fontSize: '12px',
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -455,10 +457,10 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
                 style={{
                   flex: 1,
                   padding: '10px 12px',
-                  background: !pzClosed ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${!pzClosed ? 'rgba(59, 130, 246, 0.4)' : 'rgba(255,255,255,0.1)'}`,
+                  background: !pzClosed ? 'rgba(59, 130, 246, 0.2)' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+                  border: `1px solid ${!pzClosed ? 'rgba(59, 130, 246, 0.4)' : `rgba(${o.c},${o.c},${o.c},0.1)`}`,
                   borderRadius: '6px',
-                  color: !pzClosed ? '#3b82f6' : 'rgba(255,255,255,0.5)',
+                  color: !pzClosed ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},0.5)`,
                   fontSize: '12px',
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -486,10 +488,10 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
             style={{
               flex: 1,
               padding: '12px',
-              background: canFinish ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.05)',
-              border: `1px solid ${canFinish ? 'rgba(34, 197, 94, 0.4)' : 'rgba(255,255,255,0.1)'}`,
+              background: canFinish ? 'rgba(34, 197, 94, 0.2)' : `rgba(${o.c},${o.c},${o.c},0.05)`,
+              border: `1px solid ${canFinish ? 'rgba(34, 197, 94, 0.4)' : `rgba(${o.c},${o.c},${o.c},0.1)`}`,
               borderRadius: '8px',
-              color: canFinish ? '#22c55e' : 'rgba(255,255,255,0.3)',
+              color: canFinish ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},0.3)`,
               fontSize: '13px',
               fontWeight: 600,
               cursor: canFinish ? 'pointer' : 'not-allowed',
@@ -513,10 +515,10 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
             style={{
               flex: 1,
               padding: '10px',
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: `rgba(${o.c},${o.c},${o.c},0.05)`,
+              border: '1px solid rgba(${o.c},${o.c},${o.c},0.1)',
               borderRadius: '6px',
-              color: pzDrawPoints.length > 0 ? '#f59e0b' : 'rgba(255,255,255,0.3)',
+              color: pzDrawPoints.length > 0 ? '#f59e0b' : `rgba(${o.c},${o.c},${o.c},0.3)`,
               fontSize: '12px',
               cursor: pzDrawPoints.length > 0 ? 'pointer' : 'not-allowed',
               display: 'flex',
@@ -566,7 +568,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
             borderRadius: '6px',
             padding: '8px'
           }}>
-            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginBottom: '6px' }}>
+            <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.4)`, marginBottom: '6px' }}>
               Gesetzte Punkte:
             </div>
             {pzDrawPoints.map((point, index) => (
@@ -577,7 +579,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
                   alignItems: 'center',
                   gap: '8px',
                   padding: '4px 6px',
-                  background: index === 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255,255,255,0.03)',
+                  background: index === 0 ? 'rgba(34, 197, 94, 0.1)' : `rgba(${o.c},${o.c},${o.c},0.03)`,
                   borderRadius: '4px',
                   marginBottom: '2px'
                 }}
@@ -596,7 +598,7 @@ export function PZDrawPanel({ onClose }: PZDrawPanelProps) {
                 }}>
                   {index + 1}
                 </span>
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', fontFamily: 'monospace' }}>
+                <span style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.6)`, fontFamily: 'monospace' }}>
                   {point.lat.toFixed(5)}, {point.lon.toFixed(5)}
                 </span>
               </div>

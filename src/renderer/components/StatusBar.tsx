@@ -202,7 +202,7 @@ export function StatusBar() {
   const labelStyle: React.CSSProperties = {
     fontSize: '11px',
     fontWeight: 700,
-    color: `rgba(255,255,255,${o.on ? 0.85 : 0.4})`,
+    color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
     textTransform: 'uppercase',
     letterSpacing: '0.5px'
   }
@@ -212,7 +212,7 @@ export function StatusBar() {
       width: '1px',
       alignSelf: 'stretch',
       margin: '4px 0',
-      background: `rgba(255,255,255,${o.on ? 0.2 : 0.12})`,
+      background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.12})`,
       flexShrink: 0
     }} />
   )
@@ -226,7 +226,7 @@ export function StatusBar() {
       height: '100%',
       padding: '0 14px',
       fontSize: '13px',
-      color: `rgba(255,255,255,${o.textSec})`
+      color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`
     }}>
 
       {/* ─── GPS Position (UTM) ─── */}
@@ -236,7 +236,7 @@ export function StatusBar() {
         </span>
         <span style={{
           ...monoStyle,
-          color: gpsUtm ? `rgba(255,255,255,${o.on ? 0.95 : 0.85})` : `rgba(255,255,255,${o.on ? 0.35 : 0.2})`
+          color: gpsUtm ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.95 : 0.85})` : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.35 : 0.2})`
         }}>
           {gpsUtm ? utmGridRef : '---'}
         </span>
@@ -244,17 +244,9 @@ export function StatusBar() {
 
       <Sep />
 
-      {/* ─── Mouse Position (feste Breite, springt nicht) ─── */}
-      <span style={{ ...monoStyle, color: mousePosition ? `rgba(255,255,255,${o.on ? 0.92 : 0.75})` : `rgba(255,255,255,${o.borderStrong})`, minWidth: '145px' }}>
-        {mousePosition ? mouseLatLon : '---'}
-      </span>
-
-      <span style={{ ...monoStyle, color: mousePosition ? `rgba(255,255,255,${o.text})` : `rgba(255,255,255,${o.on ? 0.2 : 0.1})`, minWidth: '120px' }}>
+      {/* ─── Mouse Position (nur UTM) ─── */}
+      <span style={{ ...monoStyle, color: mousePosition ? `rgba(${o.c},${o.c},${o.c},${o.text})` : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`, minWidth: '120px' }}>
         {mousePosition ? mouseUTM : '---'}
-      </span>
-
-      <span style={{ fontSize: '10px', fontWeight: 600, color: `rgba(255,255,255,${o.on ? 0.4 : 0.25})`, letterSpacing: '0.5px' }}>
-        WGS84
       </span>
 
       <Sep />
@@ -270,14 +262,14 @@ export function StatusBar() {
             gap: '6px',
             padding: '2px 10px',
             borderRadius: '4px',
-            background: elev != null ? 'rgba(34,197,94,0.08)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
-            border: `1px solid ${elev != null ? 'rgba(34,197,94,0.2)' : `rgba(255,255,255,${o.bgSoft})`}`,
+            background: elev != null ? 'rgba(34,197,94,0.08)' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`,
+            border: `1px solid ${elev != null ? 'rgba(34,197,94,0.2)' : `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`}`,
             flexShrink: 0
           }}>
             <span style={{
               fontSize: '11px',
               fontWeight: 700,
-              color: elev != null ? '#22c55e' : `rgba(255,255,255,${o.on ? 0.5 : 0.3})`,
+              color: elev != null ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})`,
               letterSpacing: '0.5px'
             }}>
               GND
@@ -285,7 +277,7 @@ export function StatusBar() {
             <span style={{
               ...monoStyle,
               fontWeight: 600,
-              color: elev != null ? '#fff' : `rgba(255,255,255,${o.on ? 0.35 : 0.2})`
+              color: elev != null ? '#fff' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.35 : 0.2})`
             }}>
               {elev != null
                 ? `${Math.round(elev * 3.28084)} ft`
@@ -293,7 +285,7 @@ export function StatusBar() {
               }
             </span>
             {source === 'gps' && elev != null && (
-              <span style={{ fontSize: '9px', color: `rgba(255,255,255,${o.on ? 0.5 : 0.3})` }}>GPS</span>
+              <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})` }}>GPS</span>
             )}
           </div>
         )
@@ -315,8 +307,8 @@ export function StatusBar() {
             padding: 0,
             border: '1px solid rgba(34,197,94,0.2)',
             borderRadius: '4px',
-            background: hgtImporting || showHgtMenu ? 'rgba(34,197,94,0.15)' : `rgba(255,255,255,${o.on ? 0.08 : 0.03})`,
-            color: hgtTileCount > 0 ? '#22c55e' : `rgba(255,255,255,${o.on ? 0.5 : 0.3})`,
+            background: hgtImporting || showHgtMenu ? 'rgba(34,197,94,0.15)' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`,
+            color: hgtTileCount > 0 ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.5 : 0.3})`,
             cursor: hgtImporting ? 'wait' : 'pointer',
             flexShrink: 0,
             opacity: hgtImporting ? 0.6 : 1,
@@ -336,8 +328,8 @@ export function StatusBar() {
               position: 'fixed',
               bottom: '40px',
               left: hgtBtnRef.current ? hgtBtnRef.current.getBoundingClientRect().left : 0,
-              background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
-              border: `1px solid rgba(255,255,255,${o.on ? 0.2 : 0.1})`,
+              background: o.panelGradient,
+              border: `1px solid rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
               borderRadius: '6px',
               padding: '4px',
               zIndex: 9999,
@@ -356,12 +348,12 @@ export function StatusBar() {
                 border: 'none',
                 borderRadius: '4px',
                 background: 'transparent',
-                color: `rgba(255,255,255,${o.on ? 0.95 : 0.85})`,
+                color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.95 : 0.85})`,
                 fontSize: '12px',
                 cursor: 'pointer',
                 textAlign: 'left'
               }}
-              onMouseEnter={e => e.currentTarget.style.background = `rgba(255,255,255,${o.on ? 0.2 : 0.1})`}
+              onMouseEnter={e => e.currentTarget.style.background = `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -380,12 +372,12 @@ export function StatusBar() {
                 border: 'none',
                 borderRadius: '4px',
                 background: 'transparent',
-                color: `rgba(255,255,255,${o.on ? 0.95 : 0.85})`,
+                color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.95 : 0.85})`,
                 fontSize: '12px',
                 cursor: 'pointer',
                 textAlign: 'left'
               }}
-              onMouseEnter={e => e.currentTarget.style.background = `rgba(255,255,255,${o.on ? 0.2 : 0.1})`}
+              onMouseEnter={e => e.currentTarget.style.background = `rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -405,7 +397,7 @@ export function StatusBar() {
         <span style={labelStyle}>TRK</span>
         <span style={{
           ...monoStyle,
-          color: track.length > 0 ? `rgba(255,255,255,${o.on ? 0.92 : 0.75})` : `rgba(255,255,255,${o.on ? 0.35 : 0.2})`
+          color: track.length > 0 ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.92 : 0.75})` : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.35 : 0.2})`
         }}>
           {track.length}
         </span>
@@ -429,7 +421,7 @@ export function StatusBar() {
           ...monoStyle,
           fontWeight: 700,
           fontSize: '11px',
-          color: windSourceFilter === 'all' ? `rgba(255,255,255,${o.on ? 0.85 : 0.4})`
+          color: windSourceFilter === 'all' ? `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`
                : windSourceFilter === 'forecast' ? '#0ea5e9'
                : windSourceFilter === 'measured' ? '#22c55e'
                : '#a855f7',
@@ -487,14 +479,14 @@ export function StatusBar() {
           width: 7,
           height: 7,
           borderRadius: '50%',
-          background: isConnected ? '#22c55e' : `rgba(255,255,255,${o.borderStrong})`,
+          background: isConnected ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.borderStrong})`,
           boxShadow: isConnected ? '0 0 4px #22c55e' : 'none',
           flexShrink: 0
         }} />
         <span style={{
           fontSize: '11px',
           fontWeight: 700,
-          color: isConnected ? '#22c55e' : `rgba(255,255,255,${o.on ? 0.4 : 0.25})`,
+          color: isConnected ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.4 : 0.25})`,
           letterSpacing: '0.5px'
         }}>
           BLS
@@ -506,7 +498,7 @@ export function StatusBar() {
       {/* ─── Time (based on settings) ─── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
         <span style={labelStyle}>{settings.taskTimeZone === 'local' ? 'LOC' : 'UTC'}</span>
-        <span style={{ ...monoStyle, color: `rgba(255,255,255,${o.on ? 0.95 : 0.85})` }}>
+        <span style={{ ...monoStyle, color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.95 : 0.85})` }}>
           {settings.taskTimeZone === 'local'
             ? currentTime.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
             : currentTime.toISOString().substring(11, 19)
@@ -531,7 +523,7 @@ export function StatusBar() {
             border: 'none',
             borderRadius: '4px',
             background: settings.navLineEnabled ? 'rgba(34, 197, 94, 0.2)' : 'transparent',
-            color: settings.navLineEnabled ? '#22c55e' : `rgba(255,255,255,${o.textDim})`,
+            color: settings.navLineEnabled ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.textDim})`,
             cursor: 'pointer',
             transition: 'all 0.15s',
             flexShrink: 0,
@@ -539,11 +531,11 @@ export function StatusBar() {
           }}
           onMouseEnter={e => {
             e.currentTarget.style.background = 'rgba(34, 197, 94, 0.15)'
-            e.currentTarget.style.color = settings.navLineEnabled ? '#22c55e' : `rgba(255,255,255,${o.textSec})`
+            e.currentTarget.style.color = settings.navLineEnabled ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.textSec})`
           }}
           onMouseLeave={e => {
             e.currentTarget.style.background = settings.navLineEnabled ? 'rgba(34, 197, 94, 0.2)' : 'transparent'
-            e.currentTarget.style.color = settings.navLineEnabled ? '#22c55e' : `rgba(255,255,255,${o.textDim})`
+            e.currentTarget.style.color = settings.navLineEnabled ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.textDim})`
           }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -568,18 +560,18 @@ export function StatusBar() {
           border: 'none',
           borderRadius: '4px',
           background: isFullscreen ? 'rgba(100, 116, 139, 0.2)' : 'transparent',
-          color: isFullscreen ? '#94a3b8' : `rgba(255,255,255,${o.textDim})`,
+          color: isFullscreen ? '#94a3b8' : `rgba(${o.c},${o.c},${o.c},${o.textDim})`,
           cursor: 'pointer',
           transition: 'all 0.15s',
           flexShrink: 0
         }}
         onMouseEnter={e => {
           e.currentTarget.style.background = 'rgba(100, 116, 139, 0.15)'
-          e.currentTarget.style.color = `rgba(255,255,255,${o.textSec})`
+          e.currentTarget.style.color = `rgba(${o.c},${o.c},${o.c},${o.textSec})`
         }}
         onMouseLeave={e => {
           e.currentTarget.style.background = isFullscreen ? 'rgba(100, 116, 139, 0.2)' : 'transparent'
-          e.currentTarget.style.color = isFullscreen ? '#94a3b8' : `rgba(255,255,255,${o.textDim})`
+          e.currentTarget.style.color = isFullscreen ? '#94a3b8' : `rgba(${o.c},${o.c},${o.c},${o.textDim})`
         }}
       >
         {isFullscreen ? (

@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.2.6] - 2026-04-08
+## [1.2.7] - 2026-04-08
 
 ### Bugfixes
 - Fix: 3D-Ansicht von gespeicherten Fahrten funktioniert wieder. Vorher versuchte die App die Flugdaten von Supabase zu laden (Fehler: "Cannot coerce the result to a single JSON object"), jetzt werden die lokalen Backups korrekt verwendet.

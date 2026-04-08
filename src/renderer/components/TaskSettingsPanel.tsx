@@ -1748,6 +1748,20 @@ export function TaskSettingsPanel({ isOpen, onClose }: TaskSettingsPanelProps) {
               Einstellungen für die Aufzeichnung von Trackpunkten
             </div>
 
+            {/* Auto-Takeoff */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input type="checkbox"
+                  checked={settings.autoTakeoffDetection !== false}
+                  onChange={e => updateLocalSettings({ autoTakeoffDetection: e.target.checked })}
+                  style={{ accentColor: '#22c55e', cursor: 'pointer', width: '16px', height: '16px' }} />
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: o.textColor }}>Auto-Takeoff Erkennung</div>
+                  <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},0.4)` }}>Aufnahme startet automatisch wenn der Ballon abhebt (Vario &gt; 0.3 m/s für ~5 Sek.)</div>
+                </div>
+              </label>
+            </div>
+
             {/* Recording Mode */}
             <div style={{ marginBottom: '16px' }}>
               <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '8px' }}>Aufzeichnungsmodus</div>

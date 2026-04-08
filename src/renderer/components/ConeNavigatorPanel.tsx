@@ -6,7 +6,7 @@ import { useFlightStore } from '../stores/flightStore'
 import { getOutdoor } from '../utils/outdoorStyles'
 import { calculateCone, calculateConeGuidance, ConeResult, TurnLayer } from '../utils/coneNavigator'
 import { latLonToMGRS, formatCoordinate } from '../utils/coordinatesWGS84'
-import { Goal } from '../../shared/types'
+import { Goal, WindSource, WindSourceFilter } from '../../shared/types'
 
 interface Props {
   onClose: () => void
@@ -19,7 +19,15 @@ export function ConeNavigatorPanel({ onClose, style, onMouseDown, onTouchStart }
   const { gpsData, baroData, selectedGoal, settings, tasks, updateTask, setSelectedGoal, windLayers: allWindLayers, setClimbPointResult, setConeLines, coneDeclared, setConeDeclared, coneResult, setConeResult } = useFlightStore()
   const o = getOutdoor(settings.outdoorMode)
 
-  const filteredWindLayers = allWindLayers.filter(l => l.speed > 0)
+  const [coneWindFilter, setConeWindFilter] = useState<WindSourceFilter>('all')
+  const filteredWindLayers = allWindLayers.filter(l => {
+    if (l.speed <= 0) return false
+    if (coneWindFilter === 'all') return true
+    if (coneWindFilter === 'forecast') return l.source === WindSource.Forecast
+    if (coneWindFilter === 'measured') return l.source === WindSource.Measured
+    if (coneWindFilter === 'sounding') return l.source === WindSource.Windsond || l.source === WindSource.Pibal
+    return true
+  })
   const activeCompetitionMap = useFlightStore(s => s.activeCompetitionMap)
   const effectiveUtmZone = activeCompetitionMap?.utmReprojection?.utmZone || activeCompetitionMap?.utmZone || settings.utmZone || 33
 
@@ -28,6 +36,7 @@ export function ConeNavigatorPanel({ onClose, style, onMouseDown, onTouchStart }
   const [minAltFt, setMinAltFt] = useState(1000)
   const [maxAltFt, setMaxAltFt] = useState(0)
   const [minDistM, setMinDistM] = useState(1000)
+  const [pendingResult, setPendingResult] = useState<ConeResult | null>(null)  // Ergebnis das auf Bestätigung wartet
   const cone = coneResult as ConeResult | null
   const declared = coneDeclared as { lat: number; lon: number; altitude: number; turnLayer: TurnLayer } | null
 
@@ -59,7 +68,7 @@ export function ConeNavigatorPanel({ onClose, style, onMouseDown, onTouchStart }
     }
   }, [guidance?.livePath?.length, gpsData?.latitude, gpsData?.longitude, currentAlt, targetReached])
 
-  // Berechnen
+  // Berechnen — erst prüfen, dann bei Warnung Bestätigung zeigen
   const handleCalculate = () => {
     if (!gpsData || !selectedGoal || filteredWindLayers.length === 0) return
     const alt = baroData?.pressureAltitude || gpsData.altitude || 0
@@ -71,22 +80,34 @@ export function ConeNavigatorPanel({ onClose, style, onMouseDown, onTouchStart }
       goalLat: selectedGoal.position.latitude, goalLon: selectedGoal.position.longitude
     })
 
-    setConeResult(result)
-    if (result) {
-      setConeDeclared({ lat: result.target.lat, lon: result.target.lon, altitude: result.target.altitude, turnLayer: result.turnLayer })
-      // Goal auf Deklarationspunkt setzen (wenn Goal vorhanden)
-      if (selectedGoal) {
-        const updatedGoal: Goal = {
-          ...selectedGoal,
-          position: { ...selectedGoal.position, latitude: result.target.lat, longitude: result.target.lon, altitude: result.target.altitude, timestamp: new Date() }
-        }
-        const parentTask = tasks.find(t => t.goals.some(g => g.id === selectedGoal.id))
-        if (parentTask) updateTask({ ...parentTask, goals: parentTask.goals.map(g => g.id === selectedGoal.id ? updatedGoal : g) })
-        setSelectedGoal(updatedGoal)
-      }
-      setClimbPointResult({ path: result.path, bestPoint: result.target, distanceToGoal: result.distToGoal })
-      setConeLines(result.cone)
+    if (!result) return
+
+    // Wenn keine gute Drehschicht (steerRange === 0 oder Warnung), Bestätigung zeigen
+    if (result.turnLayer.steerRange === 0 || result.turnLayer.warning) {
+      setPendingResult(result)
+      return
     }
+
+    // Sofort deklarieren wenn alles OK
+    applyResult(result)
+  }
+
+  // Ergebnis anwenden (deklarieren)
+  const applyResult = (result: ConeResult) => {
+    setConeResult(result)
+    setConeDeclared({ lat: result.target.lat, lon: result.target.lon, altitude: result.target.altitude, turnLayer: result.turnLayer })
+    if (selectedGoal) {
+      const updatedGoal: Goal = {
+        ...selectedGoal,
+        position: { ...selectedGoal.position, latitude: result.target.lat, longitude: result.target.lon, altitude: result.target.altitude, timestamp: new Date() }
+      }
+      const parentTask = tasks.find(t => t.goals.some(g => g.id === selectedGoal.id))
+      if (parentTask) updateTask({ ...parentTask, goals: parentTask.goals.map(g => g.id === selectedGoal.id ? updatedGoal : g) })
+      setSelectedGoal(updatedGoal)
+    }
+    setClimbPointResult({ path: result.path, bestPoint: result.target, distanceToGoal: result.distToGoal })
+    setConeLines(result.cone)
+    setPendingResult(null)
   }
 
   const handleReset = () => {
@@ -115,9 +136,31 @@ export function ConeNavigatorPanel({ onClose, style, onMouseDown, onTouchStart }
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-        <span style={{ fontSize: '12px', fontWeight: 700, color: '#06b6d4' }}>
-          PDG/FON {declared && <span style={{ color: '#22c55e', fontSize: '9px', marginLeft: '6px' }}>DEKLARIERT</span>}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: '#06b6d4' }}>
+            PDG/FON {declared && <span style={{ color: '#22c55e', fontSize: '9px', marginLeft: '6px' }}>DEKLARIERT</span>}
+          </span>
+          {/* Wind-Quellen-Filter */}
+          <div style={{ display: 'flex', gap: '2px', background: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.12 : 0.05})`, borderRadius: '4px', padding: '2px' }}>
+            {([
+              { key: 'all' as const, label: 'Alle', color: '#3b82f6' },
+              { key: 'forecast' as const, label: 'FC', color: '#0ea5e9' },
+              { key: 'measured' as const, label: 'Live', color: '#22c55e' },
+              { key: 'sounding' as const, label: '.dat', color: '#a855f7' }
+            ]).map(opt => (
+              <button key={opt.key} onClick={() => setConeWindFilter(opt.key)}
+                title={opt.key === 'all' ? 'Alle Windquellen' : opt.key === 'forecast' ? 'Nur Forecast-Winde' : opt.key === 'measured' ? 'Nur Live-gemessene Winde' : 'Nur Windsond/Pibal-Dateien'}
+                style={{
+                  padding: '2px 5px', border: 'none', borderRadius: '3px', fontSize: '9px', fontWeight: 700, cursor: 'pointer',
+                  background: coneWindFilter === opt.key ? `${opt.color}30` : 'transparent',
+                  color: coneWindFilter === opt.key ? opt.color : `rgba(${o.c},${o.c},${o.c},${o.textDim})`,
+                  transition: 'all 0.15s'
+                }}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <button onClick={() => { onClose(); if (!declared) handleReset() }}
           style={{ background: 'none', border: 'none', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, cursor: 'pointer', fontSize: '15px', padding: '0 2px' }}>✕</button>
       </div>
@@ -185,6 +228,44 @@ export function ConeNavigatorPanel({ onClose, style, onMouseDown, onTouchStart }
             </div>
           )}
         </>
+      )}
+
+      {/* ═══ WARNUNG — Bestätigung ═══ */}
+      {pendingResult && !declared && (
+        <div style={{
+          padding: '12px', borderRadius: '8px', marginBottom: '8px',
+          background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.4)',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b', marginBottom: '6px' }}>
+            ⚠ {pendingResult.turnLayer.steerRange === 0
+              ? 'Keine Drehschicht gefunden'
+              : 'Eingeschränkte Drehschicht'}
+          </div>
+          <div style={{ fontSize: '10px', color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`, marginBottom: '8px', lineHeight: 1.4 }}>
+            {pendingResult.turnLayer.steerRange === 0
+              ? 'Nur Drift möglich, keine Links/Rechts Korrektur. Trotzdem deklarieren?'
+              : `${pendingResult.turnLayer.warning || 'Drehschicht mit Einschränkungen.'} Trotzdem deklarieren?`}
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={() => setPendingResult(null)}
+              style={{
+                flex: 1, padding: '8px', borderRadius: '6px', border: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
+                background: 'transparent', color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`,
+                fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+              }}>
+              Abbrechen
+            </button>
+            <button onClick={() => applyResult(pendingResult)}
+              style={{
+                flex: 1, padding: '8px', borderRadius: '6px', border: 'none',
+                background: '#f59e0b', color: 'white',
+                fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+              }}>
+              Trotzdem deklarieren
+            </button>
+          </div>
+        </div>
       )}
 
       {/* ═══ DEKLARIERT ═══ */}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuthStore } from '../stores/authStore'
 
-const APP_VERSION = '1.2.5'
+const APP_VERSION = '1.2.6'
 
 export function LoginScreen() {
   const { login, activateLicense, bootstrapAdmin, checkIsEmpty, error, isLoading, clearError } = useAuthStore()

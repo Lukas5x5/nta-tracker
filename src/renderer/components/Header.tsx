@@ -1383,6 +1383,18 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
           </svg>
           ANG Berechnung
         </button>
+        {/* WNV (Wind Navigation) */}
+        <button
+          onClick={() => { setActiveToolPanel(activeToolPanel === 'wnv' ? null : 'wnv'); setShowToolsDropdown(false) }}
+          style={{ ...dropdownItem, color: activeToolPanel === 'wnv' ? '#f59e0b' : `rgba(${o.c},${o.c},${o.c},${o.textSec})` }}
+          onMouseEnter={e => (e.currentTarget.style.background = `rgba(${o.c},${o.c},${o.c},${o.on ? 0.12 : 0.05})`)}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          <svg width={Math.round(16 * scale)} height={Math.round(16 * scale)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 2 L12 22" /><path d="M5 5 L12 12 L19 5" /><circle cx="12" cy="18" r="2" />
+          </svg>
+          Wind Nav <span style={{ fontSize: '8px', opacity: 0.5 }}>BETA</span>
+        </button>
       </div>
     )}
     </>

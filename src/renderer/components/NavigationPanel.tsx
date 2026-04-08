@@ -4,6 +4,8 @@ import { useFlightStore } from '../stores/flightStore'
 import { formatAltitude, formatSpeed, formatHeading, formatVariometer, formatDistance } from '../utils/formatting'
 import { calculateDistance, calculateBearing, calculateDestination, calculateClimbPoint, ClimbPointResult, calculatePdgFon, PdgFonResult, calculatePdgFonCorrection, calculateLandRun, LandRunResult, LandRunLimits, calculateAngleTask, AngleTaskResult, interpolateWind } from '../utils/navigation'
 import { ConeNavigatorPanel } from './ConeNavigatorPanel'
+import { WindNavPanel } from './WindNavPanel'
+import { calculateConeGuidance, TurnLayer } from '../utils/coneNavigator'
 import { latLonToUTM, utmToLatLon, formatCoordinate, getGridPrecision } from '../utils/coordinatesWGS84'
 import { NavPanelField, NavPanelFieldType, GPSFix, Goal, Task } from '../../shared/types'
 import { AltitudeProfilePanel } from './AltitudeProfilePanel'
@@ -123,6 +125,7 @@ export function NavigationPanel() {
   const showLandRunPanel = activeToolPanel === 'lrn'
   const showAptPanel = activeToolPanel === 'apt'
   const showAngPanel = activeToolPanel === 'ang'
+  const showWnvPanel = activeToolPanel === 'wnv'
 
   const [isDragging, setIsDragging] = useState(false)
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -132,13 +135,12 @@ export function NavigationPanel() {
   const [showSettings, setShowSettings] = useState(false)
   const [showDropsPanel, setShowDropsPanel] = useState(false)
   const [showGpsSimPanel, setShowGpsSimPanel] = useState(false)
-  const [lrnClimbRate, setLrnClimbRate] = useState(1.5) // m/s
-  const [lrnLimitMode, setLrnLimitMode] = useState<'leg1' | 'leg2' | 'leg1+leg2' | 'total'>('leg1')
-  const [lrnLimitUnit, setLrnLimitUnit] = useState<'min' | 'km'>('min')
-  const [lrnLeg1Value, setLrnLeg1Value] = useState(10) // Min oder km
-  const [lrnLeg2Value, setLrnLeg2Value] = useState(10) // Min oder km
-  const [lrnTotalValue, setLrnTotalValue] = useState(20) // Min oder km
-  const [lrnResult, setLrnResult] = useState<LandRunResult | null>(null)
+  const lrnConfig = useFlightStore(s => s.lrnConfig)
+  const updateLrnConfig = useFlightStore(s => s.updateLrnConfig)
+  const lrnResult = useFlightStore(s => s.lrnCalcResult)
+  const setLrnResult = useFlightStore(s => s.setLrnCalcResult)
+  const lrnSelectedAlt = useFlightStore(s => s.lrnSelectedAlt)
+  const setLrnSelectedAlt = useFlightStore(s => s.setLrnSelectedAlt)
   const [lrnCalculating, setLrnCalculating] = useState(false)
   const [landingLiveVario, setLandingLiveVario] = useState(false)
 
@@ -148,10 +150,6 @@ export function NavigationPanel() {
     const vario = Math.abs(baroData?.variometer || 0)
     if (vario > 0.1) setLandingSinkRate(Math.round(vario * 10) / 10)
   }, [landingLiveVario, baroData?.variometer])
-  const [lrnSelectedAlt, setLrnSelectedAlt] = useState<number>(-1) // Index der ausgewählten Alternative (-1 = best)
-  const [lrnAltLimit, setLrnAltLimit] = useState(false) // Höhenbegrenzung aktiv?
-  const [lrnAltLimitMode, setLrnAltLimitMode] = useState<'ceiling' | 'floor'>('ceiling') // Obergrenze oder Untergrenze
-  const [lrnAltLimitValue, setLrnAltLimitValue] = useState(5000) // ft
   const setLandRunResult = useFlightStore(s => s.setLandRunResult)
   // ANG (Angle Task) Rechner State
   const [angSetDir, setAngSetDir] = useState(0)
@@ -253,6 +251,80 @@ export function NavigationPanel() {
   const [pdgDeclared, setPdgDeclared] = useState<{ lat: number; lon: number; altitude: number } | null>(null)
   const [pdgCountdownStart, setPdgCountdownStart] = useState<number | null>(null)
   const [pdgCountdown, setPdgCountdown] = useState<number | null>(null)
+  // CPA-Marker: Nächster Punkt am Ziel basierend auf Wind-Drift
+  const cpaMarkerActive = useFlightStore(s => s.cpaMarkerActive)
+  const setCpaMarkerActive = useFlightStore(s => s.setCpaMarkerActive)
+  const setCpaMarker = useFlightStore(s => s.setCpaMarker)
+
+  // CPA-Marker: Nächster Punkt am Ziel auf aktueller Flugbahn (Heading-basiert)
+  // Projiziert das Goal senkrecht auf die Heading-Linie und zeigt den Drop-Punkt
+  useEffect(() => {
+    if (!cpaMarkerActive || !gpsData || !selectedGoal) {
+      if (cpaMarkerActive) setCpaMarker(null)
+      return
+    }
+    const heading = gpsData.heading || 0
+    const goalLat = selectedGoal.position.latitude
+    const goalLon = selectedGoal.position.longitude
+
+    // Bearing und Distanz zum Goal
+    const brg = calculateBearing(gpsData.latitude, gpsData.longitude, goalLat, goalLon)
+    const dist = calculateDistance(gpsData.latitude, gpsData.longitude, goalLat, goalLon)
+
+    // Winkel zwischen Heading und Goal-Bearing
+    let angleDiff = brg - heading
+    if (angleDiff > 180) angleDiff -= 360
+    if (angleDiff < -180) angleDiff += 360
+
+    // Projektion: Entfernung entlang der Heading-Linie bis zum nächsten Punkt
+    const alongTrack = dist * Math.cos(angleDiff * Math.PI / 180)
+
+    // CPA-Punkt = Position entlang Heading in alongTrack Metern
+    // Wenn negativ (hinter uns): Punkt bleibt stehen, distToReach negativ = vorbeigefahren
+    const cpaPoint = alongTrack >= 0
+      ? calculateDestination(gpsData.latitude, gpsData.longitude, heading, alongTrack)
+      : calculateDestination(gpsData.latitude, gpsData.longitude, heading, 0)
+    const cpaDist = alongTrack >= 0
+      ? calculateDistance(cpaPoint.lat, cpaPoint.lon, goalLat, goalLon)
+      : calculateDistance(gpsData.latitude, gpsData.longitude, goalLat, goalLon)
+
+    setCpaMarker({
+      lat: cpaPoint.lat, lon: cpaPoint.lon,
+      distance: Math.round(cpaDist),
+      distToReach: Math.round(alongTrack)  // Negativ = vorbeigefahren
+    })
+  }, [cpaMarkerActive, gpsData?.latitude, gpsData?.longitude, gpsData?.heading, selectedGoal])
+
+  // Cone Navigator: Live-Pfad auch bei geschlossenem Panel aktualisieren
+  const coneDeclared = useFlightStore(s => s.coneDeclared) as { lat: number; lon: number; altitude: number; turnLayer: TurnLayer } | null
+  const setConeLines = useFlightStore(s => s.setConeLines)
+
+  useEffect(() => {
+    // Nur wenn deklariert UND Panel geschlossen
+    if (!coneDeclared || !gpsData || showClimbPanel) return
+    const currentAlt = baroData?.pressureAltitude || gpsData.altitude || 0
+    const targetReached = Math.abs(currentAlt - coneDeclared.altitude) < 15
+    if (targetReached) {
+      setClimbPointResult(null)
+      return
+    }
+    const varioMs = baroData?.variometer || 0
+    const wl = filteredWindLayers.filter(l => l.speed > 0)
+    if (wl.length === 0) return
+    const guidance = calculateConeGuidance(
+      gpsData.latitude, gpsData.longitude, currentAlt,
+      coneDeclared.lat, coneDeclared.lon, coneDeclared.altitude,
+      coneDeclared.turnLayer, wl, varioMs
+    )
+    if (guidance?.livePath && guidance.livePath.length > 1) {
+      setClimbPointResult({
+        path: guidance.livePath,
+        bestPoint: guidance.livePath[guidance.livePath.length - 1],
+        distanceToGoal: guidance.distToTarget
+      })
+    }
+  }, [coneDeclared, gpsData?.latitude, gpsData?.longitude, baroData?.pressureAltitude, baroData?.variometer, showClimbPanel])
+
   // Cone Navigator States (jetzt in ConeNavigatorPanel.tsx)
   const [climbCountdownStart, setClimbCountdownStart] = useState<number | null>(null)
   const [climbCountdownRemaining, setClimbCountdownRemaining] = useState<number | null>(null)
@@ -849,8 +921,8 @@ export function NavigationPanel() {
         top: position.y,
         zIndex: 1000,
         background: o.panelGradient,
-        borderRadius: '16px',
-        padding: '16px',
+        borderRadius: '12px',
+        padding: '10px',
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
         minWidth: '200px',
@@ -864,62 +936,37 @@ export function NavigationPanel() {
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
     >
-      {/* Header mit Titel, m/ft Toggle und Settings */}
+      {/* Header */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '12px',
-        paddingBottom: '8px',
+        marginBottom: '8px',
+        paddingBottom: '6px',
         borderBottom: '1px solid rgba(${o.c},${o.c},${o.c},0.1)'
       }}>
         <div style={{
-          fontSize: '14px',
+          fontSize: '12px',
           fontWeight: 600,
           color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`,
           letterSpacing: '1px'
         }}>
           NAVIGATION
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          {/* m/ft Toggle */}
-          <button
-            onClick={() => updateSettings({
-              altitudeUnit: settings.altitudeUnit === 'meters' ? 'feet' : 'meters',
-              distanceUnit: settings.altitudeUnit === 'meters' ? 'feet' : 'meters'
-            })}
-            style={{
-              background: `rgba(${o.c},${o.c},${o.c},${o.border})`,
-              border: 'none',
-              color: o.textColor,
-              fontSize: '11px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              padding: '4px 8px',
-              borderRadius: '6px',
-              fontFamily: 'monospace',
-              transition: 'all 0.15s'
-            }}
-            title="Zwischen Meter und Fuß umschalten"
-          >
-            {settings.altitudeUnit === 'meters' ? 'm' : 'ft'}
-          </button>
-          {/* Settings Button */}
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            style={{
-              background: showSettings ? 'rgba(59, 130, 246, 0.3)' : 'transparent',
-              border: 'none',
-              color: showSettings ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
-              fontSize: '18px',
-              cursor: 'pointer',
-              padding: '4px 8px',
-              borderRadius: '6px'
-            }}
-          >
-            ⚙
-          </button>
-        </div>
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          style={{
+            background: showSettings ? 'rgba(59, 130, 246, 0.3)' : 'transparent',
+            border: 'none',
+            color: showSettings ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`,
+            fontSize: '16px',
+            cursor: 'pointer',
+            padding: '2px 6px',
+            borderRadius: '4px'
+          }}
+        >
+          ⚙
+        </button>
       </div>
 
       {/* Settings Panel */}
@@ -1037,12 +1084,12 @@ export function NavigationPanel() {
       )}
 
       {/* Navigationsfelder - Hauptbereich */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
         {enabledFields.map(field => {
           const { value, unit, color: dynamicColor } = getFieldValue(field)
           const isSelected = editingField === field.id
           const fieldFontSize = field.fontSizePx ? `${field.fontSizePx}px` : fontSizeMap[field.fontSize]
-          const fieldPadding = field.fieldHeight ? `${Math.max(4, (field.fieldHeight - 20) / 2)}px 10px` : '6px 10px'
+          const fieldPadding = field.fieldHeight ? `${Math.max(3, (field.fieldHeight - 20) / 2)}px 8px` : '4px 8px'
 
           return (
             <div
@@ -1050,7 +1097,7 @@ export function NavigationPanel() {
               onDoubleClick={() => setEditingField(isSelected ? null : field.id)}
               style={{
                 padding: fieldPadding,
-                borderRadius: '8px',
+                borderRadius: '6px',
                 background: isSelected
                   ? 'rgba(59, 130, 246, 0.15)'
                   : field.bgColor || `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`,
@@ -1099,13 +1146,13 @@ export function NavigationPanel() {
       <div style={{
         height: '1px',
         background: `rgba(${o.c},${o.c},${o.c},${o.border})`,
-        margin: '10px 0'
+        margin: '6px 0'
       }} />
 
       {/* Action Buttons - kompakt horizontal */}
       <div style={{
         display: 'flex',
-        gap: '6px',
+        gap: '4px',
         flexWrap: 'wrap'
       }}>
         {/* DROP Button */}
@@ -1114,8 +1161,8 @@ export function NavigationPanel() {
           disabled={!gpsData}
           style={{
             flex: 1,
-            minWidth: '60px',
-            padding: '8px 10px',
+            minWidth: '50px',
+            padding: '6px 8px',
             borderRadius: '6px',
             background: gpsData ? 'rgba(239, 68, 68, 0.15)' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`,
             border: 'none',
@@ -1134,6 +1181,33 @@ export function NavigationPanel() {
           DROP
         </button>
 
+        {/* CPA-Marker Button */}
+        <button
+          onClick={() => setCpaMarkerActive(!cpaMarkerActive)}
+          disabled={!gpsData || !selectedGoal}
+          title="Zeigt den nächsten Punkt am Ziel basierend auf Wind-Drift"
+          style={{
+            minWidth: '36px',
+            padding: '6px 8px',
+            borderRadius: '6px',
+            background: cpaMarkerActive
+              ? 'rgba(20, 184, 166, 0.2)'
+              : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.08 : 0.03})`,
+            border: cpaMarkerActive ? '1px solid rgba(20, 184, 166, 0.4)' : 'none',
+            color: cpaMarkerActive ? '#14b8a6' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})`,
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: (gpsData && selectedGoal) ? 'pointer' : 'not-allowed',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            transition: 'all 0.15s'
+          }}
+        >
+          CPA
+        </button>
+
         {/* Drops Liste Button */}
         <button
           onClick={() => {
@@ -1142,7 +1216,7 @@ export function NavigationPanel() {
           }}
           style={{
             minWidth: '40px',
-            padding: '8px 10px',
+            padding: '6px 8px',
             borderRadius: '6px',
             background: (showDropsPanel || markers.length > 0)
               ? 'rgba(239, 68, 68, 0.15)'
@@ -1172,7 +1246,7 @@ export function NavigationPanel() {
           style={{
             flex: 1,
             minWidth: '50px',
-            padding: '8px 10px',
+            padding: '6px 8px',
             borderRadius: '6px',
             background: (showCoursePanel || hdgCourseLines.length > 0)
               ? 'rgba(245, 158, 11, 0.15)'
@@ -2595,74 +2669,81 @@ export function NavigationPanel() {
 
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: '#22c55e' }}>△ Land Run</span>
-            <button onClick={() => { setActiveToolPanel(null); setLrnResult(null); setLandRunResult(null) }}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#22c55e' }}>△ Land Run</span>
+              {lrnResult && (
+                <button onClick={() => { setLrnResult(null); setLandRunResult(null); setLrnSelectedAlt(-1) }}
+                  title="Berechnung zurücksetzen"
+                  style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '3px', color: '#ef4444', cursor: 'pointer', fontSize: '9px', fontWeight: 600, padding: '2px 6px' }}>Reset</button>
+              )}
+            </div>
+            <button onClick={() => { setActiveToolPanel(null) }}
               style={{ background: 'none', border: 'none', color: `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.4})`, cursor: 'pointer', fontSize: '15px', padding: '0 2px' }}>✕</button>
           </div>
 
           {/* Modus + Einheit in einer Zeile */}
           <div style={{ display: 'flex', gap: '3px', marginBottom: '6px' }}>
             {([{ key: 'leg1' as const, label: 'Leg 1' }, { key: 'leg1+leg2' as const, label: 'L1+L2' }, { key: 'total' as const, label: 'Gesamt' }]).map(m => (
-              <button key={m.key} onClick={() => setLrnLimitMode(m.key)}
+              <button key={m.key} onClick={() => updateLrnConfig({ limitMode: m.key })}
                 style={{ flex: 1, padding: '4px 0', borderRadius: '4px', border: 'none', fontSize: '9px', fontWeight: 600, cursor: 'pointer',
-                  background: lrnLimitMode === m.key ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
-                  color: lrnLimitMode === m.key ? 'white' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>{m.label}</button>
+                  background: lrnConfig.limitMode === m.key ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
+                  color: lrnConfig.limitMode === m.key ? 'white' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>{m.label}</button>
             ))}
           </div>
           <div style={{ display: 'flex', gap: '3px', marginBottom: '8px' }}>
             {([{ key: 'min' as const, label: 'Min' }, { key: 'km' as const, label: 'km' }]).map(u => (
-              <button key={u.key} onClick={() => setLrnLimitUnit(u.key)}
+              <button key={u.key} onClick={() => updateLrnConfig({ limitUnit: u.key })}
                 style={{ flex: 1, padding: '4px 0', borderRadius: '4px', border: 'none', fontSize: '9px', fontWeight: 600, cursor: 'pointer',
-                  background: lrnLimitUnit === u.key ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
-                  color: lrnLimitUnit === u.key ? 'white' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>{u.label}</button>
+                  background: lrnConfig.limitUnit === u.key ? '#22c55e' : `rgba(${o.c},${o.c},${o.c},${o.bgSoft})`,
+                  color: lrnConfig.limitUnit === u.key ? 'white' : `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>{u.label}</button>
             ))}
           </div>
 
           {/* Slider(s) */}
-          {(lrnLimitMode === 'leg1' || lrnLimitMode === 'leg1+leg2') && (
+          {(lrnConfig.limitMode === 'leg1' || lrnConfig.limitMode === 'leg1+leg2') && (
             <div style={{ marginBottom: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '2px' }}>
-                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>{lrnLimitMode === 'leg1' ? 'Leg (A→B = B→C)' : 'Leg 1 (A→B)'}</span>
-                <span style={{ color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>{lrnLeg1Value} {lrnLimitUnit === 'min' ? 'Min' : 'km'}</span>
+                <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>{lrnConfig.limitMode === 'leg1' ? 'Leg (A→B = B→C)' : 'Leg 1 (A→B)'}</span>
+                <span style={{ color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>{lrnConfig.leg1Value} {lrnConfig.limitUnit === 'min' ? 'Min' : 'km'}</span>
               </div>
-              <input type="range" min={lrnLimitUnit === 'min' ? 3 : 1} max={lrnLimitUnit === 'min' ? 60 : 30} step="1" value={lrnLeg1Value}
-                onChange={e => setLrnLeg1Value(Number(e.target.value))} style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }} />
+              <input type="range" min={lrnConfig.limitUnit === 'min' ? 3 : 1} max={lrnConfig.limitUnit === 'min' ? 60 : 30} step="1" value={lrnConfig.leg1Value}
+                onChange={e => updateLrnConfig({ leg1Value: Number(e.target.value) })} style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }} />
             </div>
           )}
-          {lrnLimitMode === 'leg1+leg2' && (
+          {lrnConfig.limitMode === 'leg1+leg2' && (
             <div style={{ marginBottom: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '2px' }}>
                 <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Leg 2 (B→C)</span>
-                <span style={{ color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>{lrnLeg2Value} {lrnLimitUnit === 'min' ? 'Min' : 'km'}</span>
+                <span style={{ color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>{lrnConfig.leg2Value} {lrnConfig.limitUnit === 'min' ? 'Min' : 'km'}</span>
               </div>
-              <input type="range" min={lrnLimitUnit === 'min' ? 3 : 1} max={lrnLimitUnit === 'min' ? 60 : 30} step="1" value={lrnLeg2Value}
-                onChange={e => setLrnLeg2Value(Number(e.target.value))} style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }} />
+              <input type="range" min={lrnConfig.limitUnit === 'min' ? 3 : 1} max={lrnConfig.limitUnit === 'min' ? 60 : 30} step="1" value={lrnConfig.leg2Value}
+                onChange={e => updateLrnConfig({ leg2Value: Number(e.target.value) })} style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }} />
             </div>
           )}
-          {lrnLimitMode === 'total' && (
+          {lrnConfig.limitMode === 'total' && (
             <div style={{ marginBottom: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '2px' }}>
                 <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>Gesamt (A→C)</span>
-                <span style={{ color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>{lrnTotalValue} {lrnLimitUnit === 'min' ? 'Min' : 'km'}</span>
+                <span style={{ color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>{lrnConfig.totalValue} {lrnConfig.limitUnit === 'min' ? 'Min' : 'km'}</span>
               </div>
-              <input type="range" min={lrnLimitUnit === 'min' ? 5 : 2} max={lrnLimitUnit === 'min' ? 120 : 60} step="1" value={lrnTotalValue}
-                onChange={e => setLrnTotalValue(Number(e.target.value))} style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }} />
+              <input type="range" min={lrnConfig.limitUnit === 'min' ? 5 : 2} max={lrnConfig.limitUnit === 'min' ? 120 : 60} step="1" value={lrnConfig.totalValue}
+                onChange={e => updateLrnConfig({ totalValue: Number(e.target.value) })} style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }} />
             </div>
           )}
 
           {/* Höhenbegrenzung + Steigrate kompakt */}
           <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', alignItems: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', flex: 1 }}>
-              <input type="checkbox" checked={lrnAltLimit} onChange={e => setLrnAltLimit(e.target.checked)} style={{ accentColor: '#22c55e', cursor: 'pointer' }} />
+              <input type="checkbox" checked={lrnConfig.altLimit} onChange={e => updateLrnConfig({ altLimit: e.target.checked })} style={{ accentColor: '#22c55e', cursor: 'pointer' }} />
               <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textSec})` }}>Höhe</span>
             </label>
-            {lrnAltLimit && (
+            {lrnConfig.altLimit && (
               <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
-                <button onClick={() => setLrnAltLimitMode(lrnAltLimitMode === 'ceiling' ? 'floor' : 'ceiling')}
+                <button onClick={() => updateLrnConfig({ altLimitMode: lrnConfig.altLimitMode === 'ceiling' ? 'floor' : 'ceiling' })}
                   style={{ padding: '2px 5px', borderRadius: '3px', border: 'none', fontSize: '8px', fontWeight: 600, cursor: 'pointer', background: '#22c55e', color: 'white' }}>
-                  {lrnAltLimitMode === 'ceiling' ? 'MAX' : 'MIN'}
+                  {lrnConfig.altLimitMode === 'ceiling' ? 'MAX' : 'MIN'}
                 </button>
-                <input type="number" value={lrnAltLimitValue} onChange={e => setLrnAltLimitValue(Number(e.target.value))}
+                <input type="number" value={lrnConfig.altLimitValue} onChange={e => updateLrnConfig({ altLimitValue: Number(e.target.value) })}
                   style={{ width: '55px', padding: '3px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '3px', color: '#22c55e', fontSize: '11px', fontWeight: 700, fontFamily: 'monospace', textAlign: 'center' }} />
                 <span style={{ fontSize: '9px', color: `rgba(${o.c},${o.c},${o.c},${o.textDim})` }}>ft</span>
               </div>
@@ -2672,9 +2753,9 @@ export function NavigationPanel() {
           <div style={{ marginBottom: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '2px' }}>
               <span style={{ color: `rgba(${o.c},${o.c},${o.c},${o.textMuted})` }}>VARIO</span>
-              <span style={{ color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>{lrnClimbRate.toFixed(1)} m/s</span>
+              <span style={{ color: '#22c55e', fontWeight: 700, fontFamily: 'monospace' }}>{lrnConfig.climbRate.toFixed(1)} m/s</span>
             </div>
-            <input type="range" min="5" max="50" value={Math.round(lrnClimbRate * 10)} onChange={e => setLrnClimbRate(Number(e.target.value) / 10)}
+            <input type="range" min="5" max="50" value={Math.round(lrnConfig.climbRate * 10)} onChange={e => updateLrnConfig({ climbRate: Number(e.target.value) / 10 })}
               style={{ width: '100%', accentColor: '#22c55e', cursor: 'pointer' }} />
           </div>
 
@@ -2684,16 +2765,16 @@ export function NavigationPanel() {
               if (!gpsData || filteredWindLayers.length < 2 || lrnCalculating) return
               const currentAlt = baroData?.pressureAltitude || gpsData.altitude || 0
               const bounds = activeCompetitionMap?.bounds || null
-              const lrnLimits: LandRunLimits = { mode: lrnLimitMode, unit: lrnLimitUnit, leg1Value: lrnLeg1Value, leg2Value: lrnLeg2Value, totalValue: lrnTotalValue }
+              const lrnLimits: LandRunLimits = { mode: lrnConfig.limitMode, unit: lrnConfig.limitUnit, leg1Value: lrnConfig.leg1Value, leg2Value: lrnConfig.leg2Value, totalValue: lrnConfig.totalValue }
               setLrnCalculating(true)
               let lrnWindLayers = filteredWindLayers
-              if (lrnAltLimit) {
-                const limitAltM = lrnAltLimitValue / 3.28084
-                lrnWindLayers = lrnAltLimitMode === 'ceiling' ? filteredWindLayers.filter(l => l.altitude <= limitAltM) : filteredWindLayers.filter(l => l.altitude >= limitAltM)
+              if (lrnConfig.altLimit) {
+                const limitAltM = lrnConfig.altLimitValue / 3.28084
+                lrnWindLayers = lrnConfig.altLimitMode === 'ceiling' ? filteredWindLayers.filter(l => l.altitude <= limitAltM) : filteredWindLayers.filter(l => l.altitude >= limitAltM)
               }
               if (lrnWindLayers.length < 2) { setLrnResult(null); setLandRunResult(null); setLrnCalculating(false); return }
               setTimeout(() => {
-                const result = calculateLandRun(gpsData.latitude, gpsData.longitude, currentAlt, lrnClimbRate, lrnWindLayers, lrnLimits,
+                const result = calculateLandRun(gpsData.latitude, gpsData.longitude, currentAlt, lrnConfig.climbRate, lrnWindLayers, lrnLimits,
                   bounds ? { north: bounds.north, south: bounds.south, east: bounds.east, west: bounds.west } : null)
                 setLrnResult(result); setLrnSelectedAlt(-1)
                 if (result) { setLandRunResult({ pointA: result.best.pointA, pointB: result.best.pointB, pointC: result.best.pointC, pathAB: result.best.pathAB, pathBC: result.best.pathBC, approachPath: result.best.approachPath, triangleArea: result.best.triangleArea }) }
@@ -3441,6 +3522,15 @@ export function NavigationPanel() {
         </div>
       )}
 
+      {/* Wind Navigation (WNV) */}
+      {showWnvPanel && (
+        <WindNavPanel
+          onClose={() => setActiveToolPanel(null)}
+          onMouseDown={handleToolMouseDown}
+          onTouchStart={handleToolTouchStart}
+          style={toolPanelStyle((settings as any).wnvPanelScale ?? 1, 'rgba(245, 158, 11, 0.3)', false)}
+        />
+      )}
 
     </>
   )

@@ -2083,6 +2083,8 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
   const startRecording = useFlightStore(s => s.startRecording)
   const stopRecording = useFlightStore(s => s.stopRecording)
   const flyToPosition = useFlightStore(s => s.flyToPosition)
+  const cpaMarkerActive = useFlightStore(s => s.cpaMarkerActive)
+  const setCpaMarkerActive = useFlightStore(s => s.setCpaMarkerActive)
   const setFlyToPosition = useFlightStore(s => s.setFlyToPosition)
   const lastMapCenter = useFlightStore(s => s.lastMapCenter)
   const lastMapZoom = useFlightStore(s => s.lastMapZoom)
@@ -2122,9 +2124,11 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
   const showLandingPrediction = useFlightStore(s => s.showLandingPrediction)
   const dropCalculator = useFlightStore(s => s.dropCalculator)
   const climbPointResult = useFlightStore(s => s.climbPointResult)
+  const cpaMarker = useFlightStore(s => s.cpaMarker)
   const coneLines = useFlightStore(s => s.coneLines)
   const landRunResult = useFlightStore(s => s.landRunResult)
   const angleResult = useFlightStore(s => s.angleResult)
+  const wnvResult = useFlightStore(s => s.wnvResult)
   const activeToolPanel = useFlightStore(s => s.activeToolPanel)
   const setActiveToolPanel = useFlightStore(s => s.setActiveToolPanel)
   const dropMarker = useFlightStore(s => s.dropMarker)
@@ -2216,12 +2220,40 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
         case 'toggleBriefing':
           onToggleBriefing?.()
           break
+        case 'openToolWnv':
+          setActiveToolPanel(activeToolPanel === 'wnv' ? null : 'wnv')
+          break
+        case 'toggleCpaMarker':
+          setCpaMarkerActive(!cpaMarkerActive)
+          break
+        case 'toggleOutdoorMode':
+          updateSettings({ outdoorMode: !settings.outdoorMode })
+          break
+        case 'centerOnBalloon':
+          if (gpsData) setFlyToPosition({ lat: gpsData.latitude, lon: gpsData.longitude })
+          break
+        case 'zoomIn':
+        case 'zoomOut':
+          // Zoom wird über Leaflet Controls gesteuert
+          break
+        case 'selectNextGoal':
+        case 'selectPrevGoal': {
+          const store = useFlightStore.getState()
+          const allGoals = store.tasks.flatMap(t => t.goals)
+          if (allGoals.length === 0) break
+          const currentIdx = store.selectedGoal ? allGoals.findIndex(g => g.id === store.selectedGoal!.id) : -1
+          const nextIdx = action === 'selectNextGoal'
+            ? (currentIdx + 1) % allGoals.length
+            : (currentIdx - 1 + allGoals.length) % allGoals.length
+          store.setSelectedGoal(allGoals[nextIdx])
+          break
+        }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [settings.functionKeyBindings, activeToolPanel, dropMarker, switchToNextBottle, setActiveToolPanel, onToggleBriefing, showWindRose, setShowWindRose, isRecording, startRecording, stopRecording])
+  }, [settings.functionKeyBindings, activeToolPanel, dropMarker, switchToNextBottle, setActiveToolPanel, onToggleBriefing, showWindRose, setShowWindRose, isRecording, startRecording, stopRecording, cpaMarkerActive, setCpaMarkerActive])
 
   // Hover-Popup für Drop-Marker
   const [hoveredDropMarker, setHoveredDropMarker] = useState<string | null>(null)
@@ -3623,6 +3655,98 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
               pathOptions={{ color: '#06b6d4', fillColor: 'transparent', fillOpacity: 0, weight: 2, opacity: 0.6 }}
               interactive={false}
             />
+          </>
+        )}
+
+        {/* CPA-Marker: Nächster Punkt am Ziel auf Heading-Linie */}
+        {cpaMarker && (
+          <>
+            {/* Linie vom CPA-Punkt zum Ziel */}
+            {selectedGoal && selectedGoal.position && (
+              <Polyline
+                positions={[
+                  [cpaMarker.lat, cpaMarker.lon],
+                  [selectedGoal.position.latitude, selectedGoal.position.longitude]
+                ]}
+                pathOptions={{ color: '#14b8a6', weight: 2, opacity: 0.7, dashArray: '4, 6' }}
+                interactive={false}
+              />
+            )}
+            {/* CPA-Punkt Marker mit Distanz-Label */}
+            <CircleMarker
+              center={[cpaMarker.lat, cpaMarker.lon]}
+              radius={8}
+              pathOptions={{
+                color: '#fff',
+                fillColor: cpaMarker.distance < 100 ? '#22c55e' : '#14b8a6',
+                fillOpacity: 0.9,
+                weight: 3
+              }}
+              interactive={false}
+            >
+              <Tooltip permanent direction="top" offset={[0, -12]} className="dark-drop-tooltip">
+                <span style={{ color: cpaMarker.distance < 100 ? '#22c55e' : '#14b8a6', fontWeight: 700, fontSize: '13px' }}>
+                  {cpaMarker.distance >= 1000
+                    ? `${(cpaMarker.distance / 1000).toFixed(2)} km`
+                    : `${cpaMarker.distance} m`
+                  }
+                </span>
+              </Tooltip>
+            </CircleMarker>
+            <CircleMarker
+              center={[cpaMarker.lat, cpaMarker.lon]}
+              radius={14}
+              pathOptions={{ color: '#14b8a6', fillColor: 'transparent', fillOpacity: 0, weight: 2, opacity: 0.6 }}
+              interactive={false}
+            />
+          </>
+        )}
+
+        {/* Wind Navigation — vorhergesagter Pfad + Landepunkt */}
+        {wnvResult && wnvResult.predictedPath.length > 1 && (
+          <>
+            <Polyline
+              positions={wnvResult.predictedPath.map(p => [p.lat, p.lon] as [number, number])}
+              pathOptions={{ color: '#000', weight: 5, opacity: 0.25, dashArray: '6, 4' }}
+              interactive={false}
+            />
+            <Polyline
+              positions={wnvResult.predictedPath.map(p => [p.lat, p.lon] as [number, number])}
+              pathOptions={{ color: '#f59e0b', weight: 3, opacity: 0.9, dashArray: '6, 4' }}
+              interactive={false}
+            />
+            {/* Linie Landepunkt → Ziel */}
+            {selectedGoal && selectedGoal.position && (
+              <Polyline
+                positions={[
+                  [wnvResult.landingPoint.lat, wnvResult.landingPoint.lon],
+                  [selectedGoal.position.latitude, selectedGoal.position.longitude]
+                ]}
+                pathOptions={{ color: '#f59e0b', weight: 1.5, opacity: 0.5, dashArray: '4, 8' }}
+                interactive={false}
+              />
+            )}
+            {/* Landepunkt */}
+            <CircleMarker
+              center={[wnvResult.landingPoint.lat, wnvResult.landingPoint.lon]}
+              radius={8}
+              pathOptions={{
+                color: '#fff',
+                fillColor: wnvResult.distanceToGoal < 100 ? '#22c55e' : '#f59e0b',
+                fillOpacity: 0.9,
+                weight: 3
+              }}
+              interactive={false}
+            >
+              <Tooltip permanent direction="top" offset={[0, -12]} className="dark-drop-tooltip">
+                <span style={{ color: wnvResult.distanceToGoal < 100 ? '#22c55e' : '#f59e0b', fontWeight: 700, fontSize: '12px' }}>
+                  {wnvResult.distanceToGoal >= 1000
+                    ? `${(wnvResult.distanceToGoal / 1000).toFixed(1)} km`
+                    : `${wnvResult.distanceToGoal} m`
+                  }
+                </span>
+              </Tooltip>
+            </CircleMarker>
           </>
         )}
 

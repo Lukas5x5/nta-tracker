@@ -250,13 +250,13 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
         position: 'fixed',
         left: `${position.x}px`,
         top: `${position.y}px`,
-        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+        background: o.panelGradient,
         borderRadius: '12px',
         padding: '20px',
         minWidth: '320px',
         maxWidth: '380px',
-        boxShadow: '0 10px 40px rgba(0,0,0,0.8)',
-        border: `1px solid rgba(${o.c},${o.c},${o.c},${o.borderStrong})`,
+        boxShadow: o.panelShadow,
+        border: o.panelBorder,
         zIndex: 10000,
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
@@ -376,9 +376,9 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
         }}>
           <div style={{
             padding: '12px',
-            background: 'rgba(0,0,0,0.4)',
+            background: o.inputBg,
             borderRadius: '10px',
-            border: coordsEditMode ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(59, 130, 246, 0.3)'
+            border: coordsEditMode ? '1px solid rgba(245, 158, 11, 0.5)' : `1px solid rgba(59, 130, 246, ${o.on ? 0.4 : 0.3})`
           }}>
             <div style={{
               fontSize: '10px',
@@ -425,7 +425,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
                 style={{
                   width: '100%',
                   padding: '8px',
-                  background: 'rgba(0,0,0,0.3)',
+                  background: o.inputBg,
                   border: '1px solid rgba(245, 158, 11, 0.5)',
                   borderRadius: '6px',
                   color: '#f59e0b',
@@ -442,7 +442,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
             ) : (
               <div style={{
                 padding: '8px',
-                color: '#3b82f6',
+                color: o.on ? '#1d4ed8' : '#3b82f6',
                 fontSize: '20px',
                 fontWeight: 700,
                 fontFamily: 'monospace',
@@ -460,9 +460,9 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
           </div>
           <div style={{
             padding: '12px',
-            background: 'rgba(0,0,0,0.4)',
+            background: o.inputBg,
             borderRadius: '10px',
-            border: coordsEditMode ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(59, 130, 246, 0.3)'
+            border: coordsEditMode ? '1px solid rgba(245, 158, 11, 0.5)' : `1px solid rgba(59, 130, 246, ${o.on ? 0.4 : 0.3})`
           }}>
             <div style={{
               fontSize: '10px',
@@ -509,7 +509,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
                 style={{
                   width: '100%',
                   padding: '8px',
-                  background: 'rgba(0,0,0,0.3)',
+                  background: o.inputBg,
                   border: '1px solid rgba(245, 158, 11, 0.5)',
                   borderRadius: '6px',
                   color: '#f59e0b',
@@ -526,7 +526,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
             ) : (
               <div style={{
                 padding: '8px',
-                color: '#3b82f6',
+                color: o.on ? '#1d4ed8' : '#3b82f6',
                 fontSize: '20px',
                 fontWeight: 700,
                 fontFamily: 'monospace',
@@ -566,7 +566,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
           </label>
           <div style={{
             padding: '8px 10px',
-            background: 'rgba(0,0,0,0.3)',
+            background: o.inputBg,
             borderRadius: '6px',
             border: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
             textAlign: 'center'
@@ -602,8 +602,8 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
             style={{
               width: '100%',
               padding: '8px 10px',
-              background: 'rgba(0,0,0,0.3)',
-              border: task.endsAt ? '1px solid rgba(59, 130, 246, 0.5)' : `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
+              background: o.inputBg,
+              border: task.endsAt ? `1px solid rgba(59, 130, 246, ${o.on ? 0.6 : 0.5})` : `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
               borderRadius: '6px',
               color: o.textColor,
               fontSize: '14px',
@@ -625,7 +625,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
           gap: '8px',
           marginBottom: '12px',
           padding: '8px',
-          background: 'rgba(245, 158, 11, 0.1)',
+          background: o.on ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.1)',
           borderRadius: '6px'
         }}>
           <input
@@ -644,7 +644,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
             style={{
               width: '40px',
               padding: '4px',
-              background: 'rgba(0,0,0,0.3)',
+              background: o.inputBg,
               border: '1px solid rgba(245, 158, 11, 0.3)',
               borderRadius: '4px',
               color: '#f59e0b',
@@ -659,7 +659,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
             onChange={(e) => updateTask({ ...task, reminderUnit: e.target.value as 'minutes' | 'seconds' })}
             style={{
               padding: '4px',
-              background: 'rgba(0,0,0,0.3)',
+              background: o.inputBg,
               border: '1px solid rgba(245, 158, 11, 0.3)',
               borderRadius: '4px',
               color: '#f59e0b',
@@ -689,7 +689,7 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
           </label>
           <div style={{
             padding: '10px',
-            background: 'rgba(0,0,0,0.3)',
+            background: o.inputBg,
             borderRadius: '6px',
             border: `1px solid rgba(${o.c},${o.c},${o.c},${o.border})`,
             color: `rgba(${o.c},${o.c},${o.c},${o.textSec})`,

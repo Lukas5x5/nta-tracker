@@ -16,7 +16,7 @@ import type { Task, ProhibitedZone } from '../shared/types'
 import { latLonToUTM } from './utils/coordinatesWGS84'
 
 // Aktuelle App-Version (muss bei jedem Release angepasst werden)
-const APP_VERSION = '1.2.5'
+const APP_VERSION = '1.2.6'
 
 // Haversine-Distanzberechnung (Meter)
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -274,6 +274,14 @@ function App() {
   const dropCalculator = useFlightStore(s => s.dropCalculator)
   const [dropSignalDismissed, setDropSignalDismissed] = useState(false)
   const dropSignalSoundPlayedRef = useRef(false)
+
+  // CPA Drop Signal State
+  const cpaMarker = useFlightStore(s => s.cpaMarker)
+  const cpaMarkerActive = useFlightStore(s => s.cpaMarkerActive)
+  const [cpaDropNow, setCpaDropNow] = useState(false)
+  const [cpaDropDismissed, setCpaDropDismissed] = useState(false)
+  const cpaDropSoundPlayedRef = useRef(false)
+  const cpaLastDistRef = useRef<number | null>(null)
 
   // Variometer Audio State - nur bei Grenzüberschreitung
   const varioLastStateRef = useRef<'neutral' | 'climbing' | 'sinking'>('neutral')
@@ -619,6 +627,81 @@ function App() {
       setDropSignalDismissed(false)
     }
   }, [dropCalculator.dropNow, playDropSignalSound])
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CPA Drop Signal — DROP! wenn Pilot am nächsten Punkt zum Ziel ist
+  // ═══════════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!cpaMarkerActive || !cpaMarker) {
+      setCpaDropNow(false)
+      cpaLastDistRef.current = null
+      cpaDropSoundPlayedRef.current = false
+      return
+    }
+
+    const distToReach = cpaMarker.distToReach  // Negativ = vorbeigefahren
+    const lastDist = cpaLastDistRef.current
+    cpaLastDistRef.current = distToReach
+
+    // DROP! wenn distToReach von positiv auf ≤0 wechselt (= genau am Punkt angekommen)
+    if (lastDist !== null && lastDist > 0 && distToReach <= 0 && !cpaDropNow) {
+      setCpaDropNow(true)
+      setCpaDropDismissed(false)
+      if (!cpaDropSoundPlayedRef.current) {
+        cpaDropSoundPlayedRef.current = true
+        playDropSignalSound()
+      }
+    } else if (distToReach > 150) {
+      // Weit weg — Reset für nächsten Durchgang
+      setCpaDropNow(false)
+      cpaDropSoundPlayedRef.current = false
+    }
+  }, [cpaMarkerActive, cpaMarker?.distToReach, playDropSignalSound])
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Auto-Takeoff Erkennung — startet Aufnahme wenn Ballon abhebt
+  // ═══════════════════════════════════════════════════════════════════
+  const autoTakeoffCountRef = useRef(0)
+  const [autoTakeoffDetected, setAutoTakeoffDetected] = useState(false)
+  const [autoTakeoffPending, setAutoTakeoffPending] = useState(false)  // Wartet auf Bestätigung (ungespeicherter Track)
+  const isRecording = useFlightStore(s => s.isRecording)
+  const startRecording = useFlightStore(s => s.startRecording)
+  const trackForTakeoff = useFlightStore(s => s.track)
+  const gpsDataForTakeoff = useFlightStore(s => s.gpsData)
+  const baroDataForTakeoff = useFlightStore(s => s.baroData)
+  useEffect(() => {
+    if (isRecording || autoTakeoffPending || settings.autoTakeoffDetection === false) {
+      autoTakeoffCountRef.current = 0
+      return
+    }
+    if (!gpsDataForTakeoff || !baroDataForTakeoff) {
+      autoTakeoffCountRef.current = 0
+      return
+    }
+
+    const vario = baroDataForTakeoff.variometer || 0
+
+    if (vario > 0.3) {
+      autoTakeoffCountRef.current++
+    } else {
+      autoTakeoffCountRef.current = Math.max(0, autoTakeoffCountRef.current - 1)
+    }
+
+    if (autoTakeoffCountRef.current >= 5) {
+      autoTakeoffCountRef.current = 0
+
+      // Wenn ungespeicherter Track existiert → erst fragen
+      if (trackForTakeoff.length > 0) {
+        console.log('[AutoTakeoff] Takeoff erkannt, aber ungespeicherter Track vorhanden')
+        setAutoTakeoffPending(true)
+        return
+      }
+
+      console.log('[AutoTakeoff] Takeoff erkannt! Starte Aufnahme. Vario:', vario.toFixed(1), 'm/s')
+      startRecording()
+      setAutoTakeoffDetected(true)
+    }
+  }, [isRecording, autoTakeoffPending, settings.autoTakeoffDetection, baroDataForTakeoff?.variometer, gpsDataForTakeoff?.latitude])
 
   // ═══════════════════════════════════════════════════════════════════
   // Variometer Audio - Einmaliger Ton bei Grenzüberschreitung
@@ -1343,6 +1426,121 @@ function App() {
             </div>
           </div>
         ) : null
+      )}
+
+      {/* Auto-Takeoff erkannt — Aufnahme gestartet */}
+      {autoTakeoffDetected && (
+        <div
+          onClick={() => setAutoTakeoffDetected(false)}
+          style={{
+            position: 'fixed',
+            top: '80px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10005,
+            background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(22, 163, 74, 0.95))',
+            color: 'white',
+            padding: '12px 24px',
+            borderRadius: '12px',
+            boxShadow: '0 4px 20px rgba(34, 197, 94, 0.5)',
+            textAlign: 'center',
+            cursor: 'pointer',
+            border: '2px solid rgba(255, 255, 255, 0.4)'
+          }}
+        >
+          <div style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '2px' }}>
+            🎈 AUTO-TAKEOFF ERKANNT
+          </div>
+          <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
+            Aufnahme gestartet · Klick zum Schließen
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Takeoff — ungespeicherter Track Warnung */}
+      {autoTakeoffPending && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 10010,
+          background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+          color: 'white',
+          padding: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.8)',
+          border: '2px solid rgba(245, 158, 11, 0.5)',
+          maxWidth: '340px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: 800, color: '#f59e0b', marginBottom: '8px' }}>
+            🎈 Takeoff erkannt!
+          </div>
+          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', marginBottom: '4px' }}>
+            Es gibt noch einen ungespeicherten Track mit <strong style={{ color: '#f59e0b' }}>{trackForTakeoff.length} Punkten</strong>.
+          </div>
+          <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '16px' }}>
+            Was möchtest du tun?
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => { setAutoTakeoffPending(false) }}
+              style={{
+                flex: 1, padding: '10px', borderRadius: '8px',
+                border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)',
+                color: 'rgba(255,255,255,0.7)', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+              }}>
+              Abbrechen
+            </button>
+            <button
+              onClick={() => {
+                startRecording()
+                setAutoTakeoffPending(false)
+                setAutoTakeoffDetected(true)
+              }}
+              style={{
+                flex: 1, padding: '10px', borderRadius: '8px', border: 'none',
+                background: '#22c55e', color: 'white',
+                fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+              }}>
+              Track verwerfen & Starten
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CPA DROP Signal */}
+      {cpaDropNow && !cpaDropDismissed && cpaMarker && (
+        <div
+          onClick={() => setCpaDropDismissed(true)}
+          style={{
+            position: 'fixed',
+            bottom: '120px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10005,
+            background: 'linear-gradient(135deg, rgba(20, 184, 166, 0.95), rgba(13, 148, 136, 0.95))',
+            color: 'white',
+            padding: '12px 24px',
+            borderRadius: '12px',
+            boxShadow: '0 4px 20px rgba(20, 184, 166, 0.5), 0 0 40px rgba(20, 184, 166, 0.3)',
+            textAlign: 'center',
+            cursor: 'pointer',
+            animation: 'pulse 0.5s ease-in-out infinite',
+            border: '2px solid rgba(255, 255, 255, 0.5)'
+          }}
+        >
+          <div style={{ fontSize: '14px', fontWeight: 900, letterSpacing: '4px', marginBottom: '2px' }}>
+            DROP!
+          </div>
+          <div style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'monospace' }}>
+            {cpaMarker.distance} m
+          </div>
+          <div style={{ fontSize: '11px', opacity: 0.8 }}>
+            CPA — nächster Punkt am Ziel
+          </div>
+        </div>
       )}
 
       {/* Disconnect Notification */}

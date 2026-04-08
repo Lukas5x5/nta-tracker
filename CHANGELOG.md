@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.2.6] - 2026-04-08
+
+### Bugfixes
+- Fix: 3D-Ansicht von gespeicherten Fahrten funktioniert wieder. Vorher versuchte die App die Flugdaten von Supabase zu laden (Fehler: "Cannot coerce the result to a single JSON object"), jetzt werden die lokalen Backups korrekt verwendet.
+
+### Funktionstasten
+- 8 neue Aktionen für F-Tasten Belegung: Wind Navigation (WNV), CPA Marker ein/aus, Outdoor-Modus umschalten, Zum Ballon fliegen, Nächstes/Vorheriges Ziel wählen, Hinein-/Herauszoomen.
+
+### Aufnahme
+- Auto-Takeoff Erkennung: Die Aufnahme startet jetzt automatisch wenn der Ballon abhebt. Erkennung über Variometer – wenn die Steigrate für ~5 Sekunden über 0.3 m/s bleibt, wird die Aufnahme gestartet. Standardmäßig aktiviert, kann in den Settings unter `autoTakeoffDetection` deaktiviert werden.
+
+### UI
+- APT (Altitude Profile Task) Panel: Outdoor-Modus Unterstützung hinzugefügt – Panel-Hintergrund, Input-Felder, Chart-Bereiche und Textfarben wechseln jetzt korrekt zwischen hellem und dunklem Design.
+- Task-Bearbeitungspanel (Doppelklick auf Task): Outdoor-Modus Unterstützung hinzugefügt – Panel-Hintergrund, Koordinaten-Boxen, MMA/Ends-At-Felder, Reminder-Inputs und Beschreibungsbox wechseln jetzt korrekt zwischen hellem (Outdoor) und dunklem Design. Vorher blieb das Panel immer im dunklen Modus.
+
+### Live Tracker (Lite)
+- Fix: Verfolger wird nicht mehr ausgeloggt wenn er die Webseite kurz verlässt. Vorher führten Netzwerk-/Supabase-Fehler beim Session-Check zum sofortigen Logout. Jetzt wird bei Verbindungsfehlern die Session beibehalten – nur bei echtem Token-Mismatch (anderes Gerät) oder deaktiviertem Account wird ausgeloggt.
+- Fix: Header/Footer auf manchen Handys abgeschnitten. Alle Screens nutzen jetzt `100dvh` (dynamic viewport height) statt `100vh` – berücksichtigt die Browser-Toolbars (URL-Leiste, Navigation) auf iOS Safari und Android Chrome korrekt.
+
+### Navigation
+- CPA-Button im Navi-Panel neben DROP: Zeigt live auf der Karte den besten Drop-Punkt an. Basierend auf aktuellem Heading wird berechnet wo man am nächsten am Ziel vorbeifährt – dort sollte man droppen. Teal-farbener Punkt auf der Karte mit gestrichelter Linie zum Goal und Distanz-Anzeige. Punkt wird grün wenn < 100m Distanz. Aktualisiert sich live bei jeder Position/Heading-Änderung.
+- Navi-Panel kompakter: ft/m Toggle aus dem Header entfernt (Einstellung bleibt in den Settings). Padding, Margins, Gaps und Border-Radien reduziert – Panel braucht deutlich weniger Platz auf dem Bildschirm.
+- CPA Drop-Alarm: Wenn der Pilot den CPA-Punkt erreicht (< 30m oder gerade vorbeigefahren), erscheint ein großes teal-farbenes "DROP!" Popup mit der Distanz zum Ziel + Drop-Signal-Sound (3 aufsteigende Beeps). Popup kann per Klick geschlossen werden, Reset wenn man sich > 100m entfernt.
+
+### Tools
+- Wind Navigation (WNV) BETA: Neues Tool das live die optimale Flugstrategie berechnet um ein Ziel am Boden zu erreichen. Simuliert verschiedene Höhen-Kombinationen (1-2 Legs) mit Sekunde-für-Sekunde Wind-Drift und findet die Route die am nächsten ans Ziel führt. Zeigt: Anweisung ("STEIGEN auf 3200 ft"), vorhergesagte Distanz zum Ziel, Flugplan mit allen Legs, vorhergesagten Pfad auf der Karte (amber gestrichelt) + Landepunkt. Auto-Recalculate alle 3 Sekunden für Live-Updates. Konfigurierbar: Steig-/Sinkrate, 1 oder 2 Legs, Wind-Quellen-Filter.
+- Land Run Rechner: Berechnung und Karten-Anzeige (Dreieck, Legs, Punkte A/B/C) bleiben jetzt beim Schließen des Panels erhalten. Beim erneuten Öffnen sind Ergebnis, gewählte Alternative und alle Einstellungen (Modus, Einheit, Leg-Werte, Steigrate, Höhenlimit) noch da. Vorher wurde beim Schließen alles gelöscht.
+- Land Run Rechner: Reset-Button im Header – erscheint nach einer Berechnung und löscht Ergebnis + Karten-Anzeige, Einstellungen bleiben erhalten.
+- PDG/FON Cone Navigator: Wind-Quellen-Filter im Header hinzugefügt (Alle / FC / Live / .dat) – wie beim Windprofil-Panel. Damit kann man auswählen welche Windquellen für die Berechnung verwendet werden sollen, z.B. nur Forecast oder nur Live-gemessene Winde.
+- PDG/FON Cone Navigator: Berechnet jetzt auch wenn keine echte Drehschicht vorhanden ist. Fallback auf die Schicht mit dem stärksten Wind. Bei fehlender oder eingeschränkter Drehschicht erscheint ein Bestätigungs-Popup: "Keine Drehschicht gefunden — trotzdem deklarieren?" mit Abbrechen/Trotzdem-Buttons. Nur bei perfekter Drehschicht wird sofort deklariert.
+- PDG/FON Cone Navigator: Live-Pfad (blaue Linie) aktualisiert sich jetzt auch wenn das Panel geschlossen ist. Solange eine Deklaration aktiv ist, wird der Pfad bei jedem GPS-Update neu berechnet – unabhängig davon ob das Tool-Panel offen oder zu ist.
+
 ## [1.2.5] - 2026-03-31
 
 ### PDG/FON Cone Navigator – Komplett neu gebaut

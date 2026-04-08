@@ -256,7 +256,16 @@ export const useAuthStore = create<AuthState>()(
             .eq('id', user.id)
             .single()
 
-          if (error || !data || !data.is_active) {
+          // Bei Netzwerk-/Supabase-Fehlern: Session beibehalten, nicht ausloggen
+          if (error) {
+            console.log('[Auth] Session-Check Fehler (Session bleibt erhalten):', error.message)
+            set({ isLoading: false })
+            return
+          }
+
+          // User nicht gefunden oder deaktiviert → ausloggen
+          if (!data || !data.is_active) {
+            console.log('[Auth] User deaktiviert oder nicht gefunden')
             set({ user: null, sessionToken: null, isAuthenticated: false, isLoading: false })
             return
           }
@@ -283,6 +292,7 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: false })
         } catch {
           // Bei Netzwerkfehler: Session beibehalten
+          console.log('[Auth] Session-Check Exception (Session bleibt erhalten)')
           set({ isLoading: false })
         }
       },

@@ -622,9 +622,9 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
               if (currentEl) currentEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
             }}
             style={{
-              margin: '0 8px 6px', padding: '4px 8px', borderRadius: '4px', border: 'none',
+              margin: '0 8px 6px', padding: '8px 10px', borderRadius: '6px', border: 'none',
               background: `rgba(59,130,246,0.15)`, color: '#3b82f6',
-              fontSize: '10px', fontWeight: 600, cursor: 'pointer', width: 'calc(100% - 16px)'
+              fontSize: '12px', fontWeight: 600, cursor: 'pointer', width: 'calc(100% - 16px)'
             }}
           >
             ▶ Zur aktuellen Höhe

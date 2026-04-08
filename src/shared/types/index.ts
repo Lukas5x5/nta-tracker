@@ -547,6 +547,9 @@ export interface AppSettings {
   dropSignalSoundEnabled?: boolean  // DROP-Signal Sound aktiviert (default: true)
   dropSignalSoundVolume?: number  // Lautstärke 0-1 (default: 0.8)
 
+  // Auto-Takeoff Erkennung
+  autoTakeoffDetection?: boolean  // Automatische Start-Erkennung (default: true)
+
   // UI Skalierung - für kleine Bildschirme
   uiScale?: 'compact' | 'normal' | 'large'  // Allgemeine UI-Skalierung (default: 'normal')
   headerHeight?: number  // Header-Höhe in Pixel (default: 60, min: 40, max: 80)
@@ -860,9 +863,17 @@ export type FKeyAction =
   | 'openToolLrn'
   | 'openToolApt'
   | 'openToolAng'
+  | 'openToolWnv'
   | 'toggleNavPanel'
   | 'toggleWindPanel'
   | 'toggleBriefing'
+  | 'toggleCpaMarker'
+  | 'toggleOutdoorMode'
+  | 'centerOnBalloon'
+  | 'zoomIn'
+  | 'zoomOut'
+  | 'selectNextGoal'
+  | 'selectPrevGoal'
   | 'none'
 
 export const FKEY_ACTION_LABELS: Record<FKeyAction, string> = {
@@ -879,8 +890,16 @@ export const FKEY_ACTION_LABELS: Record<FKeyAction, string> = {
   openToolLrn: 'Tool: Land Run',
   openToolApt: 'Tool: APT',
   openToolAng: 'Tool: ANG',
+  openToolWnv: 'Tool: Wind Navigation',
   toggleNavPanel: 'Navigation ein/aus',
   toggleWindPanel: 'Wind-Panel ein/aus',
   toggleBriefing: 'Briefing ein/aus',
+  toggleCpaMarker: 'CPA Marker ein/aus',
+  toggleOutdoorMode: 'Outdoor-Modus umschalten',
+  centerOnBalloon: 'Zum Ballon fliegen',
+  zoomIn: 'Hineinzoomen',
+  zoomOut: 'Herauszoomen',
+  selectNextGoal: 'Nächstes Ziel',
+  selectPrevGoal: 'Vorheriges Ziel',
   none: 'Keine Aktion'
 }

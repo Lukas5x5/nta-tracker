@@ -64,7 +64,7 @@ export function LiteApp() {
   if (isLoading) {
     return (
       <div style={{
-        height: '100vh',
+        height: '100dvh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -101,7 +101,7 @@ export function LiteApp() {
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      height: '100vh',
+      height: '100dvh',
       background: '#0f172a'
     }}>
       <Header

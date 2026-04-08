@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { useAuthStore } from './authStore'
+import type { LandRunResult, LandRunLimits } from '../utils/navigation'
+import type { WnvResult } from '../utils/windNavigation'
 
 // --- IndexedDB Storage Adapter ---
 // Kein Größenlimit (vs. localStorage ~5-10MB), asynchrones Lesen/Schreiben
@@ -332,6 +334,14 @@ interface FlightState {
     mmaRadius: number | null         // Aktueller MMA-Radius vom Task
   }
 
+  // CPA-Marker: Nächster Punkt am Ziel auf der aktuellen Flugbahn (basierend auf Heading)
+  cpaMarkerActive: boolean
+  cpaMarker: {
+    lat: number; lon: number
+    distance: number       // Meter zum Goal am CPA-Punkt
+    distToReach: number    // Meter vom Piloten zum CPA-Punkt
+  } | null
+
   // Steigpunkt-Rechner Ergebnis (für Karten-Darstellung)
   climbPointResult: {
     path: { lat: number; lon: number; altitude: number }[]
@@ -364,6 +374,21 @@ interface FlightState {
     triangleArea: number
   } | null
 
+  // Land Run Rechner – vollständiges Ergebnis + Konfiguration (bleibt beim Schließen erhalten)
+  lrnCalcResult: LandRunResult | null
+  lrnSelectedAlt: number // -1 = best
+  lrnConfig: {
+    climbRate: number
+    limitMode: 'leg1' | 'leg2' | 'leg1+leg2' | 'total'
+    limitUnit: 'min' | 'km'
+    leg1Value: number
+    leg2Value: number
+    totalValue: number
+    altLimit: boolean
+    altLimitMode: 'ceiling' | 'floor'
+    altLimitValue: number
+  }
+
   // Angle Task Rechner Ergebnis (für Karten-Darstellung)
   angleResult: {
     pointA: { lat: number; lon: number }
@@ -375,8 +400,15 @@ interface FlightState {
     setDirection: number
   } | null
 
-  // Aktives Tool-Panel (Marker Drop, Steigpunkt, Landeprognose, Land Run, APT, ANG)
-  activeToolPanel: 'marker' | 'fly' | 'lnd' | 'lrn' | 'apt' | 'ang' | null
+  // Wind Navigation (WNV) – Beta
+  wnvResult: WnvResult | null
+  wnvConfig: {
+    maxLegs: 1 | 2
+    autoRecalc: boolean
+  }
+
+  // Aktives Tool-Panel (Marker Drop, Steigpunkt, Landeprognose, Land Run, APT, ANG, WNV)
+  activeToolPanel: 'marker' | 'fly' | 'lnd' | 'lrn' | 'apt' | 'ang' | 'wnv' | null
 
   // Maus-Position auf der Karte (für StatusBar Anzeige)
   mousePosition: { lat: number; lon: number } | null
@@ -432,12 +464,19 @@ interface FlightState {
   setDropCalculatorActive: (active: boolean) => void
   updateDropCalculator: () => void
 
+  setCpaMarkerActive: (active: boolean) => void
+  setCpaMarker: (marker: FlightState['cpaMarker']) => void
   setClimbPointResult: (result: FlightState['climbPointResult']) => void
   setConeLines: (lines: FlightState['coneLines']) => void
   setConeDeclared: (decl: FlightState['coneDeclared']) => void
   setConeResult: (result: FlightState['coneResult']) => void
   setLandRunResult: (result: FlightState['landRunResult']) => void
+  setLrnCalcResult: (result: LandRunResult | null) => void
+  setLrnSelectedAlt: (idx: number) => void
+  updateLrnConfig: (partial: Partial<FlightState['lrnConfig']>) => void
   setAngleResult: (result: FlightState['angleResult']) => void
+  setWnvResult: (result: WnvResult | null) => void
+  updateWnvConfig: (partial: Partial<FlightState['wnvConfig']>) => void
   setActiveToolPanel: (panel: FlightState['activeToolPanel']) => void
   setMousePosition: (position: { lat: number; lon: number } | null) => void
   setFlyToPosition: (position: { lat: number; lon: number; zoom?: number } | null) => void
@@ -814,6 +853,10 @@ export const useFlightStore = create<FlightState>()(
         mmaRadius: null
       },
 
+      // CPA-Marker
+      cpaMarkerActive: false,
+      cpaMarker: null,
+
       // Steigpunkt-Rechner
       climbPointResult: null,
       coneLines: null,
@@ -822,9 +865,29 @@ export const useFlightStore = create<FlightState>()(
 
       // Land Run Rechner
       landRunResult: null,
+      lrnCalcResult: null,
+      lrnSelectedAlt: -1,
+      lrnConfig: {
+        climbRate: 1.5,
+        limitMode: 'leg1',
+        limitUnit: 'min',
+        leg1Value: 10,
+        leg2Value: 10,
+        totalValue: 20,
+        altLimit: false,
+        altLimitMode: 'ceiling',
+        altLimitValue: 5000,
+      },
 
       // Angle Task Rechner
       angleResult: null,
+
+      // Wind Navigation
+      wnvResult: null,
+      wnvConfig: {
+        maxLegs: 2,
+        autoRecalc: true,
+      },
 
       // Aktives Tool-Panel
       activeToolPanel: null,
@@ -1121,12 +1184,19 @@ export const useFlightStore = create<FlightState>()(
   },
 
   // Mouse Position Action
+  setCpaMarkerActive: (active) => set({ cpaMarkerActive: active, cpaMarker: active ? undefined : null }),
+  setCpaMarker: (marker) => set({ cpaMarker: marker }),
   setClimbPointResult: (result) => set({ climbPointResult: result }),
       setConeLines: (lines) => set({ coneLines: lines }),
       setConeDeclared: (decl) => set({ coneDeclared: decl }),
       setConeResult: (result) => set({ coneResult: result }),
   setLandRunResult: (result) => set({ landRunResult: result }),
+  setLrnCalcResult: (result) => set({ lrnCalcResult: result }),
+  setLrnSelectedAlt: (idx) => set({ lrnSelectedAlt: idx }),
+  updateLrnConfig: (partial) => set((s) => ({ lrnConfig: { ...s.lrnConfig, ...partial } })),
   setAngleResult: (result) => set({ angleResult: result }),
+  setWnvResult: (result) => set({ wnvResult: result }),
+  updateWnvConfig: (partial) => set((s) => ({ wnvConfig: { ...s.wnvConfig, ...partial } })),
   setActiveToolPanel: (panel) => set({ activeToolPanel: panel }),
   setMousePosition: (position) => set({ mousePosition: position }),
 

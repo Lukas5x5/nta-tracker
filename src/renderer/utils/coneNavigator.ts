@@ -105,65 +105,94 @@ function normalizeAngle(a: number): number {
 // ═══════════════════════════════════════════════════════════════════
 // 1. Beste Drehschicht finden
 // ═══════════════════════════════════════════════════════════════════
+//
+// Logik (v4 — realistisch für Ballonfahrt):
+// - Drehschicht = Center-Schicht wo der Pilot fährt
+// - Links/Rechts-Korrektur innerhalb von MAX_CORR_ALT (500ft/~150m)
+//   gesucht — erkennt Tendenzen auch wenn der direkte Nachbar wenig dreht
+// - Bevorzugt nahe Korrektur-Schichten (Score bestraft große Höhensprünge)
+// - Goal-Richtung fließt in die Bewertung ein
+
+const MAX_CORR_ALT = 152  // ~500ft — maximaler Höhensprung für Korrektur
 
 function findBestTurnLayer(
   minAltM: number, maxAltM: number,
   windLayers: WindLayer[],
-  pilotAltM: number = 0
+  pilotAltM: number = 0,
+  goalBearing: number = -1  // Bearing Pilot→Goal in Grad, -1 = nicht berücksichtigen
 ): TurnLayer | null {
-  // Drehschicht muss im Fenster liegen
-  const inWindow = windLayers
-    .filter(l => l.altitude >= minAltM && l.altitude <= maxAltM && l.speed > 0.5)
-    .sort((a, b) => a.altitude - b.altitude)
-
-  // Korrektur-Schichten: Zwischen Pilot-Höhe und Fenstergrenze erlaubt
-  // (Pilot darf bis minAltM sinken und bis maxAltM steigen, plus bis zu seiner aktuellen Höhe)
+  // Alle Schichten im erweiterten Bereich (Pilot bis Fenstergrenzen), sortiert nach Höhe
   const corrMin = Math.min(minAltM, pilotAltM)
   const corrMax = Math.max(maxAltM, pilotAltM)
   const allSorted = windLayers
     .filter(l => l.altitude >= corrMin && l.altitude <= corrMax && l.speed > 0.5)
     .sort((a, b) => a.altitude - b.altitude)
 
-  if (inWindow.length < 1) return null
+  if (allSorted.length < 2) return null
 
   let best: TurnLayer | null = null
-  let bestRange = 0
+  let bestScore = 0
 
-  for (let i = 0; i < inWindow.length; i++) {
-    const center = inWindow[i]
+  for (let i = 0; i < allSorted.length; i++) {
+    const center = allSorted[i]
+
+    // Center muss im Höhenfenster liegen
+    if (center.altitude < minAltM || center.altitude > maxAltM) continue
+
     const centerDrift = (center.direction + 180) % 360
 
+    // Suche beste Links- und Rechts-Korrektur innerhalb von 500ft
     let leftAngle = 0, leftAlt = center.altitude
     let rightAngle = 0, rightAlt = center.altitude
 
-    // Position der Center-Schicht in allSorted finden
-    const allIdx = allSorted.findIndex(l => l.altitude === center.altitude)
+    for (const n of allSorted) {
+      if (n.altitude === center.altitude) continue
+      // Nur Schichten innerhalb von MAX_CORR_ALT prüfen
+      if (Math.abs(n.altitude - center.altitude) > MAX_CORR_ALT) continue
 
-    // 4 Schichten darunter + 4 darüber aus ALLEN Schichten prüfen
-    const neighbors: (typeof allSorted[0] | null)[] = []
-    for (let n = 1; n <= 4; n++) {
-      neighbors.push(allIdx >= n ? allSorted[allIdx - n] : null)
-      neighbors.push(allIdx + n < allSorted.length ? allSorted[allIdx + n] : null)
-    }
-
-    for (const n of neighbors) {
-      if (!n) continue
       const drift = (n.direction + 180) % 360
       const angle = normalizeAngle(drift - centerDrift)
-      if (angle < leftAngle) { leftAngle = angle; leftAlt = n.altitude }
-      if (angle > rightAngle) { rightAngle = angle; rightAlt = n.altitude }
+
+      // Nähere Schicht bevorzugen bei gleichem Winkel
+      if (angle < leftAngle) {
+        leftAngle = angle; leftAlt = n.altitude
+      } else if (angle < 0 && angle === leftAngle && Math.abs(n.altitude - center.altitude) < Math.abs(leftAlt - center.altitude)) {
+        leftAlt = n.altitude  // Gleicher Winkel, aber näher
+      }
+
+      if (angle > rightAngle) {
+        rightAngle = angle; rightAlt = n.altitude
+      } else if (angle > 0 && angle === rightAngle && Math.abs(n.altitude - center.altitude) < Math.abs(rightAlt - center.altitude)) {
+        rightAlt = n.altitude
+      }
     }
 
-    const steerRange = rightAngle - leftAngle  // Gesamtstreuung in Grad
+    const steerRange = rightAngle - leftAngle
+    if (steerRange < 2) continue  // Mindestens 2° Streuung
 
-    if (steerRange > bestRange) {
-      bestRange = steerRange
-      const leftDrift = (interpolateWind(leftAlt, windLayers).direction + 180) % 360
-      const rightDrift = (interpolateWind(rightAlt, windLayers).direction + 180) % 360
+    // Korrektur-Aufwand
+    const leftDist = Math.abs(leftAlt - center.altitude)
+    const rightDist = Math.abs(rightAlt - center.altitude)
+    const maxJump = Math.max(leftDist, rightDist, 30)
 
-      // Warnung wenn Korrektur-Sprung > 150m (~500ft)
-      const leftDist = Math.abs(leftAlt - center.altitude)
-      const rightDist = Math.abs(rightAlt - center.altitude)
+    // Windstärke auf Center-Höhe
+    const windFactor = Math.max(center.speed, 2)
+
+    // Score: Streuung × Wind / Korrektur-Aufwand
+    let score = (steerRange * windFactor) / maxJump
+
+    // Goal-Richtung
+    if (goalBearing >= 0) {
+      const driftToGoalAngle = Math.abs(normalizeAngle(centerDrift - goalBearing))
+      const alignmentFactor = 0.7 + 0.8 * Math.cos(driftToGoalAngle * Math.PI / 180)
+      score *= alignmentFactor
+    }
+
+    if (score > bestScore) {
+      bestScore = score
+      const leftDriftBearing = (interpolateWind(leftAlt, windLayers).direction + 180) % 360
+      const rightDriftBearing = (interpolateWind(rightAlt, windLayers).direction + 180) % 360
+
       let warning: string | null = null
       if (leftDist > 150 || rightDist > 150) {
         const parts: string[] = []
@@ -178,9 +207,28 @@ function findBestTurnLayer(
         driftBearing: Math.round(centerDrift),
         windSpeed: Math.round(center.speed),
         steerRange: Math.round(steerRange),
-        leftAlt, leftAltFt: toFt50(leftAlt), leftBearing: Math.round(leftDrift),
-        rightAlt, rightAltFt: toFt50(rightAlt), rightBearing: Math.round(rightDrift),
+        leftAlt, leftAltFt: toFt50(leftAlt), leftBearing: Math.round(leftDriftBearing),
+        rightAlt, rightAltFt: toFt50(rightAlt), rightBearing: Math.round(rightDriftBearing),
         warning
+      }
+    }
+  }
+
+  // Fallback: Wenn keine Drehschicht gefunden, nimm die Schicht mit dem stärksten Wind
+  // (= maximale Drift-Distanz, auch wenn keine Korrektur möglich ist)
+  if (!best && allSorted.length >= 1) {
+    const strongest = allSorted.reduce((a, b) => a.speed > b.speed ? a : b)
+    if (strongest.altitude >= minAltM && strongest.altitude <= maxAltM) {
+      const drift = (strongest.direction + 180) % 360
+      best = {
+        altitude: strongest.altitude,
+        altitudeFt: toFt50(strongest.altitude),
+        driftBearing: Math.round(drift),
+        windSpeed: Math.round(strongest.speed),
+        steerRange: 0,
+        leftAlt: strongest.altitude, leftAltFt: toFt50(strongest.altitude), leftBearing: Math.round(drift),
+        rightAlt: strongest.altitude, rightAltFt: toFt50(strongest.altitude), rightBearing: Math.round(drift),
+        warning: '⚠ Keine Drehschicht – nur Drift, keine Links/Rechts Korrektur möglich'
       }
     }
   }
@@ -216,8 +264,11 @@ export function calculateCone(input: ConeInput): ConeResult | null {
     if (minAltM >= maxAltM) minAltM = lowestLayer
   }
 
-  // Beste Drehschicht finden (nur Schichten im Fenster)
-  const turnLayer = findBestTurnLayer(minAltM, maxAltM, windLayers, altitude)
+  // Bearing vom Piloten zum Goal (für Goal-bewusste Drehschicht-Auswahl)
+  const goalBrg = calculateBearing(lat, lon, goalLat, goalLon)
+
+  // Beste Drehschicht finden (nur Schichten im Fenster, Goal-Richtung berücksichtigt)
+  const turnLayer = findBestTurnLayer(minAltM, maxAltM, windLayers, altitude, goalBrg)
   if (!turnLayer) {
     console.log('[Cone] Keine Drehschicht im Fenster', toFt50(minAltM), '-', toFt50(maxAltM), 'ft')
     return null

@@ -557,10 +557,15 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
 
   const handleOpen3DView = async (flightId: string) => {
     try {
-      const { data, error: err } = await supabase.from('championship_flights').select('flight_data').eq('id', flightId).single()
-      if (err || !data) { setError(`Fehler: ${err?.message || 'Keine Daten'}`); return }
+      if (!selectedChampionship || !window.ntaAPI?.flights?.load) {
+        setError('Lokale Flugdaten nicht verfügbar')
+        return
+      }
 
-      const flightData = data.flight_data as FlightDataSnapshot
+      const result = await window.ntaAPI.flights.load({ championshipId: selectedChampionship.id, flightId })
+      if (!result.success || !result.data) { setError(`Fehler: ${result.error || 'Keine Daten'}`); return }
+
+      const flightData = result.data as FlightDataSnapshot
       if (!flightData.track || flightData.track.length === 0) {
         setError('Keine Track-Daten vorhanden')
         return
@@ -596,7 +601,7 @@ export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
         localStorage.setItem('nta_track_data', viewerData)
         window.open(viewerUrl, '_blank')
       }
-    } catch { setError('Verbindungsfehler') }
+    } catch { setError('Fehler beim Laden der Flugdaten') }
   }
 
   // ─── PZ Functions ───

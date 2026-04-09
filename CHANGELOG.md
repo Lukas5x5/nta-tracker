@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unveröffentlicht]
+
+### Live Tracker / Team Chat
+- Fix: Nachrichten gehen nicht mehr verloren wenn der Empfänger offline ist. Vorher wurden Team-Nachrichten nur über Supabase Realtime empfangen – war der Verfolger (oder ein anderes Teammitglied) gerade nicht auf der Webseite/in der App, gingen die Nachrichten verloren. Jetzt werden beim Verbinden/Einsteigen die letzten 50 Nachrichten aus der Datenbank geladen, sodass verpasste Nachrichten sofort sichtbar sind. Betrifft sowohl die Desktop App als auch die Lite Web-App.
+
+### Live Tracker (Lite) - Karte
+- Heading-Linie zeigt jetzt die Gradzahl an: Am Ende der gelben Richtungslinie (die anzeigt wohin der Pilot/Verfolger fährt) wird jetzt die aktuelle Fahrtrichtung in Grad angezeigt (z.B. "245°"). Gelbe Schrift mit schwarzem Rand für gute Lesbarkeit auf allen Kartenhintergründen.
+
 ## [1.2.7] - 2026-04-08
 
 ### Bugfixes

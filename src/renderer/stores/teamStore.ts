@@ -627,6 +627,47 @@ export const useTeamStore = create<TeamState>((set, get) => ({
 // Realtime Subscriptions
 // ============================================
 
+// Nachrichtenhistorie aus DB laden
+async function loadMessageHistory(teamId: string, myMemberId: string) {
+  const store = useTeamStore
+  try {
+    const { data: recentMessages } = await supabase
+      .from('team_messages')
+      .select('*')
+      .eq('team_id', teamId)
+      .order('created_at', { ascending: true })
+      .limit(50)
+
+    if (recentMessages && recentMessages.length > 0) {
+      const members = store.getState().members
+      const teamMessages: TeamMessage[] = recentMessages
+        .filter(msg => {
+          // Private Nachrichten nur anzeigen wenn wir Sender oder Empfänger sind
+          if (msg.target_member_id && msg.target_member_id !== myMemberId && msg.member_id !== myMemberId) return false
+          return true
+        })
+        .map(msg => {
+          const sender = members.find(m => m.id === msg.member_id)
+          const target = msg.target_member_id ? members.find(m => m.id === msg.target_member_id) : null
+          return {
+            id: msg.id,
+            memberId: msg.member_id,
+            callsign: sender?.callsign || '???',
+            color: sender?.color || '#ffffff',
+            message: msg.message,
+            createdAt: new Date(msg.created_at),
+            isMine: msg.member_id === myMemberId,
+            targetMemberId: msg.target_member_id || null,
+            targetCallsign: target?.callsign || null
+          }
+        })
+      store.setState({ messages: teamMessages })
+    }
+  } catch (err) {
+    console.error('[Team] Fehler beim Laden der Nachrichtenhistorie:', err)
+  }
+}
+
 function subscribeToTeam(teamId: string, myMemberId: string) {
   const store = useTeamStore
 
@@ -833,6 +874,9 @@ function subscribeToTeam(teamId: string, myMemberId: string) {
       }
     )
     .subscribe()
+
+  // 4b. Letzte Nachrichten aus DB laden (damit verpasste Nachrichten sichtbar sind)
+  loadMessageHistory(teamId, myMemberId)
 
   // 5. Windprofil-Broadcast Channel
   const windChannel = supabase

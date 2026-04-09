@@ -689,6 +689,45 @@ function startRealtimeSubscriptions(teamId: string) {
     )
     .subscribe()
 
+  // 6. Letzte Nachrichten aus DB laden (damit verpasste Nachrichten sichtbar sind)
+  const myMemberIdForHistory = store.getState().myMemberId
+  try {
+    const { data: recentMessages } = await supabase
+      .from('team_messages')
+      .select('*')
+      .eq('team_id', teamId)
+      .order('created_at', { ascending: true })
+      .limit(50)
+
+    if (recentMessages && recentMessages.length > 0) {
+      const pilots = store.getState().pilots
+      const chatMessages: ChatMessage[] = recentMessages
+        .filter(msg => {
+          // Private Nachrichten nur anzeigen wenn wir Sender oder Empfänger sind
+          if (msg.target_member_id && msg.target_member_id !== myMemberIdForHistory && msg.member_id !== myMemberIdForHistory) return false
+          return true
+        })
+        .map(msg => {
+          const sender = pilots.find(p => p.memberId === msg.member_id)
+          const target = msg.target_member_id ? pilots.find(p => p.memberId === msg.target_member_id) : null
+          return {
+            id: msg.id,
+            memberId: msg.member_id,
+            callsign: sender?.callsign || '???',
+            color: sender?.color || '#ffffff',
+            message: msg.message,
+            createdAt: new Date(msg.created_at),
+            isMine: msg.member_id === myMemberIdForHistory,
+            targetMemberId: msg.target_member_id || null,
+            targetCallsign: target?.callsign || null
+          }
+        })
+      store.setState({ messages: chatMessages })
+    }
+  } catch (err) {
+    console.error('[Tracker] Fehler beim Laden der Nachrichtenhistorie:', err)
+  }
+
   // Stale Check alle 30 Sekunden
   setInterval(() => {
     const now = Date.now()

@@ -61,6 +61,7 @@ export function TrackerMap() {
   const taskLayersRef = useRef<L.LayerGroup | null>(null)
   const navLineRef = useRef<L.Polyline | null>(null)
   const navLineBorderRef = useRef<L.Polyline | null>(null)
+  const headingLabelRef = useRef<L.Marker | null>(null)
   const myLocationMarkerRef = useRef<L.Marker | null>(null)
   const myLocationCircleRef = useRef<L.Circle | null>(null)
   const initialFitDoneRef = useRef(false)
@@ -492,7 +493,7 @@ export function TrackerMap() {
     const map = mapInstanceRef.current
     if (!map) return
 
-    // Alte Linien entfernen
+    // Alte Linien und Label entfernen
     if (navLineRef.current) {
       map.removeLayer(navLineRef.current)
       navLineRef.current = null
@@ -500,6 +501,10 @@ export function TrackerMap() {
     if (navLineBorderRef.current) {
       map.removeLayer(navLineBorderRef.current)
       navLineBorderRef.current = null
+    }
+    if (headingLabelRef.current) {
+      map.removeLayer(headingLabelRef.current)
+      headingLabelRef.current = null
     }
 
     if (!selectedPilot) return
@@ -543,6 +548,25 @@ export function TrackerMap() {
       color: '#facc15',
       weight: 3,
       opacity: 0.9,
+      interactive: false,
+    }).addTo(map)
+
+    // Grad-Label entlang der Linie
+    const headingDeg = Math.round(pilot.heading)
+    headingLabelRef.current = L.marker([endLat, endLng], {
+      icon: L.divIcon({
+        className: '',
+        html: `<div style="
+          color: #facc15;
+          font-size: 13px;
+          font-weight: bold;
+          text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+          white-space: nowrap;
+          pointer-events: none;
+        ">${headingDeg}°</div>`,
+        iconSize: [0, 0],
+        iconAnchor: [-5, 10],
+      }),
       interactive: false,
     }).addTo(map)
   }, [selectedPilot, pilots])

@@ -1,6 +1,36 @@
 # Changelog
 
-## [Unveröffentlicht]
+## [1.3.0] - 2026-04-09
+
+### Donut Tool — NEU
+- **Neues Tool: Donut-Rechner** für Donut/Ring-Aufgaben im Wettbewerb. Öffnen über Tools-Menü → "Donut" (pink). Das Tool berechnet automatisch wo der Donut-Mittelpunkt optimal platziert werden soll und wie man die größtmögliche Strecke im Ring fliegen kann.
+- **Task-Auswahl**: Dropdown zeigt alle Tasks die mindestens 2 Ringe haben. Innerer und äußerer Radius werden automatisch aus dem Task übernommen.
+- **Mindestabstand**: Der Pilot gibt ein wie weit der Donut-Mittelpunkt mindestens von der aktuellen Position entfernt sein muss (in km).
+- **360°-Optimierung**: Das Tool testet 36 Richtungen × 3 Abstände × alle Windschicht-Höhen × verschiedene Raten. Für jeden Kandidaten wird Sekunde für Sekunde simuliert und geprüft ob die Position im Ring liegt. Die Kombination mit der längsten Pfadstrecke im Ring gewinnt.
+- **Zickzack-Pendel**: Der Ballon pendelt automatisch zwischen zwei Windschichten hin und her — wenn er droht den Ring zu verlassen, wechselt er auf die andere Höhe die ihn zurücktreibt. So bleibt er so lange wie möglich im Ring und maximiert die Strecke. Das Tool zeigt die beiden Pendel-Höhen und die Anzahl der Wechsel an.
+- **Karte**: Zeigt den optimalen Donut (innerer + äußerer Ring in Pink), den vorhergesagten Flugpfad, die Strecke innerhalb des Rings hervorgehoben (kräftige Linie), Entry/Exit-Punkte (grün/rot) und Richtungslinie zum Donut-Mittelpunkt.
+- **Flugplan**: Zeigt für jedes Leg die Zielhöhe, Rate, Windinfo, Dauer und wie viel Strecke in diesem Leg im Ring zurückgelegt wird.
+- **Höhenfilter**: Min/Max Höhe in ft eingeben — nur Windschichten in diesem Höhenbereich werden für die Berechnung verwendet. Zeigt die Anzahl der verwendeten Schichten an.
+- **Deklarieren**: Nach der Berechnung kann der Pilot "DEKLARIEREN" drücken — das setzt das Goal des ausgewählten Tasks auf den berechneten Donut-Mittelpunkt. Damit werden die Task-Ringe auf der Karte korrekt am optimalen Punkt angezeigt. Nach dem Deklarieren werden die neuen Koordinaten im eingestellten Format (UTM/MGRS) angezeigt.
+- **F-Taste**: Kann auf eine Funktionstaste gelegt werden (Tool: Donut).
+
+### Task — Ursprungsposition zurücksetzen
+- Tasks speichern jetzt die Ursprungskoordinate beim Erstellen. Im Task-Edit-Panel (Doppelklick auf Task) erscheint im Verschieben-Modus ein **↩**-Button neben den Schrittweiten (10m/100m/1000m). Klick setzt das Ziel zurück auf die Position wo es ursprünglich erstellt wurde. Nur sichtbar wenn "Verschieben" aktiv ist.
+
+### Settings — PZ Labels + Panel-Größe
+- **PZ Labels ein/aus**: In den PZ-Settings kann man jetzt die Namens-Badges auf der Karte komplett ausblenden (Checkbox "Labels auf Karte anzeigen").
+- **PZ Label-Größe**: Minimum jetzt 5px statt 8px — für kleinere Badges auf der Karte.
+- **WNV + Donut Panel-Größe**: In Settings → UI-Größe können jetzt auch die Wind Navigation und Donut Panels skaliert werden.
+- **Heading-Linie**: Maximale Länge von 5km auf 20km erhöht (in Settings → Ballon → Heading-Linie).
+
+### PZ Import — Höhe aus Dateinamen
+- Beim Import von PLT-Dateien (OziExplorer) wird jetzt die Höhe automatisch aus dem Dateinamen erkannt. Dateien wie `PZ blue 3500ft.plt` oder `PZ_4500ft.plt` setzen automatisch die Höhenwarnung auf den erkannten Wert (ceiling-Modus). Auch Meter-Angaben werden unterstützt (z.B. `PZ 1000m.plt`).
+
+### WNV (Wind Navigation) — Komplett-Umbau
+- **Besserer Algorithmus**: Multi-Leg-Berechnung unterstützt jetzt bis zu 3 Legs (vorher max 2). Die Kombinationssuche ist deutlich gründlicher – statt nur die beste 1-Leg-Höhe als Leg 1 zu nehmen, werden die Top-10 Kandidaten als Leg 1 durchprobiert, dann alle Höhen als Leg 2, und für 3-Leg die Top-5 2-Leg-Kombinationen als Basis. Convergence-Weighting bevorzugt bei ähnlicher Distanz die schnellere Strategie. Neue Sensitivity-Analyse zeigt an, wie empfindlich die Strategie auf Rate-Änderungen reagiert (±0.5 m/s → wie viele Meter Abweichung).
+- **Deklarieren & Live-Guidance**: Neue Cockpit-Anzeige nach dem Vorbild des Cone Navigators. Strategie berechnen → "Deklarieren" drücken → Live-Tracking während des Flugs. Die Guidance zeigt: welches Leg man gerade fliegt, Fortschrittsbalken, CDI (Course Deviation Indicator) als horizontaler Balken, Live-Prognose wo man tatsächlich landen wird. Grün = auf Kurs, Gelb = leichte Abweichung, Rot = Neuberechnung empfohlen. "Neu berechnen" hat einen Continuity-Bias der verhindert, dass die Strategie bei jeder Neuberechnung komplett wechselt.
+- **Klarere Cockpit-Anzeige**: Im deklarierten Modus dominiert die Hauptanweisung (42px Schrift): Zielhöhe in ft + Rate in m/s. Der Flugplan ist eingeklappt (ausklappbar) damit der Pilot nicht von Details abgelenkt wird. Kompakte Info-Zeile zeigt Distanz, Zeit und Drift-Richtung.
+- **Karte**: Deklarierter Pfad wird durchgezogen dargestellt (statt gestrichelt wie die Vorschau). Live-Pfad in Cyan zeigt wo man bei aktuellem Kurs landet. CDI-Linie verbindet Piloten-Position mit dem nächsten Punkt auf dem geplanten Pfad (farbcodiert nach Abweichung).
 
 ### Live Tracker / Team Chat
 - Fix: Nachrichten gehen nicht mehr verloren wenn der Empfänger offline ist. Vorher wurden Team-Nachrichten nur über Supabase Realtime empfangen – war der Verfolger (oder ein anderes Teammitglied) gerade nicht auf der Webseite/in der App, gingen die Nachrichten verloren. Jetzt werden beim Verbinden/Einsteigen die letzten 50 Nachrichten aus der Datenbank geladen, sodass verpasste Nachrichten sofort sichtbar sind. Betrifft sowohl die Desktop App als auch die Lite Web-App.
@@ -13,7 +43,6 @@
 - Lite App: Crew kann beim Bodenwind-Melden die Messhöhe (Ballonhöhe) auswählen – 1x (25m), 2x (50m) oder 3x (75m). 1x ist vorausgewählt. Die Höhe wird auf die Bodenhöhe aufgerechnet (z.B. Boden 500m + 2x = 550m MSL).
 
 ### Bugfixes (FlightWindsPanel)
-- Fix: Windgeschwindigkeit wurde im FlightWindsPanel falsch angezeigt – der m/s-Wert wurde direkt als km/h dargestellt (z.B. 8.3 m/s wurde als "8 km/h" statt "30 km/h" angezeigt). Betraf die Live-Ansicht und Team-Windprofile.
 - Fix: Manuelle Windeingabe im FlightWindsPanel speicherte die Geschwindigkeit in km/h statt m/s und ignorierte die Von/Zu-Richtungseinstellung.
 
 ## [1.2.7] - 2026-04-08

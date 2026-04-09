@@ -1352,7 +1352,7 @@ export function TaskSettingsPanel({ isOpen, onClose }: TaskSettingsPanelProps) {
                         borderRadius: '12px'
                       }}>{(settings.balloonHeadingLineLength || 100) >= 1000 ? `${((settings.balloonHeadingLineLength || 100) / 1000).toFixed(1)} km` : `${settings.balloonHeadingLineLength || 100} m`}</span>
                     </div>
-                    <input type="range" min="10" max="5000" step="10" value={settings.balloonHeadingLineLength || 100}
+                    <input type="range" min="10" max="20000" step="10" value={settings.balloonHeadingLineLength || 100}
                       onChange={e => updateLocalSettings({ balloonHeadingLineLength: parseInt(e.target.value) })}
                       style={{ width: '100%', cursor: 'pointer' }} />
                   </div>
@@ -1457,11 +1457,18 @@ export function TaskSettingsPanel({ isOpen, onClose }: TaskSettingsPanelProps) {
             <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(${o.c},${o.c},${o.c},0.1)' }}>
               <div style={{ fontSize: '12px', color: `rgba(${o.c},${o.c},${o.c},0.7)`, marginBottom: '12px', fontWeight: 600 }}>Label Einstellungen</div>
 
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '12px' }}>
+                <input type="checkbox" checked={settings.pzLabelsVisible !== false}
+                  onChange={e => updateLocalSettings({ pzLabelsVisible: e.target.checked })}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+                <span style={{ fontSize: '12px', color: o.textColor }}>Labels auf Karte anzeigen</span>
+              </label>
+
               <div style={{ marginBottom: '12px' }}>
                 <div style={{ fontSize: '11px', color: `rgba(${o.c},${o.c},${o.c},0.5)`, marginBottom: '8px' }}>
                   Schriftgröße: {settings.pzLabelSize || 11}px
                 </div>
-                <input type="range" min="8" max="16" step="1" value={settings.pzLabelSize || 11}
+                <input type="range" min="5" max="16" step="1" value={settings.pzLabelSize || 11}
                   onChange={e => updateLocalSettings({ pzLabelSize: parseInt(e.target.value) })}
                   style={{ width: '100%', cursor: 'pointer' }} />
               </div>
@@ -1565,6 +1572,8 @@ export function TaskSettingsPanel({ isOpen, onClose }: TaskSettingsPanelProps) {
                 { key: 'lrnPanelScale', label: 'Land Run' },
                 { key: 'aptPanelScale', label: 'Altitude Profile' },
                 { key: 'angPanelScale', label: 'ANG' },
+                { key: 'wnvPanelScale', label: 'Wind Nav (WNV)' },
+                { key: 'donutPanelScale', label: 'Donut' },
                 { key: 'windRoseScale', label: 'Windrose' },
                 { key: 'gasPanelScale', label: 'Gas-Tracker' }
               ].map(({ key, label }) => (

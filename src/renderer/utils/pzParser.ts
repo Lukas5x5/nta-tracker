@@ -222,17 +222,42 @@ export function parsePLT(content: string, filename: string): ProhibitedZone[] {
     const centerLat = sumLat / polygon.length
     const centerLon = sumLon / polygon.length
 
+    // Höhe aus dem Dateinamen extrahieren (z.B. "PZ blue 3500ft", "PZ_4500ft", "PZ 5500 ft")
+    let parsedAltFt: number | null = null
+    const altMatch = filename.match(/(\d{3,5})\s*ft/i)
+    if (altMatch) {
+      parsedAltFt = parseInt(altMatch[1], 10)
+    }
+    // Auch "3500m" oder "1000m" unterstützen
+    if (!parsedAltFt) {
+      const altMatchM = filename.match(/(\d{3,5})\s*m(?!\w)/i)
+      if (altMatchM) {
+        parsedAltFt = Math.round(parseInt(altMatchM[1], 10) * 3.28084)
+      }
+    }
+
     // Create polygon PZ
-    zones.push({
+    const pz: ProhibitedZone = {
       id: `pz-plt-${Date.now()}`,
       name: trackName,
       lat: centerLat,
       lon: centerLon,
       type: 'polygon',
       polygon: polygon
-    })
+    }
 
-    console.log(`[PZ Parser] PLT: "${trackName}" mit ${polygon.length} Punkten geladen`)
+    // Höhe aus Dateinamen übernehmen
+    if (parsedAltFt && parsedAltFt > 0) {
+      pz.elevation = parsedAltFt
+      pz.altitudeWarning = true
+      pz.altitudeWarningMode = 'ceiling'
+      pz.altitudeWarningValue = parsedAltFt
+      console.log(`[PZ Parser] PLT: Höhe aus Dateinamen erkannt: ${parsedAltFt}ft`)
+    }
+
+    zones.push(pz)
+
+    console.log(`[PZ Parser] PLT: "${trackName}" mit ${polygon.length} Punkten geladen${parsedAltFt ? `, Höhe: ${parsedAltFt}ft` : ''}`)
   } catch (err) {
     console.error('[PZ Parser] PLT Fehler:', err)
   }

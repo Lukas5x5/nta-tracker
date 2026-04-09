@@ -371,7 +371,8 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
       },
       radius: taskForm.goalRadius,
       type: GoalType.Ground,
-      declaredBy: 'judge'
+      declaredBy: 'judge',
+      originalPosition: { latitude: taskForm.lat, longitude: taskForm.lon }
     }
 
     // Rings: Alle Ringe sammeln und in Meter umwandeln
@@ -515,7 +516,8 @@ export function BriefingPanel({ isOpen, onClose, clickedPosition, onClearClick, 
       },
       radius: taskForm.goalRadius,
       type: GoalType.Ground,
-      declaredBy: 'judge'
+      declaredBy: 'judge',
+      originalPosition: { latitude: taskForm.lat, longitude: taskForm.lon }
     }
 
     // Rings: Alle Ringe sammeln und in Meter umwandeln

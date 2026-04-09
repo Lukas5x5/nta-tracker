@@ -2129,6 +2129,9 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
   const landRunResult = useFlightStore(s => s.landRunResult)
   const angleResult = useFlightStore(s => s.angleResult)
   const wnvResult = useFlightStore(s => s.wnvResult)
+  const wnvDeclared = useFlightStore(s => s.wnvDeclared)
+  const wnvGuidance = useFlightStore(s => s.wnvGuidance)
+  const donutResult = useFlightStore(s => s.donutResult)
   const activeToolPanel = useFlightStore(s => s.activeToolPanel)
   const setActiveToolPanel = useFlightStore(s => s.setActiveToolPanel)
   const dropMarker = useFlightStore(s => s.dropMarker)
@@ -2222,6 +2225,9 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
           break
         case 'openToolWnv':
           setActiveToolPanel(activeToolPanel === 'wnv' ? null : 'wnv')
+          break
+        case 'openToolDonut':
+          setActiveToolPanel(activeToolPanel === 'donut' ? null : 'donut')
           break
         case 'toggleCpaMarker':
           setCpaMarkerActive(!cpaMarkerActive)
@@ -3702,8 +3708,101 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
           </>
         )}
 
-        {/* Wind Navigation — vorhergesagter Pfad + Landepunkt */}
-        {wnvResult && wnvResult.predictedPath.length > 1 && (
+        {/* Wind Navigation — Deklarierter Pfad (durchgezogen) oder Vorschau (gestrichelt) */}
+        {wnvDeclared && wnvDeclared.strategy.predictedPath.length > 1 && (
+          <>
+            {/* Deklarierter Pfad — durchgezogene Linie */}
+            <Polyline
+              positions={wnvDeclared.strategy.predictedPath.map(p => [p.lat, p.lon] as [number, number])}
+              pathOptions={{ color: '#000', weight: 5, opacity: 0.2 }}
+              interactive={false}
+            />
+            <Polyline
+              positions={wnvDeclared.strategy.predictedPath.map(p => [p.lat, p.lon] as [number, number])}
+              pathOptions={{ color: '#f59e0b', weight: 3, opacity: 0.9 }}
+              interactive={false}
+            />
+
+            {/* Live-Pfad (Guidance) — gestrichelt cyan */}
+            {wnvGuidance && wnvGuidance.livePath.length > 1 && (
+              <>
+                <Polyline
+                  positions={wnvGuidance.livePath.map(p => [p.lat, p.lon] as [number, number])}
+                  pathOptions={{ color: '#000', weight: 4, opacity: 0.15, dashArray: '6, 4' }}
+                  interactive={false}
+                />
+                <Polyline
+                  positions={wnvGuidance.livePath.map(p => [p.lat, p.lon] as [number, number])}
+                  pathOptions={{ color: '#06b6d4', weight: 2.5, opacity: 0.85, dashArray: '6, 4' }}
+                  interactive={false}
+                />
+              </>
+            )}
+
+            {/* CDI-Linie: Pilot → nächster Pfadpunkt (dünn) */}
+            {wnvGuidance && gpsData && wnvGuidance.crossTrackErrorM > 10 && (() => {
+              const devColor = wnvGuidance.deviationLevel === 'on-track' ? '#22c55e' : wnvGuidance.deviationLevel === 'minor' ? '#f59e0b' : '#ef4444'
+              // Nächsten Punkt auf deklariertem Pfad finden
+              let closestIdx = 0, closestDist = Infinity
+              for (let i = 0; i < wnvDeclared.strategy.predictedPath.length; i++) {
+                const p = wnvDeclared.strategy.predictedPath[i]
+                const dx = p.lat - gpsData.latitude, dy = p.lon - gpsData.longitude
+                const d = dx * dx + dy * dy
+                if (d < closestDist) { closestDist = d; closestIdx = i }
+              }
+              const cp = wnvDeclared.strategy.predictedPath[closestIdx]
+              return (
+                <Polyline
+                  positions={[[gpsData.latitude, gpsData.longitude], [cp.lat, cp.lon]]}
+                  pathOptions={{ color: devColor, weight: 1.5, opacity: 0.7, dashArray: '3, 6' }}
+                  interactive={false}
+                />
+              )
+            })()}
+
+            {/* Linie Landepunkt → Ziel */}
+            {selectedGoal && selectedGoal.position && (
+              <Polyline
+                positions={[
+                  [wnvDeclared.strategy.landingPoint.lat, wnvDeclared.strategy.landingPoint.lon],
+                  [selectedGoal.position.latitude, selectedGoal.position.longitude]
+                ]}
+                pathOptions={{ color: '#f59e0b', weight: 1.5, opacity: 0.5, dashArray: '4, 8' }}
+                interactive={false}
+              />
+            )}
+
+            {/* Landepunkt — Farbe nach Deviation */}
+            <CircleMarker
+              center={[wnvDeclared.strategy.landingPoint.lat, wnvDeclared.strategy.landingPoint.lon]}
+              radius={8}
+              pathOptions={{
+                color: '#fff',
+                fillColor: wnvGuidance
+                  ? (wnvGuidance.deviationLevel === 'on-track' ? '#22c55e' : wnvGuidance.deviationLevel === 'minor' ? '#f59e0b' : '#ef4444')
+                  : (wnvDeclared.strategy.distanceToGoal < 100 ? '#22c55e' : '#f59e0b'),
+                fillOpacity: 0.9,
+                weight: 3
+              }}
+              interactive={false}
+            >
+              <Tooltip permanent direction="top" offset={[0, -12]} className="dark-drop-tooltip">
+                <span style={{
+                  color: wnvDeclared.strategy.distanceToGoal < 100 ? '#22c55e' : '#f59e0b',
+                  fontWeight: 700, fontSize: '12px'
+                }}>
+                  {wnvDeclared.strategy.distanceToGoal >= 1000
+                    ? `${(wnvDeclared.strategy.distanceToGoal / 1000).toFixed(1)} km`
+                    : `${wnvDeclared.strategy.distanceToGoal} m`
+                  }
+                </span>
+              </Tooltip>
+            </CircleMarker>
+          </>
+        )}
+
+        {/* Wind Navigation — Vorschau (nicht deklariert) */}
+        {!wnvDeclared && wnvResult && wnvResult.predictedPath.length > 1 && (
           <>
             <Polyline
               positions={wnvResult.predictedPath.map(p => [p.lat, p.lon] as [number, number])}
@@ -3715,7 +3814,6 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
               pathOptions={{ color: '#f59e0b', weight: 3, opacity: 0.9, dashArray: '6, 4' }}
               interactive={false}
             />
-            {/* Linie Landepunkt → Ziel */}
             {selectedGoal && selectedGoal.position && (
               <Polyline
                 positions={[
@@ -3726,7 +3824,6 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                 interactive={false}
               />
             )}
-            {/* Landepunkt */}
             <CircleMarker
               center={[wnvResult.landingPoint.lat, wnvResult.landingPoint.lon]}
               radius={8}
@@ -3747,6 +3844,96 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                 </span>
               </Tooltip>
             </CircleMarker>
+          </>
+        )}
+
+        {/* Donut Tool — Ringe + Pfad + Ring-Segmente */}
+        {donutResult && (
+          <>
+            {/* Innerer Ring (gestrichelt, pink) */}
+            <Circle
+              center={[donutResult.centerLat, donutResult.centerLon]}
+              radius={(() => {
+                // innerRadius aus den Rings des aktiven Tasks holen
+                const task = tasks.find(t => t.isActive && t.rings && t.rings.length >= 2)
+                return task?.rings ? Math.min(...task.rings) : 1000
+              })()}
+              pathOptions={{ color: '#ec4899', fillColor: 'transparent', fillOpacity: 0, weight: 2, opacity: 0.6, dashArray: '8, 6' }}
+              interactive={false}
+            />
+            {/* Äußerer Ring (gestrichelt, pink) */}
+            <Circle
+              center={[donutResult.centerLat, donutResult.centerLon]}
+              radius={(() => {
+                const task = tasks.find(t => t.isActive && t.rings && t.rings.length >= 2)
+                return task?.rings ? Math.max(...task.rings) : 2000
+              })()}
+              pathOptions={{ color: '#ec4899', fillColor: '#ec489910', fillOpacity: 0.08, weight: 2, opacity: 0.6, dashArray: '8, 6' }}
+              interactive={false}
+            />
+
+            {/* Richtungslinie Pilot → Donut-Mittelpunkt */}
+            {gpsData && (
+              <Polyline
+                positions={[[gpsData.latitude, gpsData.longitude], [donutResult.centerLat, donutResult.centerLon]]}
+                pathOptions={{ color: '#ec4899', weight: 1, opacity: 0.4, dashArray: '4, 8' }}
+                interactive={false}
+              />
+            )}
+
+            {/* Donut-Mittelpunkt */}
+            <CircleMarker
+              center={[donutResult.centerLat, donutResult.centerLon]}
+              radius={5}
+              pathOptions={{ color: '#fff', fillColor: '#ec4899', fillOpacity: 0.9, weight: 2 }}
+              interactive={false}
+            />
+
+            {/* Predicted Path (gestrichelt) */}
+            {donutResult.predictedPath.length > 1 && (
+              <>
+                <Polyline
+                  positions={donutResult.predictedPath.map(p => [p.lat, p.lon] as [number, number])}
+                  pathOptions={{ color: '#000', weight: 4, opacity: 0.2, dashArray: '6, 4' }}
+                  interactive={false}
+                />
+                <Polyline
+                  positions={donutResult.predictedPath.map(p => [p.lat, p.lon] as [number, number])}
+                  pathOptions={{ color: '#ec4899', weight: 2.5, opacity: 0.7, dashArray: '6, 4' }}
+                  interactive={false}
+                />
+              </>
+            )}
+
+            {/* Ring-Segmente hervorgehoben (durchgezogen, kräftig) */}
+            {donutResult.ringSegments.map((seg, i) => seg.length > 1 && (
+              <Polyline
+                key={`donut-ring-seg-${i}`}
+                positions={seg.map(p => [p.lat, p.lon] as [number, number])}
+                pathOptions={{ color: '#ec4899', weight: 4, opacity: 0.95 }}
+                interactive={false}
+              />
+            ))}
+
+            {/* Entry-Punkt */}
+            {donutResult.entryPoint && (
+              <CircleMarker
+                center={[donutResult.entryPoint.lat, donutResult.entryPoint.lon]}
+                radius={5}
+                pathOptions={{ color: '#fff', fillColor: '#22c55e', fillOpacity: 0.9, weight: 2 }}
+                interactive={false}
+              />
+            )}
+
+            {/* Exit-Punkt */}
+            {donutResult.exitPoint && (
+              <CircleMarker
+                center={[donutResult.exitPoint.lat, donutResult.exitPoint.lon]}
+                radius={5}
+                pathOptions={{ color: '#fff', fillColor: '#ef4444', fillOpacity: 0.9, weight: 2 }}
+                interactive={false}
+              />
+            )}
           </>
         )}
 
@@ -5244,7 +5431,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                 </Tooltip>
               </CircleMarker>
               {/* PZ Label unterhalb des Punktes */}
-              <Marker
+              {(settings.pzLabelsVisible !== false) && <Marker
                 position={[displayCoord.lat, displayCoord.lon]}
                 icon={L.divIcon({
                   className: 'pz-label',
@@ -5266,7 +5453,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                   iconAnchor: [0, -12]
                 })}
                 interactive={false}
-              />
+              />}
             </React.Fragment>
           )
         })}

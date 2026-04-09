@@ -1395,6 +1395,18 @@ export function Header({ onBriefingToggle, briefingOpen, onDrawToggle, drawOpen,
           </svg>
           Wind Nav <span style={{ fontSize: '8px', opacity: 0.5 }}>BETA</span>
         </button>
+        {/* Donut Tool */}
+        <button
+          onClick={() => { setActiveToolPanel(activeToolPanel === 'donut' ? null : 'donut'); setShowToolsDropdown(false) }}
+          style={{ ...dropdownItem, color: activeToolPanel === 'donut' ? '#ec4899' : `rgba(${o.c},${o.c},${o.c},${o.textSec})` }}
+          onMouseEnter={e => (e.currentTarget.style.background = `rgba(${o.c},${o.c},${o.c},${o.on ? 0.12 : 0.05})`)}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          <svg width={Math.round(16 * scale)} height={Math.round(16 * scale)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" />
+          </svg>
+          Donut <span style={{ fontSize: '8px', opacity: 0.5 }}>BETA</span>
+        </button>
       </div>
     )}
     </>

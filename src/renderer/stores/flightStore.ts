@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { useAuthStore } from './authStore'
 import type { LandRunResult, LandRunLimits } from '../utils/navigation'
-import type { WnvResult } from '../utils/windNavigation'
+import type { WnvResult, WnvGuidance } from '../utils/windNavigation'
+import type { DonutResult } from '../utils/donutCalculator'
 
 // --- IndexedDB Storage Adapter ---
 // Kein Größenlimit (vs. localStorage ~5-10MB), asynchrones Lesen/Schreiben
@@ -400,15 +401,26 @@ interface FlightState {
     setDirection: number
   } | null
 
-  // Wind Navigation (WNV) – Beta
+  // Wind Navigation (WNV)
   wnvResult: WnvResult | null
   wnvConfig: {
-    maxLegs: 1 | 2
+    maxLegs: 1 | 2 | 3
     autoRecalc: boolean
   }
+  wnvDeclared: {
+    strategy: WnvResult
+    declaredAt: number
+    declaredLat: number
+    declaredLon: number
+    declaredAlt: number
+  } | null
+  wnvGuidance: WnvGuidance | null
 
   // Aktives Tool-Panel (Marker Drop, Steigpunkt, Landeprognose, Land Run, APT, ANG, WNV)
-  activeToolPanel: 'marker' | 'fly' | 'lnd' | 'lrn' | 'apt' | 'ang' | 'wnv' | null
+  // Donut Tool
+  donutResult: DonutResult | null
+
+  activeToolPanel: 'marker' | 'fly' | 'lnd' | 'lrn' | 'apt' | 'ang' | 'wnv' | 'donut' | null
 
   // Maus-Position auf der Karte (für StatusBar Anzeige)
   mousePosition: { lat: number; lon: number } | null
@@ -477,6 +489,9 @@ interface FlightState {
   setAngleResult: (result: FlightState['angleResult']) => void
   setWnvResult: (result: WnvResult | null) => void
   updateWnvConfig: (partial: Partial<FlightState['wnvConfig']>) => void
+  setWnvDeclared: (decl: FlightState['wnvDeclared']) => void
+  setWnvGuidance: (guidance: WnvGuidance | null) => void
+  setDonutResult: (result: DonutResult | null) => void
   setActiveToolPanel: (panel: FlightState['activeToolPanel']) => void
   setMousePosition: (position: { lat: number; lon: number } | null) => void
   setFlyToPosition: (position: { lat: number; lon: number; zoom?: number } | null) => void
@@ -888,6 +903,11 @@ export const useFlightStore = create<FlightState>()(
         maxLegs: 2,
         autoRecalc: true,
       },
+      wnvDeclared: null,
+      wnvGuidance: null,
+
+      // Donut Tool
+      donutResult: null,
 
       // Aktives Tool-Panel
       activeToolPanel: null,
@@ -1197,6 +1217,9 @@ export const useFlightStore = create<FlightState>()(
   setAngleResult: (result) => set({ angleResult: result }),
   setWnvResult: (result) => set({ wnvResult: result }),
   updateWnvConfig: (partial) => set((s) => ({ wnvConfig: { ...s.wnvConfig, ...partial } })),
+  setWnvDeclared: (decl) => set({ wnvDeclared: decl }),
+  setWnvGuidance: (guidance) => set({ wnvGuidance: guidance }),
+  setDonutResult: (result) => set({ donutResult: result }),
   setActiveToolPanel: (panel) => set({ activeToolPanel: panel }),
   setMousePosition: (position) => set({ mousePosition: position }),
 

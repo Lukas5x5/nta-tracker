@@ -763,6 +763,28 @@ export function TaskEditPanel({ task, isOpen, onClose }: TaskEditPanelProps) {
                 {step}m
               </button>
             ))}
+            {/* Ursprungsposition Reset — nur im Drag-Modus */}
+            {goalDragMode && task.goals[0]?.originalPosition && (
+              <button
+                onClick={() => {
+                  const goal = task.goals[0]
+                  if (!goal?.originalPosition) return
+                  updateTask({
+                    ...task,
+                    goals: task.goals.map(g => g.id === goal.id ? {
+                      ...g,
+                      position: { ...g.position, latitude: goal.originalPosition!.latitude, longitude: goal.originalPosition!.longitude }
+                    } : g)
+                  })
+                }}
+                title="Zurück zur Ursprungsposition"
+                style={{
+                  width: '32px', padding: '5px', border: 'none', borderRadius: '4px', cursor: 'pointer',
+                  background: `rgba(${o.c},${o.c},${o.c},0.1)`, color: o.textColor,
+                  fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+              >↩</button>
+            )}
           </div>
         </div>
 

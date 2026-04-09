@@ -160,6 +160,9 @@ export interface Goal {
 
   // Für HWZ: mehrere Ziele zur Auswahl
   isSelected?: boolean
+
+  // Ursprungsposition (wird beim Erstellen gespeichert, für Reset)
+  originalPosition?: { latitude: number; longitude: number }
 }
 
 export enum GoalType {
@@ -480,6 +483,7 @@ export interface AppSettings {
   pzLabelSize?: number  // Schriftgröße der PZ-Labels (8-14, default: 11)
   pzLabelColor?: string  // Schriftfarbe der PZ-Labels (default: '#ffffff')
   pzLabelBackground?: string  // Hintergrundfarbe der PZ-Labels (default: 'rgba(239, 68, 68, 0.95)')
+  pzLabelsVisible?: boolean  // PZ-Labels auf der Karte anzeigen (default: true)
   pzCircleColor?: string  // Farbe der PZ-Kreise (default: '#ef4444')
   pzCircleOpacity?: number  // Transparenz der PZ-Kreisfüllung (0.0-1.0, default: 0.15)
   pzCircleDashed?: boolean  // Gestrichelte PZ-Kreise (default: true)
@@ -568,6 +572,8 @@ export interface AppSettings {
   lrnPanelScale?: number      // Land Run Panel Skalierung (default: 1.0, range: 0.6-1.5)
   aptPanelScale?: number      // APT Panel Skalierung (default: 1.0, range: 0.6-1.5)
   angPanelScale?: number      // ANG Berechnung Panel Skalierung (default: 1.0, range: 0.6-1.5)
+  wnvPanelScale?: number      // WNV Panel Skalierung (default: 1.0, range: 0.6-1.5)
+  donutPanelScale?: number    // Donut Panel Skalierung (default: 1.0, range: 0.6-1.5)
   windRoseScale?: number      // Windrose Skalierung (default: 1.0, range: 0.6-1.5)
   gasPanelScale?: number      // Gas-Tracker Skalierung (default: 1.0, range: 0.6-1.5)
 
@@ -864,6 +870,7 @@ export type FKeyAction =
   | 'openToolApt'
   | 'openToolAng'
   | 'openToolWnv'
+  | 'openToolDonut'
   | 'toggleNavPanel'
   | 'toggleWindPanel'
   | 'toggleBriefing'
@@ -891,6 +898,7 @@ export const FKEY_ACTION_LABELS: Record<FKeyAction, string> = {
   openToolApt: 'Tool: APT',
   openToolAng: 'Tool: ANG',
   openToolWnv: 'Tool: Wind Navigation',
+  openToolDonut: 'Tool: Donut',
   toggleNavPanel: 'Navigation ein/aus',
   toggleWindPanel: 'Wind-Panel ein/aus',
   toggleBriefing: 'Briefing ein/aus',

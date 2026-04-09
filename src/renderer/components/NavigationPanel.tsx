@@ -5,6 +5,7 @@ import { formatAltitude, formatSpeed, formatHeading, formatVariometer, formatDis
 import { calculateDistance, calculateBearing, calculateDestination, calculateClimbPoint, ClimbPointResult, calculatePdgFon, PdgFonResult, calculatePdgFonCorrection, calculateLandRun, LandRunResult, LandRunLimits, calculateAngleTask, AngleTaskResult, interpolateWind } from '../utils/navigation'
 import { ConeNavigatorPanel } from './ConeNavigatorPanel'
 import { WindNavPanel } from './WindNavPanel'
+import { DonutPanel } from './DonutPanel'
 import { calculateConeGuidance, TurnLayer } from '../utils/coneNavigator'
 import { latLonToUTM, utmToLatLon, formatCoordinate, getGridPrecision } from '../utils/coordinatesWGS84'
 import { NavPanelField, NavPanelFieldType, GPSFix, Goal, Task } from '../../shared/types'
@@ -126,6 +127,7 @@ export function NavigationPanel() {
   const showAptPanel = activeToolPanel === 'apt'
   const showAngPanel = activeToolPanel === 'ang'
   const showWnvPanel = activeToolPanel === 'wnv'
+  const showDonutPanel = activeToolPanel === 'donut'
 
   const [isDragging, setIsDragging] = useState(false)
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -3528,7 +3530,17 @@ export function NavigationPanel() {
           onClose={() => setActiveToolPanel(null)}
           onMouseDown={handleToolMouseDown}
           onTouchStart={handleToolTouchStart}
-          style={toolPanelStyle((settings as any).wnvPanelScale ?? 1, 'rgba(245, 158, 11, 0.3)', false)}
+          style={toolPanelStyle(settings.wnvPanelScale ?? 1, 'rgba(245, 158, 11, 0.3)', false)}
+        />
+      )}
+
+      {/* Donut Tool */}
+      {showDonutPanel && (
+        <DonutPanel
+          onClose={() => setActiveToolPanel(null)}
+          onMouseDown={handleToolMouseDown}
+          onTouchStart={handleToolTouchStart}
+          style={toolPanelStyle(settings.donutPanelScale ?? 1, 'rgba(236, 72, 153, 0.3)', false)}
         />
       )}
 

@@ -286,7 +286,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
     const layer: WindLayer = {
       altitude: altitudeUnit === 'ft' ? alt / 3.28084 : alt,
       direction: dirFrom,
-      speed: spd / 3.6, // km/h zu m/s
+      speed: spd, // km/h (intern immer km/h)
       timestamp: new Date(),
       source: WindSource.Manual
     }
@@ -678,7 +678,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                   return sortedLayers.map((layer, i) => {
                   const isCurrentLayer = layer.altitude === closestLayerAlt
                   const isSelected = selectedWindLayer === layer.altitude
-                  const speedKmh = layer.speed * 3.6
+                  const speedKmh = layer.speed
                   const altColor = getAltitudeColor(layer.altitude, minAltitude, maxAltitude)
                   const windColor = getWindColor(speedKmh)
                   const displayDirection = settings.windDirectionMode === 'to' ? (layer.direction + 180) % 360 : layer.direction
@@ -1802,8 +1802,8 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         {previewLayers.slice(0, 20).map((layer, i) => {
                           // Geschwindigkeit in App-Einheit anzeigen
                           const displaySpeed = settings.windSpeedUnit === 'ms'
-                            ? (layer.speed / 3.6).toFixed(1)
-                            : layer.speed.toFixed(1)
+                            ? (layer.speed / 3.6).toFixed(1) // km/h → m/s
+                            : layer.speed.toFixed(1) // km/h direkt
                           const speedUnitLabel = settings.windSpeedUnit === 'ms' ? 'm/s' : 'km/h'
                           // Richtung je nach App-Einstellung (von/zu)
                           const displayDir = settings.windDirectionMode === 'from'
@@ -2311,7 +2311,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         const teamMaxAlt = teamLayers.length > 0 ? Math.max(...teamLayers.map(l => l.altitude)) : 1000
 
                         return teamLayers.map((layer, i) => {
-                          const speedKmh = layer.speed * 3.6
+                          const speedKmh = layer.speed
                           const isLineActive = windLineMode && pendingWindLayer?.altitude === layer.altitude
                           const teamAltColor = getAltitudeColor(layer.altitude, teamMinAlt, teamMaxAlt)
                           const teamWindColor = getWindColor(speedKmh)

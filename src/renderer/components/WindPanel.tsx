@@ -506,6 +506,7 @@ export function WindPanel({ isOpen, onClose, position }: WindPanelProps) {
             {/* Windschichten */}
             <div style={{ flex: 1 }}>
               {sortedLayers.map((layer, index) => {
+                console.log(`[WindPanel] Layer: alt=${layer.altitude}, dir=${layer.direction}, speed=${layer.speed} m/s → ${layer.speed * 3.6} km/h`)
                 const speedKmh = msToKmh(layer.speed)
                 const isNearCurrent = Math.abs(layer.altitude - currentAltitude) < intervalSize / 2
                 const isSelected = selectedWindLayer === layer.altitude

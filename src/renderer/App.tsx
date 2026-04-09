@@ -6,6 +6,7 @@ import { StatusBar } from './components/StatusBar'
 import { BriefingPanel } from './components/BriefingPanel'
 import { DrawingPanel } from './components/DrawingPanel'
 import { LiveTeamPanel } from './components/LiveTeamPanel'
+import { GroundWindToast } from './components/GroundWindToast'
 import { BackupDialog } from './components/BackupDialog'
 import { useFlightStore } from './stores/flightStore'
 import { useTeamStore, type TeamMessage } from './stores/teamStore'
@@ -1683,6 +1684,9 @@ function App() {
           )}
         </div>
       )}
+
+      {/* Ground Wind Toast - eigene Komponente wegen HMR */}
+      <GroundWindToast />
 
       {/* Task Reminder Notification - rechts oben */}
       {taskReminder && (() => {

@@ -13,6 +13,7 @@ export function GroundWindDialog({ task, onClose }: GroundWindDialogProps) {
   const { user } = useAuthStore()
   const [direction, setDirection] = useState('')
   const [speed, setSpeed] = useState('')
+  const [balloonHeight, setBalloonHeight] = useState<1 | 2 | 3>(1)
   const [notes, setNotes] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -98,6 +99,10 @@ export function GroundWindDialog({ task, onClose }: GroundWindDialogProps) {
       // km/h in m/s umrechnen für die Datenbank
       const spdMs = spd !== null ? spd / 3.6 : null
 
+      // Ballonhöhe-Info + Notizen kombinieren
+      const bhTag = `[BH:${balloonHeight}]`
+      const combinedNotes = notes.trim() ? `${bhTag} ${notes.trim()}` : bhTag
+
       // Prüfen ob bereits ein Report für diesen Task existiert
       const { data: existing } = await supabase
         .from('ground_wind_reports')
@@ -116,7 +121,7 @@ export function GroundWindDialog({ task, onClose }: GroundWindDialogProps) {
             wind_speed: spdMs,
             latitude: goalPos?.latitude || null,
             longitude: goalPos?.longitude || null,
-            notes: notes.trim() || null,
+            notes: combinedNotes,
             created_at: new Date().toISOString()
           })
           .eq('id', existing.id)
@@ -280,6 +285,41 @@ export function GroundWindDialog({ task, onClose }: GroundWindDialogProps) {
                 fontFamily: 'monospace'
               }}
             />
+          </div>
+
+          {/* Ballonhöhe */}
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: 11,
+              color: 'rgba(255,255,255,0.6)',
+              marginBottom: 6
+            }}>
+              Messhöhe (Ballonhöhe)
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {([1, 2, 3] as const).map(h => (
+                <button
+                  key={h}
+                  onClick={() => setBalloonHeight(h)}
+                  style={{
+                    flex: 1,
+                    padding: '10px 8px',
+                    background: balloonHeight === h ? 'rgba(59, 130, 246, 0.3)' : 'rgba(0,0,0,0.3)',
+                    border: balloonHeight === h ? '2px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 6,
+                    color: balloonHeight === h ? '#60a5fa' : 'rgba(255,255,255,0.6)',
+                    fontSize: 13,
+                    fontWeight: balloonHeight === h ? 700 : 400,
+                    cursor: 'pointer',
+                    textAlign: 'center'
+                  }}
+                >
+                  <div style={{ fontSize: 15, fontWeight: 700 }}>{h}x</div>
+                  <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>{h * 25}m</div>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Notes */}

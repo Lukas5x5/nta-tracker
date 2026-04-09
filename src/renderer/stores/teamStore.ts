@@ -73,6 +73,20 @@ interface TeamState {
   // Team Wind Profiles (geteilte Windprofile von anderen Teammitgliedern)
   teamWindProfiles: TeamWindProfile[]
 
+  // Ground Wind Toast (Benachrichtigung wenn Crew Wind durchgibt)
+  groundWindToast: {
+    id: string
+    callsign: string
+    color: string
+    taskName: string
+    windDirection: number | null
+    windSpeed: number | null
+    memberId: string
+    latitude: number | null
+    longitude: number | null
+    notes: string | null
+  } | null
+
   // Channel References (für Cleanup)
   _channels: any[] | null
   _windChannel: any | null
@@ -88,6 +102,10 @@ interface TeamState {
   setConnectionStatus: (status: TeamConnectionStatus) => void
   toggleMemberVisibility: (memberId: string) => void
   clearMessages: () => void
+  setGroundWindToast: (toast: TeamState['groundWindToast']) => void
+  acceptGroundWind: () => Promise<void>
+  pendingWindLayer: WindLayer | null
+  clearPendingWindLayer: () => void
   cleanup: () => void
 }
 
@@ -134,6 +152,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   hiddenMembers: new Set<string>(),
   messages: [],
   teamWindProfiles: [],
+  groundWindToast: null,
+  pendingWindLayer: null,
   _channels: null,
   _windChannel: null,
 
@@ -607,6 +627,52 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   }),
 
   clearMessages: () => set({ messages: [] }),
+  setGroundWindToast: (toast) => set({ groundWindToast: toast }),
+
+  acceptGroundWind: async () => {
+    const { groundWindToast } = get()
+    if (!groundWindToast) return
+
+    // Bodenhöhe am Zielkreuz aus HGT-Daten
+    const lat = groundWindToast.latitude
+    const lon = groundWindToast.longitude
+    let elevation = 0
+
+    if (lat && lon && window.ntaAPI?.elevation) {
+      try {
+        const hgtElevation = await window.ntaAPI.elevation.getElevation(lat, lon)
+        if (hgtElevation !== null) {
+          elevation = hgtElevation
+        }
+      } catch (err) {
+        console.warn('[GroundWind] HGT Elevation Fehler:', err)
+      }
+    }
+
+    // Ballonhöhe aus Notes parsen: [BH:1]=25m, [BH:2]=50m, [BH:3]=75m
+    const bhMatch = groundWindToast.notes?.match(/\[BH:(\d)\]/)
+    const balloonMultiplier = bhMatch ? parseInt(bhMatch[1]) : 1
+    const balloonOffset = balloonMultiplier * 25
+
+    // Richtung umrechnen: Verfolger gibt "wohin" der Wind geht, Windprofil braucht "woher"
+    const directionFrom = ((groundWindToast.windDirection || 0) + 180) % 360
+    const speedMs = groundWindToast.windSpeed || 0
+
+    const layer: WindLayer = {
+      altitude: elevation + balloonOffset,
+      direction: directionFrom,
+      speed: speedMs,
+      timestamp: new Date(),
+      source: WindSource.Manual,
+      isStable: true,
+      stableSince: new Date(),
+      vario: 0
+    }
+
+    console.log(`[GroundWind] Wind vorbereitet: ${directionFrom}° / ${(speedMs * 3.6).toFixed(1)} km/h @ ${elevation}+${balloonOffset}m = ${elevation + balloonOffset}m MSL (${balloonMultiplier}x Ballonhöhe)`)
+    set({ groundWindToast: null, pendingWindLayer: layer })
+  },
+  clearPendingWindLayer: () => set({ pendingWindLayer: null }),
 
   cleanup: () => {
     const { _channels, _windChannel } = get()

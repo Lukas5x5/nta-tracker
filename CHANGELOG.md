@@ -8,6 +8,14 @@
 ### Live Tracker (Lite) - Karte
 - Heading-Linie zeigt jetzt die Gradzahl an: Am Ende der gelben Richtungslinie (die anzeigt wohin der Pilot/Verfolger fährt) wird jetzt die aktuelle Fahrtrichtung in Grad angezeigt (z.B. "245°"). Gelbe Schrift mit schwarzem Rand für gute Lesbarkeit auf allen Kartenhintergründen.
 
+### Bodenwind-Benachrichtigung (Desktop + Lite)
+- Neue Push-Benachrichtigung wenn die Crew einen Bodenwind durchgibt: Es erscheint ein Toast (oben links) mit Callsign, Windrichtung, Windgeschwindigkeit und Task-Name. Mit dem Button "Ins Windprofil übernehmen" wird der Wind direkt als neue Windschicht ins eigene Windprofil eingefügt. Die Höhe der Windschicht wird aus der HGT-Datei bestimmt (Bodenhöhe MSL am Zielkreuz) plus Ballonhöhe-Offset. Bei gleichem Ziel wird der bestehende Eintrag überschrieben.
+- Lite App: Crew kann beim Bodenwind-Melden die Messhöhe (Ballonhöhe) auswählen – 1x (25m), 2x (50m) oder 3x (75m). 1x ist vorausgewählt. Die Höhe wird auf die Bodenhöhe aufgerechnet (z.B. Boden 500m + 2x = 550m MSL).
+
+### Bugfixes (FlightWindsPanel)
+- Fix: Windgeschwindigkeit wurde im FlightWindsPanel falsch angezeigt – der m/s-Wert wurde direkt als km/h dargestellt (z.B. 8.3 m/s wurde als "8 km/h" statt "30 km/h" angezeigt). Betraf die Live-Ansicht und Team-Windprofile.
+- Fix: Manuelle Windeingabe im FlightWindsPanel speicherte die Geschwindigkeit in km/h statt m/s und ignorierte die Von/Zu-Richtungseinstellung.
+
 ## [1.2.7] - 2026-04-08
 
 ### Bugfixes

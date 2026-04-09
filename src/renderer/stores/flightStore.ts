@@ -1844,6 +1844,8 @@ export const useFlightStore = create<FlightState>()(
   })),
 
   addWindLayers: (layers) => set((state) => {
+    console.log('[FlightStore] addWindLayers aufgerufen:', layers.map(l => `dir=${l.direction}° speed=${l.speed}m/s (${(l.speed*3.6).toFixed(1)}km/h) alt=${l.altitude}m`))
+    console.trace('[FlightStore] Aufrufer:')
     const merged = [...state.windLayers]
     for (const layer of layers) {
       const idx = merged.findIndex(l => l.altitude === layer.altitude)

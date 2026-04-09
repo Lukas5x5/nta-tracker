@@ -26,15 +26,27 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
   const {
     session, myMemberId, members, connectionStatus, error, queue,
     hiddenMembers, createTeam, joinTeam, leaveTeam,
-    toggleMemberVisibility, sendMessage
+    toggleMemberVisibility, sendMessage, setGroundWindToast
   } = useTeamStore()
+  const pendingWindLayer = useTeamStore(s => s.pendingWindLayer)
+  const clearPendingWindLayer = useTeamStore(s => s.clearPendingWindLayer)
 
   const { settings } = useFlightStore()
+  const addWindLayers = useFlightStore(s => s.addWindLayers)
   const o = getOutdoor(settings.outdoorMode)
   const authUser = useAuthStore(s => s.user)
 
   // Callsign ist der Anzeigename des eingeloggten Benutzers (nicht editierbar)
   const callsign = authUser?.display_name || authUser?.username || ''
+
+  // Pending Wind Layer aus teamStore ins Windprofil übernehmen
+  useEffect(() => {
+    if (pendingWindLayer) {
+      addWindLayers([pendingWindLayer])
+      console.log(`[GroundWind] Wind ins Profil übernommen: ${pendingWindLayer.direction}° / ${(pendingWindLayer.speed * 3.6).toFixed(1)} km/h @ ${pendingWindLayer.altitude}m`)
+      clearPendingWindLayer()
+    }
+  }, [pendingWindLayer])
 
   // UI State
   const [teamName, setTeamName] = useState('')
@@ -120,12 +132,37 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
           schema: 'public',
           table: 'ground_wind_reports'
         },
-        (payload) => {
+        async (payload) => {
+          console.log('[WindBadge] RAW EVENT:', payload.eventType, JSON.stringify(payload.new))
           const record = payload.new as any
           if (record?.team_id !== teamId) return
           // Nur Badge erhöhen wenn Wind-Panel geschlossen ist
           if (!showWindReportsRef.current) {
             setUnreadWindReports(prev => prev + 1)
+          }
+
+          // Toast-Benachrichtigung wenn Wind-Daten vorhanden
+          if (record.wind_direction !== null || record.wind_speed !== null) {
+            console.log('[GroundWindToast] Wind Report empfangen:', record.task_name)
+            // Member-Infos laden
+            const { data: memberData } = await supabase
+              .from('team_members')
+              .select('callsign, color')
+              .eq('id', record.member_id)
+              .single()
+
+            setGroundWindToast({
+              id: record.id,
+              callsign: memberData?.callsign || '???',
+              color: memberData?.color || '#6b7280',
+              taskName: record.task_name || 'Unbekannt',
+              windDirection: record.wind_direction,
+              windSpeed: record.wind_speed,
+              memberId: record.member_id,
+              latitude: record.latitude || null,
+              longitude: record.longitude || null,
+              notes: record.notes || null
+            })
           }
         }
       )

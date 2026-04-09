@@ -280,10 +280,13 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
 
     if (isNaN(alt) || isNaN(dir) || isNaN(spd)) return
 
+    // Richtung: wenn Einstellung "to" ist, gibt User "wohin" ein → umrechnen zu "woher" (intern immer "from")
+    const dirFrom = settings.windDirectionMode === 'to' ? (dir + 180) % 360 : dir
+
     const layer: WindLayer = {
       altitude: altitudeUnit === 'ft' ? alt / 3.28084 : alt,
-      direction: dir,
-      speed: spd, // Already in km/h
+      direction: dirFrom,
+      speed: spd / 3.6, // km/h zu m/s
       timestamp: new Date(),
       source: WindSource.Manual
     }
@@ -675,7 +678,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                   return sortedLayers.map((layer, i) => {
                   const isCurrentLayer = layer.altitude === closestLayerAlt
                   const isSelected = selectedWindLayer === layer.altitude
-                  const speedKmh = layer.speed
+                  const speedKmh = layer.speed * 3.6
                   const altColor = getAltitudeColor(layer.altitude, minAltitude, maxAltitude)
                   const windColor = getWindColor(speedKmh)
                   const displayDirection = settings.windDirectionMode === 'to' ? (layer.direction + 180) % 360 : layer.direction
@@ -2308,7 +2311,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         const teamMaxAlt = teamLayers.length > 0 ? Math.max(...teamLayers.map(l => l.altitude)) : 1000
 
                         return teamLayers.map((layer, i) => {
-                          const speedKmh = layer.speed
+                          const speedKmh = layer.speed * 3.6
                           const isLineActive = windLineMode && pendingWindLayer?.altitude === layer.altitude
                           const teamAltColor = getAltitudeColor(layer.altitude, teamMinAlt, teamMaxAlt)
                           const teamWindColor = getWindColor(speedKmh)

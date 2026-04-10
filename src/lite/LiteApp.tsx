@@ -7,6 +7,7 @@ import { PilotList } from './components/PilotList'
 import { TeamChat } from './components/TeamChat'
 import { useAuthStore } from './stores/authStore'
 import { useTrackerStore } from './stores/trackerStore'
+import { supabase } from './lib/supabase'
 
 export function LiteApp() {
   const { isAuthenticated, isLoading, checkSession } = useAuthStore()
@@ -53,6 +54,27 @@ export function LiteApp() {
     }, 30000)
     return () => clearInterval(interval)
   }, [])
+
+  // Team-Aktivität prüfen — alle 60s prüfen ob Team noch aktiv ist
+  useEffect(() => {
+    if (!team) return
+    const checkTeamActive = async () => {
+      try {
+        const { data } = await supabase
+          .from('teams')
+          .select('is_active')
+          .eq('id', team.id)
+          .single()
+        if (data && !data.is_active) {
+          console.log('[Lite] Team nicht mehr aktiv, verlasse...')
+          try { localStorage.removeItem('nta-lite-join-code') } catch {}
+          leaveTeam()
+        }
+      } catch {}
+    }
+    const interval = setInterval(checkTeamActive, 60000)
+    return () => clearInterval(interval)
+  }, [team?.id])
 
   // Cleanup bei Logout
   useEffect(() => {

@@ -128,6 +128,8 @@ export const useTrackerStore = create<TrackerState>((set, get) => ({
         .single()
 
       if (teamError || !team) {
+        // Team existiert nicht mehr — gespeicherten Code löschen
+        try { localStorage.removeItem('nta-lite-join-code') } catch {}
         set({ isJoining: false, joinError: 'Team nicht gefunden oder nicht mehr aktiv.' })
         return false
       }

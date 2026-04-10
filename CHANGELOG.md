@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.3.1] - 2026-04-10
+
+### Desktop App
+- **Kartentyp wird gespeichert**: Die gewählte Karte (OSM/Topo/Satellit) bleibt nach dem Neustart erhalten.
+- **Distanzkreis**: Neuer Button in der Fußleiste neben der Navigationslinie. Klick öffnet Dropdown mit 0,5km bis 5km — zeichnet einen Kreis um die Piloten-Position. Nochmal klicken = weg.
+- **Windlinie Label**: Das Info-Label (Höhe, Richtung, Speed) sitzt jetzt rotiert direkt auf der Kurslinie statt als Badge unter dem Startpunkt.
+- **Bodenwind vom Verfolger**: Windschichten mit Zielkreuz-Messung haben jetzt ein grünes Badge mit dem Task-Namen über der Zeile + dicken grünen Rahmen. Klick auf die Zeile zeichnet automatisch eine beidseitige Windlinie am Zielkreuz (Toggle: 2. Klick entfernt sie).
+- **Forecast-Überschreibung**: Live-gemessene Winde ersetzen jetzt automatisch Forecast-Schichten in der Nähe (±halbes Höhen-Intervall). So werden FC-Werte nicht fälschlich zur Berechnung herangezogen.
+- **Wind-Anzeige Fix**: Manuelle Windeingabe und Anzeige im FlightWindsPanel korrigiert (km/h-Inkonsistenz behoben).
+- **Team Rejoin**: Beim Verlassen eines Teams wird der Code gespeichert. Beim nächsten Öffnen des Team-Panels erscheint ein "↩ Rejoin" Button zum schnellen Wiederbeitreten.
+
+### Lite App (Web für Crew)
+- **Navigiere zum Piloten**: Klick auf Pilot-Marker zeigt Popup mit Callsign, Höhe, Speed und "🧭 Navigiere zu" Button (öffnet Google Maps Navigation).
+- **Kartentyp wird gespeichert**: Gewählte Karte (OSM/Satellit/Topo) bleibt nach Neustart der App erhalten.
+- **Team-Ablauf**: Wenn ein Team nicht mehr aktiv ist, wird der Nutzer automatisch zum Team-Code-Eingabe-Screen zurückgeleitet. Prüfung alle 60 Sekunden.
+- **Logout-Button**: Kleiner und unauffälliger, mit Bestätigungs-Dialog um versehentliches Ausloggen zu verhindern.
+
 ## [1.3.0] - 2026-04-09
 
 ### Donut Tool — NEU

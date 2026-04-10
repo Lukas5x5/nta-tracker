@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useFlightStore } from '../stores/flightStore'
 import { getOutdoor } from '../utils/outdoorStyles'
 import { latLonToUTM } from '../utils/coordinatesWGS84'
@@ -15,6 +15,22 @@ export function StatusBar() {
   const selectedGoal = useFlightStore(s => s.selectedGoal)
   const windSourceFilter = useFlightStore(s => s.windSourceFilter)
   const activeCompetitionMap = useFlightStore(s => s.activeCompetitionMap)
+  const rangeCircleRadius = useFlightStore(s => s.rangeCircleRadius)
+  const setRangeCircleRadius = useFlightStore(s => s.setRangeCircleRadius)
+  const [showRangeDropdown, setShowRangeDropdown] = useState(false)
+  const rangeDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Distanzkreis Dropdown schließen bei Klick außerhalb
+  useEffect(() => {
+    if (!showRangeDropdown) return
+    const handler = (e: MouseEvent) => {
+      if (rangeDropdownRef.current && !rangeDropdownRef.current.contains(e.target as Node)) {
+        setShowRangeDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showRangeDropdown])
 
   // Live clock
   const [currentTime, setCurrentTime] = useState(new Date())
@@ -545,6 +561,69 @@ export function StatusBar() {
           </svg>
         </button>
       )}
+
+      {/* ─── Distanzkreis ─── */}
+      <div style={{ position: 'relative', flexShrink: 0 }} ref={rangeDropdownRef}>
+        <button
+          onClick={() => {
+            if (rangeCircleRadius) {
+              setRangeCircleRadius(null)
+              setShowRangeDropdown(false)
+            } else {
+              setShowRangeDropdown(!showRangeDropdown)
+            }
+          }}
+          title={rangeCircleRadius ? `Distanzkreis ${rangeCircleRadius >= 1000 ? `${rangeCircleRadius / 1000}km` : `${rangeCircleRadius}m`} — Klick zum Entfernen` : 'Distanzkreis anzeigen'}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: '22px', height: '22px', padding: 0, border: 'none', borderRadius: '4px',
+            background: rangeCircleRadius ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+            color: rangeCircleRadius ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},${o.textDim})`,
+            cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0, marginRight: '4px'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)'
+            e.currentTarget.style.color = rangeCircleRadius ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},${o.textSec})`
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = rangeCircleRadius ? 'rgba(59, 130, 246, 0.2)' : 'transparent'
+            e.currentTarget.style.color = rangeCircleRadius ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},${o.textDim})`
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="9" />
+            <circle cx="12" cy="12" r="2" />
+          </svg>
+        </button>
+
+        {/* Dropdown */}
+        {showRangeDropdown && (
+          <div style={{
+            position: 'absolute', bottom: '28px', right: 0,
+            background: o.on ? 'rgba(255,255,255,0.97)' : 'rgba(30,30,30,0.95)',
+            border: `1px solid rgba(${o.c},${o.c},${o.c},${o.on ? 0.15 : 0.25})`,
+            borderRadius: '6px', padding: '4px', zIndex: 9999,
+            boxShadow: o.on ? '0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.5)',
+            display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '60px'
+          }}>
+            {[500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000].map(r => (
+              <button key={r} onClick={() => { setRangeCircleRadius(r); setShowRangeDropdown(false) }}
+                style={{
+                  padding: '4px 8px', border: 'none', borderRadius: '4px', cursor: 'pointer',
+                  background: rangeCircleRadius === r ? (o.on ? 'rgba(59,130,246,0.3)' : 'rgba(59,130,246,0.15)') : 'transparent',
+                  color: rangeCircleRadius === r ? '#3b82f6' : `rgba(${o.c},${o.c},${o.c},${o.on ? 0.85 : 0.7})`,
+                  fontSize: '11px', fontWeight: 600, fontFamily: 'monospace', textAlign: 'right',
+                  whiteSpace: 'nowrap'
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = o.on ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.08)')}
+                onMouseLeave={e => (e.currentTarget.style.background = rangeCircleRadius === r ? (o.on ? 'rgba(59,130,246,0.3)' : 'rgba(59,130,246,0.15)') : 'transparent')}
+              >
+                {`${(r / 1000).toFixed(1).replace('.', ',')}km`}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* ─── Fullscreen Toggle ─── */}
       <button

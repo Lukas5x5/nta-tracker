@@ -2097,7 +2097,10 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
   const hiddenTeamMembers = useTeamStore(s => s.hiddenMembers)
 
   const [followBalloon, setFollowBalloon] = useState(true)
-  const [mapType, setMapType] = useState<'osm' | 'satellite' | 'hybrid'>('osm')
+  const [mapType, setMapType] = useState<'osm' | 'satellite' | 'hybrid'>(() => {
+    const saved = localStorage.getItem('nta-map-type')
+    return (saved === 'satellite' || saved === 'hybrid') ? saved : 'osm'
+  })
   const [showPowerLines, setShowPowerLines] = useState(false) // Hochspannungsleitungen Overlay
   const [showPowerLinesLegend, setShowPowerLinesLegend] = useState(false) // Legende für Power Lines
   const [showCompetitionArea, setShowCompetitionArea] = useState(false) // Wettkampfbereich-Panel
@@ -2132,6 +2135,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
   const wnvDeclared = useFlightStore(s => s.wnvDeclared)
   const wnvGuidance = useFlightStore(s => s.wnvGuidance)
   const donutResult = useFlightStore(s => s.donutResult)
+  const rangeCircleRadius = useFlightStore(s => s.rangeCircleRadius)
   const activeToolPanel = useFlightStore(s => s.activeToolPanel)
   const setActiveToolPanel = useFlightStore(s => s.setActiveToolPanel)
   const dropMarker = useFlightStore(s => s.dropMarker)
@@ -3104,6 +3108,11 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
           const endLat = startLat + latDiff
           const endLon = startLon + lonDiff
 
+          // Gegenrichtung für beidseitige Linie (Bodenwind am Zielkreuz)
+          const oppLat = startLat - latDiff
+          const oppLon = startLon - lonDiff
+          const isBidirectional = !!windLine.windLayer.goalPosition
+
           // Formatiere Windrichtung
           const formatWindDirection = () => {
             if (settings.windDirectionMode === 'from') {
@@ -3134,10 +3143,9 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
             <React.Fragment key={windLine.id}>
               {/* Schwarzer Rand für Kontrast */}
               <Polyline
-                positions={[
-                  [startLat, startLon],
-                  [endLat, endLon]
-                ]}
+                positions={isBidirectional
+                  ? [[oppLat, oppLon], [startLat, startLon], [endLat, endLon]]
+                  : [[startLat, startLon], [endLat, endLon]]}
                 pathOptions={{
                   color: '#000000',
                   weight: borderWidth,
@@ -3146,10 +3154,9 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
               />
               {/* Hauptlinie in Linienfarbe */}
               <Polyline
-                positions={[
-                  [startLat, startLon],
-                  [endLat, endLon]
-                ]}
+                positions={isBidirectional
+                  ? [[oppLat, oppLon], [startLat, startLon], [endLat, endLon]]
+                  : [[startLat, startLon], [endLat, endLon]]}
                 pathOptions={{
                   color: windLineColor,
                   weight: windLineWidth,
@@ -3176,47 +3183,48 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                   iconAnchor: [0, 0]
                 })}
               />
-              {/* Startpunkt Marker */}
-              <Marker
-                position={[startLat, startLon]}
-                icon={L.divIcon({
-                  className: 'wind-line-start',
-                  html: `
-                    <div style="
-                      position: relative;
-                      width: 16px;
-                      height: 16px;
-                      transform: translate(-50%, -50%);
-                    ">
-                      <div style="
-                        width: 16px;
-                        height: 16px;
-                        background: ${windLineColor};
-                        border: 3px solid white;
-                        border-radius: 50%;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-                      "></div>
-                      <div style="
+              {/* Startpunkt */}
+              <CircleMarker
+                center={[startLat, startLon]}
+                radius={5}
+                pathOptions={{ color: '#fff', fillColor: windLineColor, fillOpacity: 1, weight: 2 }}
+                interactive={false}
+              />
+              {/* Label entlang der Linie (mittig, rotiert) */}
+              {(() => {
+                const midLat = (startLat + endLat) / 2
+                const midLon = (startLon + endLon) / 2
+                let rot = flyDirection - 90
+                if (rot > 90 && rot < 270) rot += 180
+                if (rot > 360) rot -= 360
+                return (
+                  <Marker
+                    position={[midLat, midLon]}
+                    icon={L.divIcon({
+                      className: 'wind-line-label',
+                      html: `<div style="
                         position: absolute;
-                        top: 20px;
-                        left: 50%;
-                        transform: translateX(-50%);
+                        left: 50%; top: 50%;
+                        transform: translate(-50%, -50%) rotate(${rot}deg);
+                      "><div style="
                         background: ${windLineColor};
                         color: white;
-                        padding: 2px 6px;
+                        padding: 3px 8px;
                         border-radius: 4px;
                         font-size: 11px;
                         font-weight: 700;
                         white-space: nowrap;
-                      ">
-                        ${formatAltitudeForLabel()} - ${formatWindDirection()}° / ${windLine.windLayer.speed.toFixed(1)} km/h
-                      </div>
-                    </div>
-                  `,
-                  iconSize: [0, 0],
-                  iconAnchor: [0, 0]
-                })}
-              />
+                        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                        display: inline-block;
+                      ">${formatAltitudeForLabel()} ${formatWindDirection()}° ${windLine.windLayer.speed.toFixed(0)}km/h</div></div>`,
+                      iconSize: [0, 0],
+                      iconAnchor: [0, 0]
+                    })}
+                    interactive={false}
+                  />
+                )
+              })()}
             </React.Fragment>
           )
         })}
@@ -3845,6 +3853,19 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
               </Tooltip>
             </CircleMarker>
           </>
+        )}
+
+        {/* Distanzkreis um Piloten-Position */}
+        {rangeCircleRadius && gpsData && (
+          <Circle
+            center={[gpsData.latitude, gpsData.longitude]}
+            radius={rangeCircleRadius}
+            pathOptions={{
+              color: '#3b82f6', fillColor: 'transparent', fillOpacity: 0,
+              weight: 2, opacity: 0.6, dashArray: '8, 6'
+            }}
+            interactive={false}
+          />
         )}
 
         {/* Donut Tool — Ringe + Pfad + Ring-Segmente */}
@@ -5783,6 +5804,7 @@ export function MapView({ onMapClick, clickedPosition, briefingOpen, drawingMode
                 const currentIndex = types.indexOf(mapType)
                 const nextIndex = (currentIndex + 1) % types.length
                 setMapType(types[nextIndex])
+                localStorage.setItem('nta-map-type', types[nextIndex])
               }}
               style={mapBtnStyle(mapType !== 'osm', mapType === 'satellite' ? '#3b82f6' : '#8b5cf6')}
               title={`Kartentyp: ${mapType === 'osm' ? 'OpenStreetMap' : mapType === 'satellite' ? 'Topo' : 'Satellit'}`}

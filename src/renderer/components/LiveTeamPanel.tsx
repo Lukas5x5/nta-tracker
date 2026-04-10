@@ -198,6 +198,23 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
     if (success) setMode('menu')
   }
 
+  // Letztes Team aus localStorage
+  const lastTeamRaw = localStorage.getItem('nta_last_team')
+  const lastTeam: { joinCode: string; name: string; id: string } | null = lastTeamRaw ? JSON.parse(lastTeamRaw) : null
+
+  const handleRejoin = async () => {
+    if (!callsign.trim() || !lastTeam) return
+    setIsLoading(true)
+    const success = await joinTeam(lastTeam.joinCode, callsign.trim())
+    setIsLoading(false)
+    if (success) {
+      setMode('menu')
+    } else {
+      // Team nicht mehr aktiv — letztes Team vergessen
+      localStorage.removeItem('nta_last_team')
+    }
+  }
+
   const handleLeave = async () => {
     stopPositionBroadcasting()
     await leaveTeam()
@@ -363,6 +380,31 @@ export function LiveTeamPanel({ isOpen, onClose }: LiveTeamPanelProps) {
                 >
                   Team erstellen
                 </button>
+
+                {/* Rejoin letztes Team */}
+                {lastTeam && callsign.trim() && (
+                  <button
+                    onClick={handleRejoin}
+                    disabled={isLoading}
+                    style={{
+                      width: '100%',
+                      padding: `${10 * scale}px`,
+                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: `${6 * scale}px`,
+                      fontSize: `${12 * scale}px`,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: `${6 * scale}px`
+                    }}
+                  >
+                    ↩ Rejoin{lastTeam.name ? ` "${lastTeam.name}"` : ''} ({lastTeam.joinCode})
+                  </button>
+                )}
 
                 <button
                   onClick={() => setMode('join')}

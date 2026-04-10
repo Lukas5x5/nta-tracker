@@ -212,12 +212,14 @@ export interface GoalDeclaration {
 export interface WindLayer {
   altitude: number // Meter
   direction: number // Grad (woher der Wind kommt)
-  speed: number // m/s oder km/h
+  speed: number // km/h
   timestamp: Date
   source: WindSource
   isStable?: boolean // true wenn >8 Sekunden stabil gemessen (Vario < 2m/s)
   stableSince?: Date // Zeitpunkt ab dem der Wind stabil ist
   vario?: number // m/s - Steig-/Sinkrate zum Zeitpunkt der Messung (für Stabilitätsanzeige)
+  goalName?: string // Name des Ziels bei dem der Wind gemessen wurde (z.B. Bodenwind vom Verfolger)
+  goalPosition?: { lat: number; lon: number } // Position des Ziels (für automatische Windlinie am Kreuz)
 }
 
 export enum WindSource {

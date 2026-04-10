@@ -444,6 +444,15 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     // Channels aufräumen
     get().cleanup()
 
+    // Letztes Team merken für Rejoin
+    if (session) {
+      localStorage.setItem('nta_last_team', JSON.stringify({
+        joinCode: session.joinCode,
+        name: session.name,
+        id: session.id
+      }))
+    }
+
     // Member aus DB entfernen
     if (session && myMemberId) {
       try {
@@ -666,7 +675,9 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       source: WindSource.Manual,
       isStable: true,
       stableSince: new Date(),
-      vario: 0
+      vario: 0,
+      goalName: groundWindToast.taskName || undefined,
+      goalPosition: (lat && lon) ? { lat, lon } : undefined
     }
 
     console.log(`[GroundWind] Wind vorbereitet: ${directionFrom}° / ${(speedMs * 3.6).toFixed(1)} km/h @ ${elevation}+${balloonOffset}m = ${elevation + balloonOffset}m MSL (${balloonMultiplier}x Ballonhöhe)`)

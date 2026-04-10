@@ -76,7 +76,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
   const {
     windLayers, removeWindLayer, clearWindLayers, addWindLayers, replaceWindLayers, addWindLayer,
     gpsData, baroData, settings, updateSettings,
-    windLineMode, pendingWindLayer, windLines, setWindLineMode, removeWindLine, clearAllWindLines,
+    windLineMode, pendingWindLayer, windLines, setWindLineMode, addWindLine, removeWindLine, clearAllWindLines,
     windImportPickPosition, windImportPosition, setWindImportPickPosition, setWindImportPosition,
     importedTrajectories, addTrajectories, removeTrajectory, toggleTrajectoryVisibility, clearAllTrajectories,
     windSourceFilter, setWindSourceFilter,
@@ -683,20 +683,43 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                   const windColor = getWindColor(speedKmh)
                   const displayDirection = settings.windDirectionMode === 'to' ? (layer.direction + 180) % 360 : layer.direction
 
+                  const hasGoalName = !!layer.goalName
+
                   return (
+                    <div key={`${layer.altitude}-${i}`} style={{ margin: '3px 0', position: 'relative' }}>
+                    {/* Zielkreuz-Badge oben links */}
+                    {hasGoalName && (
+                      <div style={{
+                        position: 'absolute', top: '-7px', left: '8px', zIndex: 1,
+                        fontSize: '9px', fontWeight: 700, color: '#fff',
+                        background: '#22c55e', padding: '2px 6px', borderRadius: '3px',
+                        lineHeight: 1, whiteSpace: 'nowrap'
+                      }}>
+                        📍 {layer.goalName}
+                      </div>
+                    )}
                     <div
-                      key={`${layer.altitude}-${i}`}
                       data-current-layer={isCurrentLayer ? 'true' : undefined}
                       onClick={() => {
-                        onSelectWindLayer(isSelected ? null : layer.altitude)
-                        // Windlinie direkt aktivieren beim Klick
-                        setWindLineMode(!isSelected, isSelected ? undefined : layer)
+                        if (hasGoalName && layer.goalPosition) {
+                          // Bodenwind vom Verfolger: Toggle — existiert schon → entfernen, sonst neu (nur eine)
+                          const existing = windLines.find(wl => wl.windLayer.altitude === layer.altitude && wl.windLayer.goalName === layer.goalName)
+                          if (existing) {
+                            removeWindLine(existing.id)
+                          } else {
+                            // Alle bestehenden Goal-Windlinien entfernen, dann neue setzen
+                            windLines.filter(wl => wl.windLayer.goalPosition).forEach(wl => removeWindLine(wl.id))
+                            addWindLine({ startPosition: layer.goalPosition, windLayer: layer })
+                          }
+                        } else {
+                          onSelectWindLayer(isSelected ? null : layer.altitude)
+                          setWindLineMode(!isSelected, isSelected ? undefined : layer)
+                        }
                       }}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        padding: '8px 10px',
-                        margin: '3px 0',
+                        padding: hasGoalName ? '10px 10px 8px' : '8px 10px',
                         background: isCurrentLayer
                           ? 'linear-gradient(90deg, rgba(59, 130, 246, 0.4) 0%, rgba(59, 130, 246, 0.15) 100%)'
                           : isSelected
@@ -705,9 +728,11 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         borderRadius: '8px',
                         border: isCurrentLayer
                           ? '2px solid #3b82f6'
-                          : isSelected
-                            ? '1px solid rgba(34, 197, 94, 0.5)'
-                            : `1px solid rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
+                          : hasGoalName
+                            ? '2px solid #22c55e'
+                            : isSelected
+                              ? '1px solid rgba(34, 197, 94, 0.5)'
+                              : `1px solid rgba(${o.c},${o.c},${o.c},${o.on ? 0.2 : 0.1})`,
                         cursor: 'pointer',
                         transition: 'all 0.15s',
                         boxShadow: isCurrentLayer ? '0 0 12px rgba(59, 130, 246, 0.5)' : 'none'
@@ -879,6 +904,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                         </div>
                       )}
 
+
                       {/* Windlinie Button */}
                       <button
                         onClick={(e) => {
@@ -928,6 +954,7 @@ export function FlightWindsPanel({ isOpen, onClose, selectedWindLayer, onSelectW
                       >
                         ✕
                       </button>
+                    </div>
                     </div>
                   )
                 })

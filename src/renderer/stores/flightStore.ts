@@ -420,6 +420,9 @@ interface FlightState {
   // Donut Tool
   donutResult: DonutResult | null
 
+  // Distanzkreis um Piloten-Position (Meter, null = aus)
+  rangeCircleRadius: number | null
+
   activeToolPanel: 'marker' | 'fly' | 'lnd' | 'lrn' | 'apt' | 'ang' | 'wnv' | 'donut' | null
 
   // Maus-Position auf der Karte (für StatusBar Anzeige)
@@ -492,6 +495,7 @@ interface FlightState {
   setWnvDeclared: (decl: FlightState['wnvDeclared']) => void
   setWnvGuidance: (guidance: WnvGuidance | null) => void
   setDonutResult: (result: DonutResult | null) => void
+  setRangeCircleRadius: (radius: number | null) => void
   setActiveToolPanel: (panel: FlightState['activeToolPanel']) => void
   setMousePosition: (position: { lat: number; lon: number } | null) => void
   setFlyToPosition: (position: { lat: number; lon: number; zoom?: number } | null) => void
@@ -909,6 +913,9 @@ export const useFlightStore = create<FlightState>()(
       // Donut Tool
       donutResult: null,
 
+      // Distanzkreis
+      rangeCircleRadius: null,
+
       // Aktives Tool-Panel
       activeToolPanel: null,
 
@@ -1220,6 +1227,7 @@ export const useFlightStore = create<FlightState>()(
   setWnvDeclared: (decl) => set({ wnvDeclared: decl }),
   setWnvGuidance: (guidance) => set({ wnvGuidance: guidance }),
   setDonutResult: (result) => set({ donutResult: result }),
+  setRangeCircleRadius: (radius) => set({ rangeCircleRadius: radius }),
   setActiveToolPanel: (panel) => set({ activeToolPanel: panel }),
   setMousePosition: (position) => set({ mousePosition: position }),
 
@@ -1385,8 +1393,26 @@ export const useFlightStore = create<FlightState>()(
       const vario = updatedState.baroData?.variometer || 0
       const isCurrentlyStable = Math.abs(vario) < 2.0 // Stabil wenn |vario| < 2 m/s
 
-      // Prüfe ob bereits eine Schicht mit dieser Höhe existiert
-      const existingLayer = updatedState.windLayers.find(l => l.altitude === roundedAltitude)
+      // Forecast-Schichten in der Nähe entfernen (werden durch Live-Messung ersetzt)
+      // Toleranz: halbes Intervall — z.B. bei 100ft-Intervall werden FC ±50ft entfernt
+      const toleranceM = altitudeUnit === 'ft'
+        ? (intervalValue / 2) / 3.28084  // halbes Intervall in Meter
+        : intervalValue / 2
+      const layersBeforeClean = updatedState.windLayers
+      const cleanedLayers = layersBeforeClean.filter(l => {
+        if (l.source !== WindSource.Forecast) return true // Nur FC entfernen
+        const altDiff = Math.abs(l.altitude - roundedAltitude)
+        return altDiff > toleranceM // Behalte FC die weit genug weg sind
+      })
+      if (cleanedLayers.length < layersBeforeClean.length) {
+        const removed = layersBeforeClean.length - cleanedLayers.length
+        console.log(`[Wind] ${removed} Forecast-Schicht(en) bei ~${Math.round(roundedAltitude)}m durch Live-Messung ersetzt`)
+        set({ windLayers: cleanedLayers })
+      }
+
+      // Prüfe ob bereits eine Schicht mit dieser Höhe existiert (nach FC-Cleanup)
+      const currentLayers = get().windLayers
+      const existingLayer = currentLayers.find(l => l.altitude === roundedAltitude)
 
       if (existingLayer) {
         // Immer aktualisieren wenn wir in dieser Höhe sind

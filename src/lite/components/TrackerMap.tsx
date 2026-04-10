@@ -75,12 +75,16 @@ export function TrackerMap() {
     (window as any).__ntaNavigateToGoal = (lat: number, lng: number) => {
       window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`, '_blank')
     };
+    (window as any).__ntaNavigateToPilot = (lat: number, lng: number) => {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`, '_blank')
+    };
     (window as any).__ntaReportWind = (taskId: string) => {
       const task = useTrackerStore.getState().pilotTasks.find(t => t.id === taskId)
       if (task) setWindDialogTask(task)
     }
     return () => {
       delete (window as any).__ntaNavigateToGoal
+      delete (window as any).__ntaNavigateToPilot
       delete (window as any).__ntaReportWind
     }
   }, [])
@@ -126,16 +130,24 @@ export function TrackerMap() {
     })
     topoLayer.on('tileerror', handleTileError)
 
-    // Default Layer
-    osmLayer.addTo(map)
-
     // Layer Control
     const baseLayers: Record<string, L.TileLayer> = {
       'Karte': osmLayer,
       'Satellit': satelliteLayer,
       'Topo': topoLayer
     }
-    L.control.layers(baseLayers, {}, { position: 'topright', collapsed: false }).addTo(map)
+
+    // Gespeicherte Karte wiederherstellen oder Default (OSM)
+    const savedLayer = localStorage.getItem('nta-lite-map-layer') || 'Karte'
+    const defaultLayer = baseLayers[savedLayer] || osmLayer
+    defaultLayer.addTo(map)
+
+    const layerControl = L.control.layers(baseLayers, {}, { position: 'topright', collapsed: false }).addTo(map)
+
+    // Karten-Auswahl speichern wenn gewechselt
+    map.on('baselayerchange', (e: any) => {
+      try { localStorage.setItem('nta-lite-map-layer', e.name) } catch {}
+    })
 
     // Attribution
     L.control.attribution({
@@ -636,8 +648,21 @@ function createPilotIcon(pilot: PilotPosition): L.DivIcon {
 function createPilotMarker(pilot: PilotPosition, map: L.Map, onSelect: (memberId: string) => void): L.Marker {
   const icon = createPilotIcon(pilot)
 
+  const altFt = Math.round(pilot.altitude * 3.28084)
+  const speedKmh = (pilot.speed * 3.6).toFixed(0)
+
   const marker = L.marker([pilot.latitude, pilot.longitude], { icon })
     .addTo(map)
+    .bindPopup(`
+      <div style="text-align:center;min-width:120px">
+        <div style="font-weight:700;font-size:13px;color:${pilot.color};margin-bottom:4px">${pilot.callsign}</div>
+        <div style="font-size:11px;color:#666;margin-bottom:6px">${altFt}ft · ${speedKmh}km/h · ${Math.round(pilot.heading)}°</div>
+        <button onclick="window.__ntaNavigateToPilot(${pilot.latitude},${pilot.longitude})"
+          style="padding:6px 12px;background:#3b82f6;color:white;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;width:100%">
+          🧭 Navigiere zu
+        </button>
+      </div>
+    `, { className: 'task-popup' })
 
   marker.on('click', () => {
     onSelect(pilot.memberId)

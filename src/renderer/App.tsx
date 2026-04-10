@@ -17,7 +17,7 @@ import type { Task, ProhibitedZone } from '../shared/types'
 import { latLonToUTM } from './utils/coordinatesWGS84'
 
 // Aktuelle App-Version (muss bei jedem Release angepasst werden)
-const APP_VERSION = '1.3.0'
+const APP_VERSION = '1.3.1'
 
 // Haversine-Distanzberechnung (Meter)
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
